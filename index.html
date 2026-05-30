@@ -1,10 +1,123 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <title>TungTungSahur - Twitch Stream</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Lava Lamp</title>
+    <style>
+        /* Reset and set a sleek blackish-grey background */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #1a1a1a; /* Dark charcoal/blackish-grey */
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            /* Adds a slight blur effect to make the colors blend smoothly like lava */
+            filter: blur(20px); 
+        }
+    </style>
 </head>
 <body>
-    <p>
-        idk
-    </p>
+
+    <canvas id="lavaCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('lavaCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Resize canvas to fit screen
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Color palette for the lava blobs
+        const colors = [
+            'rgba(255, 0, 128, 0.8)',   /* Vibrant Pink */
+            'rgba(0, 212, 255, 0.8)',   /* Cyan Blue */
+            'rgba(154, 0, 255, 0.8)',   /* Deep Purple */
+            'rgba(255, 184, 0, 0.8)',   /* Warm Yellow/Orange */
+            'rgba(0, 255, 137, 0.8)'    /* Neon Green */
+        ];
+
+        // Blob class to manage individual moving colors
+        class Blob {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                // Randomized radius for organic shaping
+                this.radius = Math.random() * 150 + 150; 
+                // Random speed vectors for continuous movement
+                this.vx = (Math.random() - 0.5) * 2; 
+                this.vy = (Math.random() - 0.5) * 1.5; 
+                this.color = colors[Math.floor(Math.random() * colors.length)];
+            }
+
+            update() {
+                // Move the blob
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Bounce off edges gently to maintain infinite movement
+                if (this.x < -this.radius) this.vx *= -1;
+                if (this.x > canvas.width + this.radius) this.vx *= -1;
+                if (this.y < -this.radius) this.vy *= -1;
+                if (this.y > canvas.height + this.radius) this.vy *= -1;
+            }
+
+            draw() {
+                // Create a radial gradient for a soft, glowing organic look
+                let gradient = ctx.createRadialGradient(
+                    this.x, this.y, 0, 
+                    this.x, this.y, this.radius
+                );
+                gradient.addColorStop(0, this.color);
+                gradient.addColorStop(1, 'transparent');
+
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Generate a cluster of blobs
+        const blobs = [];
+        const numBlobs = 12; // Adjust number for more/fewer color pockets
+        for (let i = 0; i < numBlobs; i++) {
+            blobs.push(new Blob());
+        }
+
+        // Infinite animation loop
+        function animate() {
+            // Faint trailing fill clears screen while leaving a smooth movement trail
+            ctx.fillStyle = 'rgba(26, 26, 26, 0.08)'; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Use 'screen' blend mode so colors mix beautifully when they overlap
+            ctx.globalCompositeOperation = 'screen';
+
+            blobs.forEach(blob => {
+                blob.update();
+                blob.draw();
+            });
+
+            // Reset composite operation for background trail logic
+            ctx.globalCompositeOperation = 'source-over';
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
 </body>
 </html>
