@@ -3,24 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Infinite Lava Lamp</title>
+    <title>Interactive Gravity Lava Lamp</title>
     <style>
-        /* Reset and set a sleek blackish-grey background */
+        /* Dark charcoal/blackish-grey background */
         body, html {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background-color: #1a1a1a; /* Dark charcoal/blackish-grey */
+            background-color: #161616; 
         }
 
         canvas {
             display: block;
             width: 100%;
             height: 100%;
-            /* Adds a slight blur effect to make the colors blend smoothly like lava */
-            filter: blur(20px); 
+            /* Heavy blur creates the organic, melting lava lamp look */
+            filter: blur(35px); 
         }
     </style>
 </head>
@@ -32,7 +32,6 @@
         const canvas = document.getElementById('lavaCanvas');
         const ctx = canvas.getContext('2d');
 
-        // Resize canvas to fit screen
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -40,47 +39,83 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // Color palette for the lava blobs
+        // Vibrant neon lava lamp color palette
         const colors = [
-            'rgba(255, 0, 128, 0.8)',   /* Vibrant Pink */
-            'rgba(0, 212, 255, 0.8)',   /* Cyan Blue */
-            'rgba(154, 0, 255, 0.8)',   /* Deep Purple */
-            'rgba(255, 184, 0, 0.8)',   /* Warm Yellow/Orange */
-            'rgba(0, 255, 137, 0.8)'    /* Neon Green */
+            'rgba(255, 0, 100, 0.9)',  /* Hot Pink */
+            'rgba(0, 230, 255, 0.9)',  /* Electric Cyan */
+            'rgba(200, 0, 255, 0.9)',  /* Neon Purple */
+            'rgba(255, 160, 0, 0.9)'   /* Lava Orange */
         ];
 
-        // Blob class to manage individual moving colors
-        class Blob {
+        class LavaBlob {
             constructor() {
+                this.radius = Math.random() * 80 + 70; // Size of the blob
                 this.x = Math.random() * canvas.width;
-                this.y = Math.random() * canvas.height;
-                // Randomized radius for organic shaping
-                this.radius = Math.random() * 150 + 150; 
-                // Random speed vectors for continuous movement
-                this.vx = (Math.random() - 0.5) * 2; 
-                this.vy = (Math.random() - 0.5) * 1.5; 
+                // Start mostly near the bottom half
+                this.y = canvas.height - (Math.random() * (canvas.height / 2)) - this.radius; 
+                
+                this.vx = (Math.random() - 0.5) * 1; // Gentle horizontal drifting
+                this.vy = 0; 
+                
                 this.color = colors[Math.floor(Math.random() * colors.length)];
+                
+                // Physics properties
+                this.gravity = 0.04;      // Pulls blobs downward
+                this.buoyancy = 0.055;    // Internal heat pushing blobs upward
+                this.temperature = Math.random(); // 1 = Hot (rises), 0 = Cold (sinks)
             }
 
             update() {
-                // Move the blob
+                // Lava Lamp Thermodynamics Simulation:
+                // If near the bottom (heater), it warms up. If near the top, it cools down.
+                if (this.y > canvas.height - this.radius - 50) {
+                    this.temperature += 0.005; // Warm up
+                } else if (this.y < this.radius + 50) {
+                    this.temperature -= 0.006; // Cool down
+                }
+
+                // Clamp temperature between 0 and 1
+                this.temperature = Math.max(0, Math.min(1, this.temperature));
+
+                // Calculate net force: buoyancy fights gravity based on temperature
+                const netAcceleration = this.gravity - (this.buoyancy * this.temperature);
+                this.vy += netAcceleration;
+
+                // Apply terminal velocity so they glide smoothly instead of rocketing
+                this.vy = Math.max(-2, Math.min(2, this.vy));
+
+                // Move blob
                 this.x += this.vx;
                 this.y += this.vy;
 
-                // Bounce off edges gently to maintain infinite movement
-                if (this.x < -this.radius) this.vx *= -1;
-                if (this.x > canvas.width + this.radius) this.vx *= -1;
-                if (this.y < -this.radius) this.vy *= -1;
-                if (this.y > canvas.height + this.radius) this.vy *= -1;
+                // Window Wall Interactions (Bounce gently off sides)
+                if (this.x - this.radius < 0) {
+                    this.x = this.radius;
+                    this.vx *= -1;
+                }
+                if (this.x + this.radius > canvas.width) {
+                    this.x = canvas.width - this.radius;
+                    this.vx *= -1;
+                }
+
+                // Window Ceiling and Floor Boundaries
+                if (this.y - this.radius < 0) {
+                    this.y = this.radius;
+                    this.vy *= -0.2; // Absorb impact
+                }
+                if (this.y + this.radius > canvas.height) {
+                    this.y = canvas.height - this.radius;
+                    this.vy *= -0.2; // Absorb impact
+                }
             }
 
             draw() {
-                // Create a radial gradient for a soft, glowing organic look
                 let gradient = ctx.createRadialGradient(
                     this.x, this.y, 0, 
                     this.x, this.y, this.radius
                 );
                 gradient.addColorStop(0, this.color);
+                gradient.addColorStop(0.8, this.color);
                 gradient.addColorStop(1, 'transparent');
 
                 ctx.fillStyle = gradient;
@@ -90,20 +125,20 @@
             }
         }
 
-        // Generate a cluster of blobs
+        // Create the blob population
         const blobs = [];
-        const numBlobs = 12; // Adjust number for more/fewer color pockets
+        const numBlobs = 14; 
         for (let i = 0; i < numBlobs; i++) {
-            blobs.push(new Blob());
+            blobs.push(new LavaBlob());
         }
 
-        // Infinite animation loop
+        // Infinite Render Loop
         function animate() {
-            // Faint trailing fill clears screen while leaving a smooth movement trail
-            ctx.fillStyle = 'rgba(26, 26, 26, 0.08)'; 
+            // Draws background layer with a slight transparency trail
+            ctx.fillStyle = 'rgba(22, 22, 22, 0.1)'; 
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Use 'screen' blend mode so colors mix beautifully when they overlap
+            // Screen mode blends overlapping colors into bright, gorgeous intersections
             ctx.globalCompositeOperation = 'screen';
 
             blobs.forEach(blob => {
@@ -111,9 +146,7 @@
                 blob.draw();
             });
 
-            // Reset composite operation for background trail logic
             ctx.globalCompositeOperation = 'source-over';
-
             requestAnimationFrame(animate);
         }
 
