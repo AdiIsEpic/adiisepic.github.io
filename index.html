@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fixed Physics Sandbox (Unified Engine)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Fixed Physics Sandbox (Mobile Ready)</title>
     <style>
         body, html {
             margin: 0;
@@ -13,6 +13,8 @@
             overflow: hidden;
             background-color: #1c1c1e;
             user-select: none;
+            -webkit-user-select: none;
+            touch-action: none; /* CRITICAL: Prevents mobile scrolling/pull-to-refresh */
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
 
@@ -20,6 +22,7 @@
             display: block;
             width: 100%;
             height: 100%;
+            touch-action: none;
         }
 
         #toggleBtn {
@@ -35,6 +38,7 @@
             font-weight: 600;
             cursor: pointer;
             backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             transition: all 0.2s ease;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             z-index: 10;
@@ -95,15 +99,13 @@
                 this.color = colors[Math.floor(Math.random() * colors.length)];
                 
                 this.bounce = 0.65; 
-                this.mass = this.radius * this.radius; // Mass proxy based on area footprint
+                this.mass = this.radius * this.radius; 
                 this.isDragged = false;
             }
 
             getArea() {
                 return Math.PI * this.radius * this.radius;
             }
-
-            // Note: Update logic moved to the central Engine loop to ensure perfect execution order
 
             draw() {
                 ctx.beginPath();
@@ -144,7 +146,10 @@
             draggedBall = null;
 
             const totalScreenArea = canvas.width * canvas.height;
-            const targetBallArea = totalScreenArea * 0.20; 
+            // Slightly lower density on mobile to maintain 60fps
+            const isMobile = window.innerWidth < 768;
+            const density = isMobile ? 0.15 : 0.20;
+            const targetBallArea = totalScreenArea * density; 
 
             let currentBallArea = 0;
 
@@ -170,7 +175,8 @@
             }
         });
 
-        window.addEventListener('mousedown', (e) => {
+        // Upgraded to Pointer Events (Handles Mouse, Touch, and Stylus flawlessly)
+        window.addEventListener('pointerdown', (e) => {
             if (e.target === toggleBtn) return;
 
             for (let i = balls.length - 1; i >= 0; i--) {
@@ -179,16 +185,25 @@
                 let dy = e.clientY - ball.y;
                 let distance = Math.sqrt(dx * dx + dy * dy);
 
-                if (distance < ball.radius) {
+                // Give touch targets a slight generous hit-box margin on mobile
+                let hitRadius = ball.radius + (e.pointerType === 'touch' ? 10 : 0);
+
+                if (distance < hitRadius) {
                     draggedBall = ball;
                     ball.isDragged = true;
+                    // Snap exactly to touch point to prevent visual jumping
+                    mouseX = e.clientX;
+                    mouseY = e.clientY;
+                    lastMouseX = mouseX;
+                    lastMouseY = mouseY;
+                    
                     balls.push(balls.splice(i, 1)[0]); 
                     break;
                 }
             }
         });
 
-        window.addEventListener('mousemove', (e) => {
+        window.addEventListener('pointermove', (e) => {
             mouseX = e.clientX;
             mouseY = e.clientY;
 
@@ -198,7 +213,7 @@
             lastMouseX = mouseX;
             lastMouseY = mouseY;
             
-            if (!draggedBall) {
+            if (!draggedBall && e.pointerType === 'mouse') {
                 let hovering = false;
                 for (let ball of balls) {
                     let dx = mouseX - ball.x;
@@ -211,12 +226,12 @@
                 if (e.target !== toggleBtn) {
                     document.body.style.cursor = hovering ? 'pointer' : 'default';
                 }
-            } else {
+            } else if (draggedBall) {
                 document.body.style.cursor = 'grabbing';
             }
         });
 
-        window.addEventListener('mouseup', () => {
+        function releaseBall() {
             if (draggedBall) {
                 draggedBall.isDragged = false;
                 draggedBall = null;
@@ -224,10 +239,13 @@
             if (document.body.style.cursor === 'grabbing') {
                 document.body.style.cursor = 'default';
             }
-        });
+        }
 
-        // The New Unified Engine Loop
-        const SUBSTEPS = 8; // Breaks math down into ultra-fast fragments for rigid solidity
+        window.addEventListener('pointerup', releaseBall);
+        window.addEventListener('pointercancel', releaseBall); // Catches system interruptions
+
+        // The Unified Engine Loop
+        const SUBSTEPS = 8; 
         
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -236,7 +254,6 @@
 
             for (let step = 0; step < SUBSTEPS; step++) {
                 
-                // 1. Apply Forces and Movement
                 balls.forEach(b => {
                     if (b.isDragged) {
                         b.x = mouseX;
@@ -245,14 +262,13 @@
                         b.vy = mouseVy;
                     } else {
                         b.vy += gravityY * dt;
-                        b.vx *= 0.999; // Minor air resistance
+                        b.vx *= 0.999; 
                         b.vy *= 0.999;
                         b.x += b.vx * dt;
                         b.y += b.vy * dt;
                     }
                 });
 
-                // 2. Resolve Ball Collisions Instantly
                 for (let i = 0; i < balls.length; i++) {
                     for (let j = i + 1; j < balls.length; j++) {
                         let b1 = balls[i];
@@ -275,7 +291,6 @@
                             let r1 = b2.mass / sumM;
                             let r2 = b1.mass / sumM;
 
-                            // Structural Override
                             if (!b1.isDragged && !b2.isDragged) {
                                 b1.x -= nx * overlap * r1;
                                 b1.y -= ny * overlap * r1;
@@ -289,13 +304,11 @@
                                 b1.y -= ny * overlap;
                             }
 
-                            // Kinetic Response
                             let kx = b1.vx - b2.vx;
                             let ky = b1.vy - b2.vy;
                             let relVel = kx * nx + ky * ny;
 
                             if (relVel > 0) {
-                                // Threshold cuts micro-bounces under weight so piles harden perfectly
                                 let bounce = relVel > 1.5 ? Math.min(b1.bounce, b2.bounce) : 0;
                                 let impulse = (1 + bounce) * relVel / (1 / b1.mass + 1 / b2.mass);
 
@@ -312,11 +325,9 @@
                     }
                 }
 
-                // 3. Resolve Environmental Boundaries inside the SAME timeframe
                 balls.forEach(b => {
                     if (b.isDragged) return;
 
-                    // Walls
                     if (b.x - b.radius < 0) {
                         b.x = b.radius;
                         if (b.vx < 0) b.vx *= (Math.abs(b.vx) > 1.5 ? -b.bounce : 0);
@@ -325,19 +336,17 @@
                         if (b.vx > 0) b.vx *= (Math.abs(b.vx) > 1.5 ? -b.bounce : 0);
                     }
 
-                    // Floor and Ceiling
                     if (b.y - b.radius < 0) {
                         b.y = b.radius;
                         if (b.vy < 0) b.vy *= (Math.abs(b.vy) > 1.5 ? -b.bounce : 0);
                     } else if (b.y + b.radius > canvas.height) {
                         b.y = canvas.height - b.radius;
                         if (b.vy > 0) b.vy *= (b.vy > 1.5 ? -b.bounce : 0);
-                        b.vx *= 0.95; // Drags against the floor to sleep cleanly
+                        b.vx *= 0.95; 
                     }
                 });
             }
 
-            // Draw to Slate
             balls.forEach(b => b.draw());
 
             mouseVx *= 0.85;
@@ -346,6 +355,7 @@
             requestAnimationFrame(animate);
         }
 
+        // Initialize
         handleWindowResize();
         animate();
     </script>
