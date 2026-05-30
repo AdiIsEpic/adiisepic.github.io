@@ -3,33 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Gravity Lava Lamp</title>
+    <title>Interactive Drag & Toss Sandbox (Fixed)</title>
     <style>
-        /* Dark charcoal/blackish-grey background */
         body, html {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background-color: #161616; 
+            background-color: #1c1c1e; /* Sleek blackish-grey */
+            user-select: none;
         }
 
         canvas {
             display: block;
             width: 100%;
             height: 100%;
-            /* Heavy blur creates the organic, melting lava lamp look */
-            filter: blur(35px); 
         }
     </style>
 </head>
 <body>
 
-    <canvas id="lavaCanvas"></canvas>
+    <canvas id="physicsCanvas"></canvas>
 
     <script>
-        const canvas = document.getElementById('lavaCanvas');
+        const canvas = document.getElementById('physicsCanvas');
         const ctx = canvas.getContext('2d');
 
         function resize() {
@@ -39,114 +37,215 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // Vibrant neon lava lamp color palette
-        const colors = [
-            'rgba(255, 0, 100, 0.9)',  /* Hot Pink */
-            'rgba(0, 230, 255, 0.9)',  /* Electric Cyan */
-            'rgba(200, 0, 255, 0.9)',  /* Neon Purple */
-            'rgba(255, 160, 0, 0.9)'   /* Lava Orange */
-        ];
+        // Physics Forces
+        let gravityY = 0.6; 
+        let mouseX = 0;
+        let mouseY = 0;
+        let mouseVx = 0;
+        let mouseVy = 0;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+        let draggedBall = null;
 
-        class LavaBlob {
+        const colors = ['#FF3B30', '#FF9500', '#FFCC00', '#4CD964', '#5AC8FA', '#5856D6', '#FF2D55'];
+
+        class Ball {
             constructor() {
-                this.radius = Math.random() * 80 + 70; // Size of the blob
-                this.x = Math.random() * canvas.width;
-                // Start mostly near the bottom half
-                this.y = canvas.height - (Math.random() * (canvas.height / 2)) - this.radius; 
-                
-                this.vx = (Math.random() - 0.5) * 1; // Gentle horizontal drifting
-                this.vy = 0; 
-                
+                this.radius = Math.random() * 12 + 20; // 20px to 32px size range
+                this.x = Math.random() * (canvas.width - this.radius * 2) + this.radius;
+                this.y = Math.random() * (canvas.height * 0.4) + this.radius; 
+                this.vx = (Math.random() - 0.5) * 5;
+                this.vy = (Math.random() - 0.5) * 5;
                 this.color = colors[Math.floor(Math.random() * colors.length)];
-                
-                // Physics properties
-                this.gravity = 0.04;      // Pulls blobs downward
-                this.buoyancy = 0.055;    // Internal heat pushing blobs upward
-                this.temperature = Math.random(); // 1 = Hot (rises), 0 = Cold (sinks)
+                this.bounce = 0.75; 
+                this.friction = 0.99; 
+                this.isDragged = false;
             }
 
             update() {
-                // Lava Lamp Thermodynamics Simulation:
-                // If near the bottom (heater), it warms up. If near the top, it cools down.
-                if (this.y > canvas.height - this.radius - 50) {
-                    this.temperature += 0.005; // Warm up
-                } else if (this.y < this.radius + 50) {
-                    this.temperature -= 0.006; // Cool down
+                if (this.isDragged) {
+                    // Lock position straight to the cursor coordinate
+                    this.x = mouseX;
+                    this.y = mouseY;
+                    
+                    // Match physics movement vectors to cursor velocity
+                    this.vx = mouseVx;
+                    this.vy = mouseVy;
+                    return;
                 }
 
-                // Clamp temperature between 0 and 1
-                this.temperature = Math.max(0, Math.min(1, this.temperature));
+                // Normal Environment Physics
+                this.vy += gravityY;
+                this.vx *= this.friction;
+                this.vy *= this.friction;
 
-                // Calculate net force: buoyancy fights gravity based on temperature
-                const netAcceleration = this.gravity - (this.buoyancy * this.temperature);
-                this.vy += netAcceleration;
-
-                // Apply terminal velocity so they glide smoothly instead of rocketing
-                this.vy = Math.max(-2, Math.min(2, this.vy));
-
-                // Move blob
                 this.x += this.vx;
                 this.y += this.vy;
 
-                // Window Wall Interactions (Bounce gently off sides)
+                // Wall Edge Collisions (Left & Right)
                 if (this.x - this.radius < 0) {
                     this.x = this.radius;
-                    this.vx *= -1;
-                }
-                if (this.x + this.radius > canvas.width) {
+                    this.vx = -this.vx * this.bounce;
+                } else if (this.x + this.radius > canvas.width) {
                     this.x = canvas.width - this.radius;
-                    this.vx *= -1;
+                    this.vx = -this.vx * this.bounce;
                 }
 
-                // Window Ceiling and Floor Boundaries
+                // Ceiling & Floor Collisions (Top & Bottom)
                 if (this.y - this.radius < 0) {
                     this.y = this.radius;
-                    this.vy *= -0.2; // Absorb impact
-                }
-                if (this.y + this.radius > canvas.height) {
+                    this.vy = -this.vy * this.bounce;
+                } else if (this.y + this.radius > canvas.height) {
                     this.y = canvas.height - this.radius;
-                    this.vy *= -0.2; // Absorb impact
+                    this.vy = -this.vy * this.bounce;
+                    this.vx *= 0.95; // Ground drag friction
                 }
             }
 
             draw() {
-                let gradient = ctx.createRadialGradient(
-                    this.x, this.y, 0, 
-                    this.x, this.y, this.radius
-                );
-                gradient.addColorStop(0, this.color);
-                gradient.addColorStop(0.8, this.color);
-                gradient.addColorStop(1, 'transparent');
-
-                ctx.fillStyle = gradient;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                
+                if (this.isDragged) {
+                    ctx.shadowBlur = 25;
+                    ctx.shadowColor = 'rgba(255, 255, 255, 0.6)';
+                } else {
+                    ctx.shadowBlur = 8;
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+                    ctx.shadowOffsetY = 4;
+                }
+                
                 ctx.fill();
+                ctx.closePath();
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetY = 0;
             }
         }
 
-        // Create the blob population
-        const blobs = [];
-        const numBlobs = 14; 
-        for (let i = 0; i < numBlobs; i++) {
-            blobs.push(new LavaBlob());
+        // Generate Balls
+        const balls = [];
+        const ballCount = 35;
+        for (let i = 0; i < ballCount; i++) {
+            balls.push(new Ball());
         }
 
-        // Infinite Render Loop
+        // Mouse Down Hook: Pick up a ball
+        window.addEventListener('mousedown', (e) => {
+            for (let i = balls.length - 1; i >= 0; i--) {
+                let ball = balls[i];
+                let dx = e.clientX - ball.x;
+                let dy = e.clientY - ball.y;
+                let distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < ball.radius) {
+                    draggedBall = ball;
+                    ball.isDragged = true;
+                    // Bring the selected ball to the top rendering layer
+                    balls.push(balls.splice(i, 1)[0]);
+                    break;
+                }
+            }
+        });
+
+        // Mouse Move Hook: Track velocity parameters safely
+        window.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+
+            // Simple, reliable velocity tracking calculation
+            mouseVx = mouseX - lastMouseX;
+            mouseVy = mouseY - lastMouseY;
+
+            lastMouseX = mouseX;
+            lastMouseY = mouseY;
+            
+            // UI Cursor feedback adjustments
+            if (!draggedBall) {
+                let hovering = false;
+                for (let ball of balls) {
+                    let dx = mouseX - ball.x;
+                    let dy = mouseY - ball.y;
+                    if (Math.sqrt(dx * dx + dy * dy) < ball.radius) {
+                        hovering = true;
+                        break;
+                    }
+                }
+                document.body.style.cursor = hovering ? 'pointer' : 'default';
+            } else {
+                document.body.style.cursor = 'grabbing';
+            }
+        });
+
+        // Mouse Up Hook: Let go and throw the ball
+        window.addEventListener('mouseup', () => {
+            if (draggedBall) {
+                draggedBall.isDragged = false;
+                draggedBall = null;
+            }
+            document.body.style.cursor = 'default';
+        });
+
+        // Interactive Ball-to-Ball Collisions
+        function handleBallCollisions() {
+            for (let i = 0; i < balls.length; i++) {
+                for (let j = i + 1; j < balls.length; j++) {
+                    let b1 = balls[i];
+                    let b2 = balls[j];
+
+                    let dx = b2.x - b1.x;
+                    let dy = b2.y - b1.y;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
+                    let minDistance = b1.radius + b2.radius;
+
+                    if (distance < minDistance) {
+                        let overlap = minDistance - distance;
+                        let nx = dx / (distance || 1); 
+                        let ny = dy / (distance || 1);
+
+                        // Push overlapping objects away structurally
+                        if (!b1.isDragged) {
+                            b1.x -= nx * overlap * (b2.isDragged ? 1 : 0.5);
+                            b1.y -= ny * overlap * (b2.isDragged ? 1 : 0.5);
+                        }
+                        if (!b2.isDragged) {
+                            b2.x += nx * overlap * (b1.isDragged ? 1 : 0.5);
+                            b2.y += ny * overlap * (b1.isDragged ? 1 : 0.5);
+                        }
+
+                        // Kinetic momentum velocity exchange
+                        let kx = b1.vx - b2.vx;
+                        let ky = b1.vy - b2.vy;
+                        let p = 2 * (nx * kx + ny * ky) / 2;
+
+                        if (!b1.isDragged) {
+                            b1.vx -= p * nx * b1.bounce;
+                            b1.vy -= p * ny * b1.bounce;
+                        }
+                        if (!b2.isDragged) {
+                            b2.vx += p * nx * b2.bounce;
+                            b2.vy += p * ny * b2.bounce;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Continuous Loop Render Processing
         function animate() {
-            // Draws background layer with a slight transparency trail
-            ctx.fillStyle = 'rgba(22, 22, 22, 0.1)'; 
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Screen mode blends overlapping colors into bright, gorgeous intersections
-            ctx.globalCompositeOperation = 'screen';
+            handleBallCollisions();
 
-            blobs.forEach(blob => {
-                blob.update();
-                blob.draw();
+            balls.forEach(ball => {
+                ball.update();
+                ball.draw();
             });
 
-            ctx.globalCompositeOperation = 'source-over';
+            // Naturally slow down mouse recording speeds when mouse stops 
+            mouseVx *= 0.85;
+            mouseVy *= 0.85;
+
             requestAnimationFrame(animate);
         }
 
