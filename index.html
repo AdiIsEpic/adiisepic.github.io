@@ -1,856 +1,439 @@
 <!DOCTYPE html>
-
 <html lang="en">
-
 <head>
-
     <meta charset="UTF-8">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-
     <title>Physics Sandbox</title>
-
     <style>
-
         body, html {
-
             margin: 0; padding: 0; width: 100%; height: 100%;
-
             overflow: hidden; background-color: #1c1c1e;
-
             user-select: none; -webkit-user-select: none;
-
             touch-action: none;
-
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-
         }
-
         canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 
-
-
-        /* ── Top buttons ── */
-
         #toggleBtn {
-
             position: absolute; top: 20px; right: 20px;
-
             padding: 12px 20px;
-
             background-color: rgba(255,255,255,0.1); color: #fff;
-
             border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
-
             font-size: 14px; font-weight: 600; cursor: pointer;
-
             backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-
             transition: all 0.2s ease;
-
             box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10;
-
         }
-
         #toggleBtn:hover { background-color: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.4); }
-
         #toggleBtn:active { transform: scale(0.95); }
-
         #toggleBtn.disabled { background-color: rgba(255,59,48,0.2); border-color: rgba(255,59,48,0.4); color: #ff453a; }
 
-
-
-        /* ── Dock toggle button ── */
-
         #dockBtn {
-
             position: absolute; top: 20px; right: 170px;
-
             padding: 12px 16px;
-
             background-color: rgba(255,255,255,0.1); color: #fff;
-
             border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
-
-            font-size: 18px; cursor: pointer;
-
+            font-size: 14px; font-weight: 600; cursor: pointer;
             backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-
             transition: all 0.2s ease;
-
             box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10;
-
-            line-height: 1;
-
+            line-height: 1; white-space: nowrap;
         }
-
         #dockBtn:hover { background-color: rgba(255,255,255,0.2); }
-
         #dockBtn:active { transform: scale(0.95); }
 
-
-
-        /* ── Slider dock panel ── */
+        /* Permission button shown on iOS before gyro is granted */
+        #gyroBtn {
+            position: absolute; top: 70px; right: 20px;
+            padding: 10px 16px;
+            background-color: rgba(90,200,250,0.15); color: #5AC8FA;
+            border: 1px solid rgba(90,200,250,0.35); border-radius: 8px;
+            font-size: 13px; font-weight: 600; cursor: pointer;
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10;
+            display: none;
+        }
 
         #dock {
-
-            position: absolute;
-
-            bottom: 32px;
-
-            left: 50%;
-
+            position: absolute; bottom: 32px; left: 50%;
             transform: translateX(-50%) translateY(0);
-
             background: rgba(28,28,30,0.85);
-
             backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-
-            border: 1px solid rgba(255,255,255,0.12);
-
-            border-radius: 16px;
-
+            border: 1px solid rgba(255,255,255,0.12); border-radius: 16px;
             padding: 18px 28px 16px;
-
             box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-
-            z-index: 10;
-
-            min-width: 300px;
-
+            z-index: 10; min-width: 300px;
             transition: opacity 0.25s ease, transform 0.25s ease;
-
         }
-
         #dock.hidden {
-
-            opacity: 0;
-
-            transform: translateX(-50%) translateY(20px);
-
-            pointer-events: none;
-
+            opacity: 0; transform: translateX(-50%) translateY(20px); pointer-events: none;
         }
-
         #dock label {
-
-            display: flex;
-
-            justify-content: space-between;
-
-            align-items: center;
-
-            color: #fff;
-
-            font-size: 13px;
-
-            font-weight: 600;
-
-            margin-bottom: 12px;
-
-            letter-spacing: 0.02em;
-
+            display: flex; justify-content: space-between; align-items: center;
+            color: #fff; font-size: 13px; font-weight: 600;
+            margin-bottom: 12px; letter-spacing: 0.02em;
         }
-
-        #dock label span {
-
-            font-size: 12px;
-
-            color: rgba(255,255,255,0.5);
-
-            font-weight: 400;
-
-        }
-
+        #dock label span { font-size: 12px; color: rgba(255,255,255,0.5); font-weight: 400; }
         #catCount {
-
-            display: inline-block;
-
-            background: rgba(90,200,250,0.25);
-
-            color: #5AC8FA;
-
-            border-radius: 6px;
-
-            padding: 1px 8px;
-
-            font-size: 13px;
-
-            font-weight: 700;
-
-            min-width: 28px;
-
-            text-align: center;
-
+            display: inline-block; background: rgba(90,200,250,0.25); color: #5AC8FA;
+            border-radius: 6px; padding: 1px 8px; font-size: 13px; font-weight: 700;
+            min-width: 28px; text-align: center;
         }
-
         #alienSlider {
-
-            -webkit-appearance: none;
-
-            appearance: none;
-
-            width: 100%;
-
-            height: 6px;
-
-            border-radius: 3px;
-
-            background: rgba(255,255,255,0.15);
-
-            outline: none;
-
-            cursor: pointer;
-
+            -webkit-appearance: none; appearance: none;
+            width: 100%; height: 6px; border-radius: 3px;
+            background: rgba(255,255,255,0.15); outline: none; cursor: pointer;
         }
-
         #alienSlider::-webkit-slider-thumb {
-
-            -webkit-appearance: none;
-
-            appearance: none;
-
-            width: 22px; height: 22px;
-
-            border-radius: 50%;
-
-            background: #5AC8FA;
-
-            box-shadow: 0 0 8px rgba(90,200,250,0.6);
-
-            cursor: grab;
-
-            transition: transform 0.1s;
-
+            -webkit-appearance: none; appearance: none;
+            width: 22px; height: 22px; border-radius: 50%;
+            background: #5AC8FA; box-shadow: 0 0 8px rgba(90,200,250,0.6);
+            cursor: grab; transition: transform 0.1s;
         }
-
         #alienSlider::-webkit-slider-thumb:active { cursor: grabbing; transform: scale(1.15); }
-
         #alienSlider::-moz-range-thumb {
-
-            width: 22px; height: 22px;
-
-            border-radius: 50%;
-
-            background: #5AC8FA;
-
-            box-shadow: 0 0 8px rgba(90,200,250,0.6);
-
+            width: 22px; height: 22px; border-radius: 50%;
+            background: #5AC8FA; box-shadow: 0 0 8px rgba(90,200,250,0.6);
             cursor: grab; border: none;
-
         }
-
-        #dockHint {
-
-            text-align: center;
-
-            color: rgba(255,255,255,0.3);
-
-            font-size: 11px;
-
-            margin-top: 10px;
-
-        }
-
+        #dockHint { text-align: center; color: rgba(255,255,255,0.3); font-size: 11px; margin-top: 10px; }
     </style>
-
 </head>
-
 <body>
-
-    <button id="dockBtn" title="Toggle alien slider">Alien Cat Slider👽👾</button>
-
+    <button id="dockBtn">Alien Cat Slider 👽👾</button>
     <button id="toggleBtn">Spawning: ON</button>
-
-
-
-    <!-- Slider dock -->
+    <button id="gyroBtn">Enable Tilt 🌀</button>
 
     <div id="dock">
-
         <label>
-
             Alien cats
-
             <span><span id="catCount">6</span> / <span id="totalCount">0</span></span>
-
         </label>
-
         <input type="range" id="alienSlider" min="0" max="100" value="6" step="1">
-
         <div id="dockHint">drag slider · 0 = none · max = all</div>
-
     </div>
-
-
 
     <canvas id="physicsCanvas"></canvas>
 
-
-
     <script>
-
-        const canvas   = document.getElementById('physicsCanvas');
-
-        const ctx      = canvas.getContext('2d');
-
-        const toggleBtn  = document.getElementById('toggleBtn');
-
-        const dockBtn    = document.getElementById('dockBtn');
-
-        const dock       = document.getElementById('dock');
-
+        const canvas      = document.getElementById('physicsCanvas');
+        const ctx         = canvas.getContext('2d');
+        const toggleBtn   = document.getElementById('toggleBtn');
+        const dockBtn     = document.getElementById('dockBtn');
+        const dock        = document.getElementById('dock');
         const alienSlider = document.getElementById('alienSlider');
-
         const catCountEl  = document.getElementById('catCount');
+        const totalCountEl= document.getElementById('totalCount');
+        const gyroBtn     = document.getElementById('gyroBtn');
 
-        const totalCountEl = document.getElementById('totalCount');
-
-
-
-        let allowSpawning = true;
-
+        // ── Gravity (tilts on mobile) ────────────────────────────────────────
+        let gravityX = 0;
         let gravityY = 0.6;
+        const GRAVITY_STRENGTH = 0.6;
 
+        const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+
+        function setupGyro() {
+            if (!isMobile) return;
+
+            // iOS 13+ requires a user-gesture permission request
+            if (typeof DeviceOrientationEvent !== 'undefined' &&
+                typeof DeviceOrientationEvent.requestPermission === 'function') {
+                gyroBtn.style.display = 'block';
+                gyroBtn.addEventListener('click', () => {
+                    DeviceOrientationEvent.requestPermission().then(state => {
+                        if (state === 'granted') {
+                            attachOrientation();
+                            gyroBtn.style.display = 'none';
+                        }
+                    }).catch(console.error);
+                });
+            } else {
+                // Android / older iOS — no permission needed
+                attachOrientation();
+            }
+        }
+
+        function attachOrientation() {
+            window.addEventListener('deviceorientation', (e) => {
+                // gamma = left/right tilt (-90 to 90)
+                // beta  = front/back tilt (-180 to 180)
+                const gamma = e.gamma || 0; // left-right
+                const beta  = e.beta  || 0; // forward-back
+
+                // Clamp tilt to ±45° for reasonable feel
+                const tiltX = Math.max(-45, Math.min(45, gamma)) / 45;
+                const tiltY = Math.max(-45, Math.min(45, beta - 20)) / 45; // -20 = natural resting angle
+
+                gravityX = tiltX * GRAVITY_STRENGTH;
+                gravityY = tiltY * GRAVITY_STRENGTH + 0.15; // small baseline so balls don't float
+            }, true);
+        }
+
+        setupGyro();
+
+        // ── State ────────────────────────────────────────────────────────────
+        let allowSpawning = true;
         let mouseX = 0, mouseY = 0, mouseVx = 0, mouseVy = 0, lastMouseX = 0, lastMouseY = 0;
-
         let draggedBall = null;
-
         let balls = [];
-
-        let targetAlienCount = 6; // slider value
-
-
+        let targetAlienCount = 6;
 
         const colors = ['#FF3B30', '#FF9500', '#FFCC00', '#4CD964', '#5AC8FA', '#5856D6', '#FF2D55'];
 
-
-
+        // No crossOrigin — fixes CORS block on Tenor
         const alienCatImg = new Image();
-
-        alienCatImg.crossOrigin = 'anonymous';
-
         alienCatImg.src = 'https://media.tenor.com/-TO4hXAw_MQAAAAj/alien-alien-cat.gif';
 
-
-
         // ── Dock toggle ──────────────────────────────────────────────────────
-
         let dockVisible = true;
-
         dockBtn.addEventListener('click', () => {
-
             dockVisible = !dockVisible;
-
             dock.classList.toggle('hidden', !dockVisible);
-
         });
-
-
-
-        // Prevent pointer events on dock from interacting with canvas
-
         dock.addEventListener('pointerdown', e => e.stopPropagation());
 
-
-
         // ── Slider ───────────────────────────────────────────────────────────
-
         alienSlider.addEventListener('input', () => {
-
             targetAlienCount = parseInt(alienSlider.value);
-
             applyAlienCount(targetAlienCount);
-
-            catCountEl.textContent = targetAlienCount;
-
+            catCountEl.textContent = balls.filter(b => b.isImageBall).length;
         });
 
-
-
         function applyAlienCount(n) {
-
-            // Clamp to actual ball count
-
             n = Math.min(n, balls.length);
-
             const currentAliens = balls.filter(b => b.isImageBall).length;
-
-
-
             if (n > currentAliens) {
-
-                // Promote non-alien balls to alien
-
                 let needed = n - currentAliens;
-
                 for (let i = 0; i < balls.length && needed > 0; i++) {
-
                     if (!balls[i].isImageBall) { balls[i].isImageBall = true; needed--; }
-
                 }
-
             } else if (n < currentAliens) {
-
-                // Demote alien balls back to colored
-
                 let excess = currentAliens - n;
-
                 for (let i = 0; i < balls.length && excess > 0; i++) {
-
                     if (balls[i].isImageBall) { balls[i].isImageBall = false; excess--; }
-
                 }
-
             }
-
         }
-
-
 
         function syncSliderMax() {
-
             const total = balls.length;
-
             alienSlider.max = total;
-
             totalCountEl.textContent = total;
-
-            // Clamp slider value if balls were removed
-
             if (parseInt(alienSlider.value) > total) {
-
                 alienSlider.value = total;
-
                 targetAlienCount = total;
-
                 catCountEl.textContent = total;
-
             }
-
         }
 
-
-
-        // ── Ball class ───────────────────────────────────────────────────────
-
+        // ── Ball ─────────────────────────────────────────────────────────────
         class Ball {
-
             constructor(isImageBall = false) {
-
+                // Same size range on all devices
                 this.radius = Math.random() * 8 + 18;
-
-                let maxSpawnX = Math.max(100, window.innerWidth - this.radius * 2);
-
-                let maxSpawnY = Math.max(100, window.innerHeight - this.radius * 2);
-
-                this.x = Math.random() * maxSpawnX + this.radius;
-
-                this.y = Math.random() * maxSpawnY + this.radius;
-
+                this.x = Math.random() * (window.innerWidth  - this.radius * 2) + this.radius;
+                this.y = Math.random() * (window.innerHeight - this.radius * 2) + this.radius;
                 this.vx = (Math.random() - 0.5) * 4;
-
                 this.vy = (Math.random() - 0.5) * 2;
-
                 this.color = colors[Math.floor(Math.random() * colors.length)];
-
                 this.bounce = 0.65;
-
                 this.mass = this.radius * this.radius;
-
                 this.isDragged = false;
-
                 this.isImageBall = isImageBall;
-
             }
-
-
 
             getArea() { return Math.PI * this.radius * this.radius; }
 
-
-
             draw() {
-
                 ctx.save();
-
                 if (this.isImageBall && alienCatImg.complete && alienCatImg.naturalWidth > 0) {
-
                     ctx.beginPath();
-
                     ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-
                     ctx.clip();
-
                     ctx.shadowBlur = this.isDragged ? 25 : 6;
-
                     ctx.shadowColor = this.isDragged ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.4)';
-
                     if (!this.isDragged) ctx.shadowOffsetY = 3;
-
                     const d = this.radius * 2;
-
                     ctx.drawImage(alienCatImg, this.x - this.radius, this.y - this.radius, d, d);
-
                 } else {
-
                     ctx.beginPath();
-
                     ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-
                     ctx.fillStyle = this.color;
-
                     ctx.shadowBlur = this.isDragged ? 25 : 6;
-
                     ctx.shadowColor = this.isDragged ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.4)';
-
                     if (!this.isDragged) ctx.shadowOffsetY = 3;
-
                     ctx.fill();
-
                     ctx.closePath();
-
                 }
-
                 ctx.restore();
-
             }
-
         }
-
-
 
         // ── Spawn / resize ───────────────────────────────────────────────────
-
         function handleWindowResize() {
-
-            canvas.width = window.innerWidth;
-
+            canvas.width  = window.innerWidth;
             canvas.height = window.innerHeight;
 
-
-
             if (!allowSpawning) {
-
-                balls.forEach(ball => {
-
-                    if (!ball.isDragged) {
-
-                        if (ball.x > canvas.width - ball.radius) ball.x = canvas.width - ball.radius;
-
-                        if (ball.y > canvas.height - ball.radius) ball.y = canvas.height - ball.radius;
-
+                balls.forEach(b => {
+                    if (!b.isDragged) {
+                        if (b.x > canvas.width  - b.radius) b.x = canvas.width  - b.radius;
+                        if (b.y > canvas.height - b.radius) b.y = canvas.height - b.radius;
                     }
-
                 });
-
                 return;
-
             }
-
-
 
             balls = [];
-
             draggedBall = null;
 
-
-
-            const totalScreenArea = canvas.width * canvas.height;
-
-            const isMobile = window.innerWidth < 768;
-
-            const density = isMobile ? 0.15 : 0.20;
-
-            const targetBallArea = totalScreenArea * density;
-
+            // Same density on all screen sizes — no mobile reduction
+            const density = 0.20;
+            const targetBallArea = canvas.width * canvas.height * density;
             let currentBallArea = 0;
 
-
-
             while (currentBallArea < targetBallArea) {
-
-                const newBall = new Ball(false);
-
-                balls.push(newBall);
-
-                currentBallArea += newBall.getArea();
-
+                const b = new Ball(false);
+                balls.push(b);
+                currentBallArea += b.getArea();
             }
 
-
-
-            // Apply current slider value
-
             applyAlienCount(targetAlienCount);
-
             syncSliderMax();
-
-            catCountEl.textContent = Math.min(targetAlienCount, balls.length);
-
+            catCountEl.textContent = balls.filter(b => b.isImageBall).length;
         }
-
-
 
         window.addEventListener('resize', handleWindowResize);
 
-
-
-        // ── Top buttons ──────────────────────────────────────────────────────
-
         toggleBtn.addEventListener('click', () => {
-
             allowSpawning = !allowSpawning;
-
             if (allowSpawning) {
-
                 toggleBtn.textContent = "Spawning: ON";
-
                 toggleBtn.classList.remove('disabled');
-
                 handleWindowResize();
-
             } else {
-
                 toggleBtn.textContent = "Spawning: OFF";
-
                 toggleBtn.classList.add('disabled');
-
             }
-
         });
-
-
 
         // ── Pointer events ───────────────────────────────────────────────────
-
         window.addEventListener('pointerdown', (e) => {
-
-            if (e.target === toggleBtn || e.target === dockBtn) return;
-
+            if (e.target === toggleBtn || e.target === dockBtn || e.target === gyroBtn) return;
             for (let i = balls.length - 1; i >= 0; i--) {
-
                 let ball = balls[i];
-
                 let dx = e.clientX - ball.x, dy = e.clientY - ball.y;
-
-                let distance = Math.sqrt(dx*dx + dy*dy);
-
-                let hitRadius = ball.radius + (e.pointerType === 'touch' ? 10 : 0);
-
-                if (distance < hitRadius) {
-
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                let hitR = ball.radius + (e.pointerType === 'touch' ? 10 : 0);
+                if (dist < hitR) {
                     draggedBall = ball;
-
                     ball.isDragged = true;
-
                     mouseX = e.clientX; mouseY = e.clientY;
-
                     lastMouseX = mouseX; lastMouseY = mouseY;
-
                     balls.push(balls.splice(i, 1)[0]);
-
                     break;
-
                 }
-
             }
-
         });
-
-
 
         window.addEventListener('pointermove', (e) => {
-
             mouseX = e.clientX; mouseY = e.clientY;
-
             mouseVx = mouseX - lastMouseX;
-
             mouseVy = mouseY - lastMouseY;
-
             lastMouseX = mouseX; lastMouseY = mouseY;
 
-
-
             if (!draggedBall && e.pointerType === 'mouse') {
-
                 let hovering = false;
-
-                for (let ball of balls) {
-
-                    let dx = mouseX - ball.x, dy = mouseY - ball.y;
-
-                    if (Math.sqrt(dx*dx + dy*dy) < ball.radius) { hovering = true; break; }
-
+                for (let b of balls) {
+                    let dx = mouseX - b.x, dy = mouseY - b.y;
+                    if (Math.sqrt(dx*dx + dy*dy) < b.radius) { hovering = true; break; }
                 }
-
                 if (e.target !== toggleBtn && e.target !== dockBtn)
-
                     document.body.style.cursor = hovering ? 'pointer' : 'default';
-
             } else if (draggedBall) {
-
                 document.body.style.cursor = 'grabbing';
-
             }
-
         });
 
-
-
         function releaseBall() {
-
             if (draggedBall) { draggedBall.isDragged = false; draggedBall = null; }
-
             if (document.body.style.cursor === 'grabbing') document.body.style.cursor = 'default';
-
         }
-
-
-
         window.addEventListener('pointerup', releaseBall);
-
         window.addEventListener('pointercancel', releaseBall);
 
-
-
         // ── Physics loop ─────────────────────────────────────────────────────
-
         const SUBSTEPS = 8;
 
-
-
         function animate() {
-
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
             const dt = 1.0 / SUBSTEPS;
-
-
 
             for (let step = 0; step < SUBSTEPS; step++) {
 
                 balls.forEach(b => {
-
                     if (b.isDragged) {
-
                         b.x = mouseX; b.y = mouseY; b.vx = mouseVx; b.vy = mouseVy;
-
                     } else {
-
-                        b.vy += gravityY * dt;
-
+                        b.vx += gravityX * dt;   // tilt left/right
+                        b.vy += gravityY * dt;   // tilt forward/back (or constant on desktop)
                         b.vx *= 0.999; b.vy *= 0.999;
-
                         b.x += b.vx * dt; b.y += b.vy * dt;
-
                     }
-
                 });
 
-
-
+                // Ball–ball collisions
                 for (let i = 0; i < balls.length; i++) {
-
                     for (let j = i + 1; j < balls.length; j++) {
-
                         let b1 = balls[i], b2 = balls[j];
-
                         let dx = b2.x - b1.x, dy = b2.y - b1.y;
-
                         let distSq = dx*dx + dy*dy;
-
                         let minDist = b1.radius + b2.radius;
-
                         if (distSq < minDist * minDist) {
-
                             let dist = Math.sqrt(distSq);
-
                             if (dist === 0) { dx = 1; dist = 1; }
-
                             let nx = dx/dist, ny = dy/dist;
-
                             let overlap = minDist - dist;
-
                             let sumM = b1.mass + b2.mass;
-
                             let r1 = b2.mass/sumM, r2 = b1.mass/sumM;
-
                             if (!b1.isDragged && !b2.isDragged) {
-
                                 b1.x -= nx*overlap*r1; b1.y -= ny*overlap*r1;
-
                                 b2.x += nx*overlap*r2; b2.y += ny*overlap*r2;
-
                             } else if (b1.isDragged) {
-
                                 b2.x += nx*overlap; b2.y += ny*overlap;
-
                             } else if (b2.isDragged) {
-
                                 b1.x -= nx*overlap; b1.y -= ny*overlap;
-
                             }
-
                             let kx = b1.vx-b2.vx, ky = b1.vy-b2.vy;
-
                             let relVel = kx*nx + ky*ny;
-
                             if (relVel > 0) {
-
                                 let bounce = relVel > 1.5 ? Math.min(b1.bounce, b2.bounce) : 0;
-
                                 let impulse = (1+bounce)*relVel / (1/b1.mass + 1/b2.mass);
-
                                 if (!b1.isDragged) { b1.vx -= (impulse*nx)/b1.mass; b1.vy -= (impulse*ny)/b1.mass; }
-
                                 if (!b2.isDragged) { b2.vx += (impulse*nx)/b2.mass; b2.vy += (impulse*ny)/b2.mass; }
-
                             }
-
                         }
-
                     }
-
                 }
 
-
-
+                // Wall collisions
                 balls.forEach(b => {
-
                     if (b.isDragged) return;
-
                     if (b.x - b.radius < 0) { b.x = b.radius; if (b.vx < 0) b.vx *= (Math.abs(b.vx) > 1.5 ? -b.bounce : 0); }
-
                     else if (b.x + b.radius > canvas.width) { b.x = canvas.width - b.radius; if (b.vx > 0) b.vx *= (Math.abs(b.vx) > 1.5 ? -b.bounce : 0); }
-
                     if (b.y - b.radius < 0) { b.y = b.radius; if (b.vy < 0) b.vy *= (Math.abs(b.vy) > 1.5 ? -b.bounce : 0); }
-
                     else if (b.y + b.radius > canvas.height) { b.y = canvas.height - b.radius; if (b.vy > 0) b.vy *= (b.vy > 1.5 ? -b.bounce : 0); b.vx *= 0.95; }
-
                 });
-
             }
 
-
-
             balls.forEach(b => b.draw());
-
             mouseVx *= 0.85; mouseVy *= 0.85;
-
             requestAnimationFrame(animate);
-
         }
 
-
-
         handleWindowResize();
-
         animate();
-
     </script>
-
 </body>
-
 </html>
-
