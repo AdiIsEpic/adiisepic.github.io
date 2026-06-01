@@ -39,6 +39,7 @@
         }
         #dockBtn:hover { background-color: rgba(255,255,255,0.2); }
         #dockBtn:active { transform: scale(0.95); }
+
         #gyroBtn {
             position: absolute; top: 70px; right: 20px;
             padding: 10px 16px;
@@ -47,8 +48,21 @@
             font-size: 13px; font-weight: 600; cursor: pointer;
             backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
             box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10;
-            display: none;
+            display: none; white-space: nowrap;
         }
+
+        /* Toast for Brave blocked-sensor message */
+        #gyroToast {
+            position: absolute; bottom: 120px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,59,48,0.9);
+            color: #fff; font-size: 12px; font-weight: 500;
+            padding: 10px 18px; border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            z-index: 20; display: none; text-align: center;
+            max-width: 280px; line-height: 1.5;
+        }
+
         #dock {
             position: absolute; bottom: 32px; left: 50%;
             transform: translateX(-50%) translateY(0);
@@ -96,6 +110,7 @@
     <button id="dockBtn">Alien Cat Slider 👽👾</button>
     <button id="toggleBtn">Spawning: ON</button>
     <button id="gyroBtn">Enable Tilt 🌀</button>
+    <div id="gyroToast"></div>
     <div id="dock">
         <label>
             Alien cats
@@ -107,48 +122,106 @@
     <canvas id="physicsCanvas"></canvas>
 
     <script>
-        const canvas      = document.getElementById('physicsCanvas');
-        const ctx         = canvas.getContext('2d');
-        const toggleBtn   = document.getElementById('toggleBtn');
-        const dockBtn     = document.getElementById('dockBtn');
-        const dock        = document.getElementById('dock');
-        const alienSlider = document.getElementById('alienSlider');
-        const catCountEl  = document.getElementById('catCount');
-        const totalCountEl= document.getElementById('totalCount');
-        const gyroBtn     = document.getElementById('gyroBtn');
+        const canvas       = document.getElementById('physicsCanvas');
+        const ctx          = canvas.getContext('2d');
+        const toggleBtn    = document.getElementById('toggleBtn');
+        const dockBtn      = document.getElementById('dockBtn');
+        const dock         = document.getElementById('dock');
+        const alienSlider  = document.getElementById('alienSlider');
+        const catCountEl   = document.getElementById('catCount');
+        const totalCountEl = document.getElementById('totalCount');
+        const gyroBtn      = document.getElementById('gyroBtn');
+        const gyroToast    = document.getElementById('gyroToast');
 
-        // ── Gravity / gyro ───────────────────────────────────────────────────
-        let gravityX = 0, gravityY = 0.6;
+        // ── Gravity ──────────────────────────────────────────────────────────
+        let gravityX = 0;
+        let gravityY = 0.6; // safe default — always correct before gyro kicks in
         const GRAVITY_STRENGTH = 0.6;
         const isMobileDevice = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
-        function setupGyro() {
-            if (!isMobileDevice) return;
-            if (typeof DeviceOrientationEvent !== 'undefined' &&
-                typeof DeviceOrientationEvent.requestPermission === 'function') {
-                gyroBtn.style.display = 'block';
-                gyroBtn.addEventListener('click', () => {
-                    DeviceOrientationEvent.requestPermission().then(s => {
-                        if (s === 'granted') { attachOrientation(); gyroBtn.style.display = 'none'; }
-                    }).catch(console.error);
-                });
-            } else {
-                attachOrientation();
-            }
+        let gyroActive = false;       // true once we're receiving real sensor data
+        let betaBaseline = null;      // calibrated on first good reading
+
+        function showToast(msg, duration = 5000) {
+            gyroToast.textContent = msg;
+            gyroToast.style.display = 'block';
+            clearTimeout(showToast._t);
+            showToast._t = setTimeout(() => { gyroToast.style.display = 'none'; }, duration);
         }
+
         function attachOrientation() {
+            let watchdog = setTimeout(() => {
+                // If no real events fired within 2s, Brave is probably blocking
+                if (!gyroActive) {
+                    gyroBtn.textContent = 'Enable Tilt 🌀';
+                    gyroBtn.style.display = 'block';
+                    showToast('Tilt blocked — in Brave go to Settings → Privacy & Security → Motion Sensors and enable it, then tap Enable Tilt again.', 8000);
+                }
+            }, 2000);
+
             window.addEventListener('deviceorientation', e => {
-                const tx = Math.max(-45, Math.min(45, e.gamma || 0)) / 45;
-                const ty = Math.max(-45, Math.min(45, (e.beta || 0) - 20)) / 45;
-                gravityX = tx * GRAVITY_STRENGTH;
-                gravityY = ty * GRAVITY_STRENGTH + 0.15;
+                // Brave sometimes fires events but with all-null values — ignore those
+                if (e.beta === null || e.gamma === null) return;
+
+                // Calibrate baseline on first valid reading so we don't
+                // assume the phone is lying flat at beta=0
+                if (betaBaseline === null) {
+                    betaBaseline = e.beta;
+                    clearTimeout(watchdog);
+                    gyroActive = true;
+                    gyroBtn.style.display = 'none';
+                }
+
+                const gamma = e.gamma; // left/right tilt, -90 to 90
+                const beta  = e.beta - betaBaseline; // relative to how they're holding it
+
+                const tiltX = Math.max(-45, Math.min(45, gamma)) / 45;
+                const tiltY = Math.max(-45, Math.min(45, beta))  / 45;
+
+                gravityX = tiltX * GRAVITY_STRENGTH;
+                // Keep a small downward pull so balls don't float when held level
+                gravityY = tiltY * GRAVITY_STRENGTH + 0.1;
             }, true);
         }
+
+        function setupGyro() {
+            if (!isMobileDevice) return;
+
+            // Show button on ALL mobile — let the user opt in (handles Brave, iOS, Android)
+            gyroBtn.style.display = 'block';
+
+            gyroBtn.addEventListener('click', () => {
+                gyroBtn.textContent = 'Enabling…';
+                gyroBtn.style.display = 'block';
+
+                // iOS 13+ needs a permission request triggered by user gesture
+                if (typeof DeviceOrientationEvent !== 'undefined' &&
+                    typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(state => {
+                            if (state === 'granted') {
+                                attachOrientation();
+                                gyroBtn.style.display = 'none';
+                            } else {
+                                gyroBtn.textContent = 'Enable Tilt 🌀';
+                                showToast('Permission denied. Allow motion access in iOS Settings → Safari → Motion & Orientation Access.');
+                            }
+                        })
+                        .catch(() => {
+                            gyroBtn.textContent = 'Enable Tilt 🌀';
+                        });
+                } else {
+                    // Android / Brave — just attach and let the watchdog detect if it's blocked
+                    attachOrientation();
+                    gyroBtn.style.display = 'none';
+                }
+            });
+        }
+
         setupGyro();
 
         // ── Multi-pointer map ────────────────────────────────────────────────
-        // pointerId → { ball, x, y, vx, vy }
-        const pointers = new Map();
+        const pointers = new Map(); // pointerId → { ball, x, y, vx, vy }
 
         // ── Scene state ──────────────────────────────────────────────────────
         let allowSpawning = true;
@@ -230,11 +303,10 @@
             }
         }
 
-        // ── Spawn ────────────────────────────────────────────────────────────
+        // ── Spawn / resize ───────────────────────────────────────────────────
         function handleWindowResize() {
             canvas.width  = window.innerWidth;
             canvas.height = window.innerHeight;
-
             if (!allowSpawning) {
                 balls.forEach(b => {
                     if (b.isDragged) return;
@@ -243,16 +315,12 @@
                 });
                 return;
             }
-
-            // Hard-reset all drag state
             pointers.forEach(p => { p.ball.isDragged = false; });
             pointers.clear();
             balls = [];
-
             const target = canvas.width * canvas.height * 0.20;
             let area = 0;
             while (area < target) { const b = new Ball(); balls.push(b); area += b.getArea(); }
-
             applyAlienCount(targetAlienCount);
             syncSliderMax();
             catCountEl.textContent = balls.filter(b => b.isImageBall).length;
@@ -277,10 +345,9 @@
                 const hitR = b.radius + (e.pointerType === 'touch' ? 10 : 0);
                 if (dx*dx + dy*dy < hitR*hitR) {
                     b.isDragged = true;
-                    // Store pointer with current position; velocity starts at 0
                     pointers.set(e.pointerId, { ball: b, x: e.clientX, y: e.clientY, vx: 0, vy: 0 });
                     canvas.setPointerCapture(e.pointerId);
-                    balls.push(balls.splice(i, 1)[0]); // bring to front
+                    balls.push(balls.splice(i, 1)[0]);
                     break;
                 }
             }
@@ -290,7 +357,6 @@
             e.preventDefault();
             const p = pointers.get(e.pointerId);
             if (!p) return;
-            // Velocity = how far the finger moved since last event
             p.vx = e.clientX - p.x;
             p.vy = e.clientY - p.y;
             p.x  = e.clientX;
@@ -307,17 +373,12 @@
         }
         canvas.addEventListener('pointerup',     releasePointer);
         canvas.addEventListener('pointercancel', releasePointer);
-        // Safety net: if the window loses focus, release everything
+
         window.addEventListener('blur', () => {
-            pointers.forEach(p => {
-                p.ball.isDragged = false;
-                p.ball.vx = p.vx;
-                p.ball.vy = p.vy;
-            });
+            pointers.forEach(p => { p.ball.isDragged = false; p.ball.vx = p.vx; p.ball.vy = p.vy; });
             pointers.clear();
         });
 
-        // Desktop hover cursor
         canvas.addEventListener('mousemove', e => {
             if (pointers.size > 0) return;
             let hover = false;
@@ -330,42 +391,30 @@
 
         // ── Physics ──────────────────────────────────────────────────────────
         const SUBSTEPS = 8;
-
-        // Build a quick lookup: ball → pointer, rebuilt each frame
-        let ballToPointer = new Map();
+        const ballToPointer = new Map();
 
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             const dt = 1.0 / SUBSTEPS;
 
-            // Rebuild ball→pointer lookup once per frame
             ballToPointer.clear();
             pointers.forEach(p => ballToPointer.set(p.ball, p));
 
-            // Safety net: any ball marked dragged but with no owning pointer gets freed
-            balls.forEach(b => {
-                if (b.isDragged && !ballToPointer.has(b)) {
-                    b.isDragged = false;
-                }
-            });
+            // Safety net: orphaned dragged balls get freed
+            balls.forEach(b => { if (b.isDragged && !ballToPointer.has(b)) b.isDragged = false; });
 
             for (let step = 0; step < SUBSTEPS; step++) {
-
                 balls.forEach(b => {
                     if (b.isDragged) {
                         const p = ballToPointer.get(b);
-                        // Smoothly track finger rather than teleport, avoids tunnelling
                         b.x += (p.x - b.x) * 0.5;
                         b.y += (p.y - b.y) * 0.5;
-                        b.vx = p.vx;
-                        b.vy = p.vy;
+                        b.vx = p.vx; b.vy = p.vy;
                     } else {
                         b.vx += gravityX * dt;
                         b.vy += gravityY * dt;
-                        b.vx *= 0.999;
-                        b.vy *= 0.999;
-                        b.x  += b.vx * dt;
-                        b.y  += b.vy * dt;
+                        b.vx *= 0.999; b.vy *= 0.999;
+                        b.x  += b.vx * dt; b.y  += b.vy * dt;
                     }
                 });
 
@@ -376,12 +425,10 @@
                         const distSq = dx*dx + dy*dy;
                         const minDist = b1.radius + b2.radius;
                         if (distSq >= minDist * minDist) continue;
-
                         let dist = Math.sqrt(distSq) || 1;
                         const nx = dx/dist, ny = dy/dist;
                         const overlap = minDist - dist;
                         const sumM = b1.mass + b2.mass;
-
                         if (!b1.isDragged && !b2.isDragged) {
                             const r1 = b2.mass/sumM, r2 = b1.mass/sumM;
                             b1.x -= nx*overlap*r1; b1.y -= ny*overlap*r1;
@@ -391,12 +438,11 @@
                         } else if (b2.isDragged && !b1.isDragged) {
                             b1.x -= nx*overlap; b1.y -= ny*overlap;
                         }
-
-                        const kx = b1.vx - b2.vx, ky = b1.vy - b2.vy;
+                        const kx = b1.vx-b2.vx, ky = b1.vy-b2.vy;
                         const relVel = kx*nx + ky*ny;
                         if (relVel > 0) {
-                            const e = relVel > 1.5 ? Math.min(b1.bounce, b2.bounce) : 0;
-                            const imp = (1 + e) * relVel / (1/b1.mass + 1/b2.mass);
+                            const e2 = relVel > 1.5 ? Math.min(b1.bounce, b2.bounce) : 0;
+                            const imp = (1+e2)*relVel / (1/b1.mass + 1/b2.mass);
                             if (!b1.isDragged) { b1.vx -= imp*nx/b1.mass; b1.vy -= imp*ny/b1.mass; }
                             if (!b2.isDragged) { b2.vx += imp*nx/b2.mass; b2.vy += imp*ny/b2.mass; }
                         }
@@ -405,10 +451,10 @@
 
                 balls.forEach(b => {
                     if (b.isDragged) return;
-                    if (b.x - b.radius < 0)              { b.x = b.radius;              if (b.vx < 0) b.vx *= Math.abs(b.vx) > 1.5 ? -b.bounce : 0; }
-                    else if (b.x + b.radius > canvas.width)  { b.x = canvas.width - b.radius;  if (b.vx > 0) b.vx *= Math.abs(b.vx) > 1.5 ? -b.bounce : 0; }
-                    if (b.y - b.radius < 0)              { b.y = b.radius;              if (b.vy < 0) b.vy *= Math.abs(b.vy) > 1.5 ? -b.bounce : 0; }
-                    else if (b.y + b.radius > canvas.height) { b.y = canvas.height - b.radius; if (b.vy > 0) b.vy *= b.vy > 1.5 ? -b.bounce : 0; b.vx *= 0.95; }
+                    if (b.x - b.radius < 0)                { b.x = b.radius;               if (b.vx < 0) b.vx *= Math.abs(b.vx) > 1.5 ? -b.bounce : 0; }
+                    else if (b.x + b.radius > canvas.width) { b.x = canvas.width - b.radius;  if (b.vx > 0) b.vx *= Math.abs(b.vx) > 1.5 ? -b.bounce : 0; }
+                    if (b.y - b.radius < 0)                { b.y = b.radius;               if (b.vy < 0) b.vy *= Math.abs(b.vy) > 1.5 ? -b.bounce : 0; }
+                    else if (b.y + b.radius > canvas.height){ b.y = canvas.height - b.radius; if (b.vy > 0) b.vy *= b.vy > 1.5 ? -b.bounce : 0; b.vx *= 0.95; }
                 });
             }
 
