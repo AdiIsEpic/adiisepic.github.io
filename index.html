@@ -13,264 +13,438 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
         canvas { display: block; width: 100%; height: 100%; touch-action: none; }
-        #toggleBtn {
-            position: absolute; top: 20px; right: 20px;
-            padding: 12px 20px;
-            background-color: rgba(255,255,255,0.1); color: #fff;
-            border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
-            font-size: 14px; font-weight: 600; cursor: pointer;
-            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10;
-        }
-        #toggleBtn:hover { background-color: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.4); }
-        #toggleBtn:active { transform: scale(0.95); }
-        #toggleBtn.disabled { background-color: rgba(255,59,48,0.2); border-color: rgba(255,59,48,0.4); color: #ff453a; }
-        #dockBtn {
-            position: absolute; top: 20px; right: 170px;
+
+        /* ── Top bar buttons ── */
+        .top-btn {
+            position: absolute; top: 20px;
             padding: 12px 16px;
             background-color: rgba(255,255,255,0.1); color: #fff;
             border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
-            font-size: 14px; font-weight: 600; cursor: pointer;
+            font-size: 13px; font-weight: 600; cursor: pointer;
             backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-            transition: all 0.2s ease;
+            transition: background 0.2s, border-color 0.2s, transform 0.1s;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10;
-            line-height: 1; white-space: nowrap;
+            white-space: nowrap; line-height: 1;
         }
-        #dockBtn:hover { background-color: rgba(255,255,255,0.2); }
-        #dockBtn:active { transform: scale(0.95); }
+        .top-btn:hover  { background-color: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.4); }
+        .top-btn:active { transform: scale(0.95); }
+        .top-btn.disabled { background-color: rgba(255,59,48,0.2); border-color: rgba(255,59,48,0.4); color: #ff453a; }
+        #toggleBtn  { right: 20px; }
+        #uploadBtn  { right: 155px; }
+        #alienDockBtn { right: 290px; }
 
+        /* ── Gyro button ── */
         #gyroBtn {
             position: absolute; top: 70px; right: 20px;
             padding: 10px 16px;
             background-color: rgba(90,200,250,0.15); color: #5AC8FA;
             border: 1px solid rgba(90,200,250,0.35); border-radius: 8px;
             font-size: 13px; font-weight: 600; cursor: pointer;
-            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10;
-            display: none; white-space: nowrap;
+            backdrop-filter: blur(10px); box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 10; display: none; white-space: nowrap;
         }
 
-        /* Toast for Brave blocked-sensor message */
+        /* ── Toast ── */
         #gyroToast {
-            position: absolute; bottom: 120px; left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255,59,48,0.9);
-            color: #fff; font-size: 12px; font-weight: 500;
+            position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,59,48,0.9); color: #fff;
+            font-size: 12px; font-weight: 500; line-height: 1.5;
             padding: 10px 18px; border-radius: 10px;
             box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-            z-index: 20; display: none; text-align: center;
-            max-width: 280px; line-height: 1.5;
+            z-index: 20; display: none; text-align: center; max-width: 280px;
         }
 
-        #dock {
-            position: absolute; bottom: 32px; left: 50%;
-            transform: translateX(-50%) translateY(0);
-            background: rgba(28,28,30,0.85);
-            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+        /* ── Shared panel base ── */
+        .panel {
+            position: absolute;
+            background: rgba(28,28,30,0.88);
+            backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
             border: 1px solid rgba(255,255,255,0.12); border-radius: 16px;
-            padding: 18px 28px 16px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-            z-index: 10; min-width: 300px;
+            z-index: 10;
             transition: opacity 0.25s ease, transform 0.25s ease;
         }
-        #dock.hidden { opacity: 0; transform: translateX(-50%) translateY(20px); pointer-events: none; }
-        #dock label {
+        .panel.hidden { opacity: 0; pointer-events: none; }
+
+        /* ── Alien cat dock ── */
+        #alienDock {
+            bottom: 32px; left: 50%; transform: translateX(-50%);
+            padding: 18px 28px 16px; min-width: 300px;
+        }
+        #alienDock.hidden { transform: translateX(-50%) translateY(20px); }
+        #alienDock label {
             display: flex; justify-content: space-between; align-items: center;
             color: #fff; font-size: 13px; font-weight: 600;
             margin-bottom: 12px; letter-spacing: 0.02em;
         }
-        #dock label span { font-size: 12px; color: rgba(255,255,255,0.5); font-weight: 400; }
-        #catCount {
+        #alienDock label span { font-size: 12px; color: rgba(255,255,255,0.5); font-weight: 400; }
+        #alienCount {
             display: inline-block; background: rgba(90,200,250,0.25); color: #5AC8FA;
             border-radius: 6px; padding: 1px 8px; font-size: 13px; font-weight: 700;
             min-width: 28px; text-align: center;
         }
-        #alienSlider {
+        .panel-hint { text-align: center; color: rgba(255,255,255,0.3); font-size: 11px; margin-top: 10px; }
+
+        /* ── Upload panel ── */
+        #uploadPanel {
+            bottom: 32px; right: 20px; transform: translateY(0);
+            width: 320px; padding: 16px;
+        }
+        #uploadPanel.hidden { transform: translateY(20px); }
+
+        #uploadPanel .panel-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 12px;
+        }
+        #uploadPanel .panel-title {
+            color: #fff; font-size: 13px; font-weight: 700; letter-spacing: 0.02em;
+        }
+        #uploadAddBtn {
+            padding: 6px 14px;
+            background: rgba(90,200,250,0.2); color: #5AC8FA;
+            border: 1px solid rgba(90,200,250,0.4); border-radius: 8px;
+            font-size: 12px; font-weight: 700; cursor: pointer;
+            transition: background 0.15s;
+        }
+        #uploadAddBtn:hover { background: rgba(90,200,250,0.35); }
+
+        #uploadList {
+            display: flex; flex-direction: column; gap: 10px;
+            max-height: 280px; overflow-y: auto;
+            scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent;
+        }
+        #uploadList::-webkit-scrollbar { width: 4px; }
+        #uploadList::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+        .upload-row {
+            display: flex; align-items: center; gap: 8px;
+        }
+        .remove-btn {
+            width: 22px; height: 22px; flex-shrink: 0;
+            background: rgba(255,59,48,0.2); color: #ff453a;
+            border: 1px solid rgba(255,59,48,0.35); border-radius: 6px;
+            font-size: 14px; line-height: 1; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.15s;
+        }
+        .remove-btn:hover { background: rgba(255,59,48,0.4); }
+
+        .upload-thumb {
+            width: 36px; height: 36px; flex-shrink: 0;
+            border-radius: 50%; object-fit: cover;
+            border: 1.5px solid rgba(255,255,255,0.15);
+        }
+
+        .upload-slider-wrap {
+            flex: 1; display: flex; flex-direction: column; gap: 3px;
+        }
+        .upload-count-label {
+            font-size: 11px; color: rgba(255,255,255,0.45);
+            text-align: right; font-variant-numeric: tabular-nums;
+        }
+
+        /* ── Shared slider styles ── */
+        .slider {
             -webkit-appearance: none; appearance: none;
             width: 100%; height: 6px; border-radius: 3px;
             background: rgba(255,255,255,0.15); outline: none; cursor: pointer;
         }
-        #alienSlider::-webkit-slider-thumb {
+        .slider::-webkit-slider-thumb {
             -webkit-appearance: none; appearance: none;
-            width: 22px; height: 22px; border-radius: 50%;
-            background: #5AC8FA; box-shadow: 0 0 8px rgba(90,200,250,0.6);
+            width: 20px; height: 20px; border-radius: 50%;
+            background: #5AC8FA; box-shadow: 0 0 6px rgba(90,200,250,0.5);
             cursor: grab; transition: transform 0.1s;
         }
-        #alienSlider::-webkit-slider-thumb:active { cursor: grabbing; transform: scale(1.15); }
-        #alienSlider::-moz-range-thumb {
-            width: 22px; height: 22px; border-radius: 50%;
-            background: #5AC8FA; box-shadow: 0 0 8px rgba(90,200,250,0.6);
-            cursor: grab; border: none;
+        .slider::-webkit-slider-thumb:active { cursor: grabbing; transform: scale(1.15); }
+        .slider::-moz-range-thumb {
+            width: 20px; height: 20px; border-radius: 50%;
+            background: #5AC8FA; border: none; cursor: grab;
         }
-        #dockHint { text-align: center; color: rgba(255,255,255,0.3); font-size: 11px; margin-top: 10px; }
+
+        #uploadEmpty {
+            text-align: center; color: rgba(255,255,255,0.25);
+            font-size: 12px; padding: 12px 0;
+        }
     </style>
 </head>
 <body>
-    <button id="dockBtn">Alien Cat Slider 👽👾</button>
-    <button id="toggleBtn">Spawning: ON</button>
+    <button class="top-btn" id="alienDockBtn">Alien Cat Slider 👽</button>
+    <button class="top-btn" id="uploadBtn">Upload Image 🖼️</button>
+    <button class="top-btn" id="toggleBtn">Spawning: ON</button>
     <button id="gyroBtn">Enable Tilt 🌀</button>
     <div id="gyroToast"></div>
-    <div id="dock">
+
+    <!-- Alien cat dock -->
+    <div id="alienDock" class="panel">
         <label>
             Alien cats
-            <span><span id="catCount">6</span> / <span id="totalCount">0</span></span>
+            <span><span id="alienCount">6</span> / <span id="alienTotal">0</span></span>
         </label>
-        <input type="range" id="alienSlider" min="0" max="100" value="6" step="1">
-        <div id="dockHint">drag slider · 0 = none · max = all</div>
+        <input type="range" id="alienSlider" class="slider" min="0" max="100" value="6" step="1">
+        <div class="panel-hint">drag slider · 0 = none · max = all</div>
     </div>
+
+    <!-- Upload panel -->
+    <div id="uploadPanel" class="panel hidden">
+        <div class="panel-header">
+            <span class="panel-title">Custom Images</span>
+            <button id="uploadAddBtn">+ Upload</button>
+        </div>
+        <div id="uploadList">
+            <div id="uploadEmpty">No images yet — upload one above</div>
+        </div>
+    </div>
+
+    <!-- Hidden file input -->
+    <input type="file" id="fileInput" accept="image/*" multiple style="display:none">
+
     <canvas id="physicsCanvas"></canvas>
 
     <script>
         const canvas       = document.getElementById('physicsCanvas');
         const ctx          = canvas.getContext('2d');
         const toggleBtn    = document.getElementById('toggleBtn');
-        const dockBtn      = document.getElementById('dockBtn');
-        const dock         = document.getElementById('dock');
+        const alienDockBtn = document.getElementById('alienDockBtn');
+        const uploadBtn    = document.getElementById('uploadBtn');
+        const alienDock    = document.getElementById('alienDock');
         const alienSlider  = document.getElementById('alienSlider');
-        const catCountEl   = document.getElementById('catCount');
-        const totalCountEl = document.getElementById('totalCount');
+        const alienCountEl = document.getElementById('alienCount');
+        const alienTotalEl = document.getElementById('alienTotal');
+        const uploadPanel  = document.getElementById('uploadPanel');
+        const uploadAddBtn = document.getElementById('uploadAddBtn');
+        const fileInput    = document.getElementById('fileInput');
+        const uploadList   = document.getElementById('uploadList');
+        const uploadEmpty  = document.getElementById('uploadEmpty');
         const gyroBtn      = document.getElementById('gyroBtn');
         const gyroToast    = document.getElementById('gyroToast');
 
-        // ── Gravity ──────────────────────────────────────────────────────────
-        let gravityX = 0;
-        let gravityY = 0.6; // safe default — always correct before gyro kicks in
-        const GRAVITY_STRENGTH = 0.6;
-        const isMobileDevice = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+        // ── Gravity / gyro ───────────────────────────────────────────────────
+        let gravityX = 0, gravityY = 0.6;
+        const GRAV = 0.6;
+        const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+        let betaBaseline = null, gyroActive = false;
 
-        let gyroActive = false;       // true once we're receiving real sensor data
-        let betaBaseline = null;      // calibrated on first good reading
-
-        function showToast(msg, duration = 5000) {
+        function showToast(msg, ms = 6000) {
             gyroToast.textContent = msg;
             gyroToast.style.display = 'block';
             clearTimeout(showToast._t);
-            showToast._t = setTimeout(() => { gyroToast.style.display = 'none'; }, duration);
+            showToast._t = setTimeout(() => gyroToast.style.display = 'none', ms);
         }
 
         function attachOrientation() {
             let watchdog = setTimeout(() => {
-                // If no real events fired within 2s, Brave is probably blocking
                 if (!gyroActive) {
                     gyroBtn.textContent = 'Enable Tilt 🌀';
                     gyroBtn.style.display = 'block';
-                    showToast('Tilt blocked — in Brave go to Settings → Privacy & Security → Motion Sensors and enable it, then tap Enable Tilt again.', 8000);
+                    showToast('Motion blocked — in Brave: Settings → Privacy & Security → Motion Sensors → Allow', 8000);
                 }
             }, 2000);
-
             window.addEventListener('deviceorientation', e => {
-                // Brave sometimes fires events but with all-null values — ignore those
                 if (e.beta === null || e.gamma === null) return;
-
-                // Calibrate baseline on first valid reading so we don't
-                // assume the phone is lying flat at beta=0
                 if (betaBaseline === null) {
                     betaBaseline = e.beta;
                     clearTimeout(watchdog);
                     gyroActive = true;
                     gyroBtn.style.display = 'none';
                 }
-
-                const gamma = e.gamma; // left/right tilt, -90 to 90
-                const beta  = e.beta - betaBaseline; // relative to how they're holding it
-
-                const tiltX = Math.max(-45, Math.min(45, gamma)) / 45;
-                const tiltY = Math.max(-45, Math.min(45, beta))  / 45;
-
-                gravityX = tiltX * GRAVITY_STRENGTH;
-                // Keep a small downward pull so balls don't float when held level
-                gravityY = tiltY * GRAVITY_STRENGTH + 0.1;
+                const tx = Math.max(-45, Math.min(45, e.gamma)) / 45;
+                const ty = Math.max(-45, Math.min(45, e.beta - betaBaseline)) / 45;
+                gravityX = tx * GRAV;
+                gravityY = ty * GRAV + 0.1;
             }, true);
         }
 
         function setupGyro() {
-            if (!isMobileDevice) return;
-
-            // Show button on ALL mobile — let the user opt in (handles Brave, iOS, Android)
+            if (!isMobile) return;
             gyroBtn.style.display = 'block';
-
             gyroBtn.addEventListener('click', () => {
                 gyroBtn.textContent = 'Enabling…';
-                gyroBtn.style.display = 'block';
-
-                // iOS 13+ needs a permission request triggered by user gesture
                 if (typeof DeviceOrientationEvent !== 'undefined' &&
                     typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    DeviceOrientationEvent.requestPermission()
-                        .then(state => {
-                            if (state === 'granted') {
-                                attachOrientation();
-                                gyroBtn.style.display = 'none';
-                            } else {
-                                gyroBtn.textContent = 'Enable Tilt 🌀';
-                                showToast('Permission denied. Allow motion access in iOS Settings → Safari → Motion & Orientation Access.');
-                            }
-                        })
-                        .catch(() => {
-                            gyroBtn.textContent = 'Enable Tilt 🌀';
-                        });
+                    DeviceOrientationEvent.requestPermission().then(s => {
+                        if (s === 'granted') { attachOrientation(); gyroBtn.style.display = 'none'; }
+                        else { gyroBtn.textContent = 'Enable Tilt 🌀'; showToast('Permission denied — allow motion in iOS Settings → Safari'); }
+                    }).catch(() => gyroBtn.textContent = 'Enable Tilt 🌀');
                 } else {
-                    // Android / Brave — just attach and let the watchdog detect if it's blocked
                     attachOrientation();
                     gyroBtn.style.display = 'none';
                 }
             });
         }
-
         setupGyro();
 
-        // ── Multi-pointer map ────────────────────────────────────────────────
-        const pointers = new Map(); // pointerId → { ball, x, y, vx, vy }
+        // ── Image registry ───────────────────────────────────────────────────
+        // Each entry: { id, name, url, img, count }
+        // Ball.skin = null | 'alien' | <imageId number>
+        const uploadedImages = [];
+        let nextImageId = 0;
 
-        // ── Scene state ──────────────────────────────────────────────────────
-        let allowSpawning = true;
-        let balls = [];
-        let targetAlienCount = 6;
-        const colors = ['#FF3B30','#FF9500','#FFCC00','#4CD964','#5AC8FA','#5856D6','#FF2D55'];
+        function freeBalls() {
+            return balls.filter(b => b.skin === null);
+        }
+        function ballsWithSkin(skin) {
+            return balls.filter(b => b.skin === skin);
+        }
 
-        const alienCatImg = new Image();
-        alienCatImg.src = 'https://media.tenor.com/-TO4hXAw_MQAAAAj/alien-alien-cat.gif';
+        function setSkinCount(skin, newCount) {
+            const current = ballsWithSkin(skin).length;
+            if (newCount > current) {
+                let need = newCount - current;
+                for (let i = 0; i < balls.length && need > 0; i++) {
+                    if (balls[i].skin === null) { balls[i].skin = skin; need--; }
+                }
+            } else if (newCount < current) {
+                let excess = current - newCount;
+                for (let i = 0; i < balls.length && excess > 0; i++) {
+                    if (balls[i].skin === skin) { balls[i].skin = null; excess--; }
+                }
+            }
+        }
 
-        // ── Dock ─────────────────────────────────────────────────────────────
-        let dockVisible = true;
-        dockBtn.addEventListener('click', () => {
-            dockVisible = !dockVisible;
-            dock.classList.toggle('hidden', !dockVisible);
+        // Max any one slider can go = free balls + that skin's current count
+        function sliderMax(skin) {
+            return freeBalls().length + ballsWithSkin(skin).length;
+        }
+
+        // ── Panel toggles ────────────────────────────────────────────────────
+        let alienVisible = true, uploadVisible = false;
+
+        alienDockBtn.addEventListener('click', () => {
+            alienVisible = !alienVisible;
+            alienDock.classList.toggle('hidden', !alienVisible);
         });
-        dock.addEventListener('pointerdown', e => e.stopPropagation());
+
+        uploadBtn.addEventListener('click', () => {
+            uploadVisible = !uploadVisible;
+            uploadPanel.classList.toggle('hidden', !uploadVisible);
+        });
+
+        [alienDock, uploadPanel].forEach(p => p.addEventListener('pointerdown', e => e.stopPropagation()));
+
+        // ── Alien slider ─────────────────────────────────────────────────────
+        let targetAlienCount = 6;
 
         alienSlider.addEventListener('input', () => {
             targetAlienCount = parseInt(alienSlider.value);
-            applyAlienCount(targetAlienCount);
-            catCountEl.textContent = balls.filter(b => b.isImageBall).length;
+            setSkinCount('alien', targetAlienCount);
+            refreshAlienUI();
+            refreshAllUploadRows(); // maxes may have changed
         });
 
-        function applyAlienCount(n) {
-            n = Math.min(n, balls.length);
-            const cur = balls.filter(b => b.isImageBall).length;
-            if (n > cur) {
-                let need = n - cur;
-                for (let i = 0; i < balls.length && need > 0; i++)
-                    if (!balls[i].isImageBall) { balls[i].isImageBall = true; need--; }
-            } else if (n < cur) {
-                let excess = cur - n;
-                for (let i = 0; i < balls.length && excess > 0; i++)
-                    if (balls[i].isImageBall) { balls[i].isImageBall = false; excess--; }
-            }
+        function refreshAlienUI() {
+            const cur = ballsWithSkin('alien').length;
+            alienCountEl.textContent = cur;
+            alienSlider.value = cur;
+            alienSlider.max = sliderMax('alien');
+            alienTotalEl.textContent = balls.length;
         }
 
-        function syncSliderMax() {
-            alienSlider.max = balls.length;
-            totalCountEl.textContent = balls.length;
-            if (parseInt(alienSlider.value) > balls.length) {
-                alienSlider.value = balls.length;
-                targetAlienCount = balls.length;
-                catCountEl.textContent = balls.length;
-            }
+        // ── Upload panel ─────────────────────────────────────────────────────
+        uploadAddBtn.addEventListener('click', () => fileInput.click());
+        uploadAddBtn.addEventListener('pointerdown', e => e.stopPropagation());
+
+        fileInput.addEventListener('change', () => {
+            Array.from(fileInput.files).forEach(file => addUploadedImage(file));
+            fileInput.value = ''; // reset so same file can be re-uploaded
+        });
+
+        function addUploadedImage(file) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                const url = e.target.result;
+                const img = new Image();
+                img.src = url;
+                const entry = { id: nextImageId++, name: file.name.replace(/\.[^.]+$/, ''), url, img, count: 0 };
+                uploadedImages.push(entry);
+                renderUploadRow(entry);
+                uploadEmpty.style.display = 'none';
+            };
+            reader.readAsDataURL(file);
         }
 
-        // ── Ball ─────────────────────────────────────────────────────────────
+        function renderUploadRow(entry) {
+            const row = document.createElement('div');
+            row.className = 'upload-row';
+            row.dataset.id = entry.id;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'remove-btn';
+            removeBtn.textContent = '×';
+            removeBtn.addEventListener('click', () => removeUploadedImage(entry.id));
+            removeBtn.addEventListener('pointerdown', e => e.stopPropagation());
+
+            const thumb = document.createElement('img');
+            thumb.className = 'upload-thumb';
+            thumb.src = entry.url;
+
+            const wrap = document.createElement('div');
+            wrap.className = 'upload-slider-wrap';
+
+            const countLabel = document.createElement('div');
+            countLabel.className = 'upload-count-label';
+
+            const slider = document.createElement('input');
+            slider.type = 'range';
+            slider.className = 'slider';
+            slider.min = 0;
+            slider.max = sliderMax(entry.id);
+            slider.value = 0;
+            slider.step = 1;
+
+            function updateRow() {
+                const max = sliderMax(entry.id);
+                slider.max = max;
+                const cur = ballsWithSkin(entry.id).length;
+                slider.value = cur;
+                countLabel.textContent = `${cur} / ${max}`;
+            }
+            updateRow();
+            entry._updateRow = updateRow; // store so we can call it from outside
+
+            slider.addEventListener('input', () => {
+                const n = parseInt(slider.value);
+                setSkinCount(entry.id, n);
+                entry.count = ballsWithSkin(entry.id).length;
+                updateRow();
+                refreshAlienUI();
+                refreshAllUploadRows();
+            });
+            slider.addEventListener('pointerdown', e => e.stopPropagation());
+
+            wrap.appendChild(slider);
+            wrap.appendChild(countLabel);
+            row.appendChild(removeBtn);
+            row.appendChild(thumb);
+            row.appendChild(wrap);
+            uploadList.appendChild(row);
+        }
+
+        function removeUploadedImage(id) {
+            // Free all balls using this image
+            setSkinCount(id, 0);
+            const idx = uploadedImages.findIndex(e => e.id === id);
+            if (idx !== -1) uploadedImages.splice(idx, 1);
+            const row = uploadList.querySelector(`.upload-row[data-id="${id}"]`);
+            if (row) row.remove();
+            if (uploadedImages.length === 0) uploadEmpty.style.display = '';
+            refreshAlienUI();
+            refreshAllUploadRows();
+        }
+
+        function refreshAllUploadRows() {
+            uploadedImages.forEach(entry => {
+                if (entry._updateRow) entry._updateRow();
+            });
+        }
+
+        // ── Spawning ─────────────────────────────────────────────────────────
+        let allowSpawning = true;
+        let balls = [];
+
+        const colors = ['#FF3B30','#FF9500','#FFCC00','#4CD964','#5AC8FA','#5856D6','#FF2D55'];
+        const alienCatImg = new Image();
+        alienCatImg.src = 'https://media.tenor.com/-TO4hXAw_MQAAAAj/alien-alien-cat.gif';
+
         class Ball {
             constructor() {
                 this.radius = Math.random() * 8 + 18;
@@ -282,7 +456,7 @@
                 this.bounce = 0.65;
                 this.mass = this.radius * this.radius;
                 this.isDragged = false;
-                this.isImageBall = false;
+                this.skin = null; // null | 'alien' | imageId
             }
             getArea() { return Math.PI * this.radius * this.radius; }
             draw() {
@@ -293,17 +467,23 @@
                 ctx.shadowBlur = this.isDragged ? 25 : 6;
                 ctx.shadowColor = this.isDragged ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.4)';
                 if (!this.isDragged) ctx.shadowOffsetY = 3;
-                if (this.isImageBall && alienCatImg.complete && alienCatImg.naturalWidth > 0) {
+
+                if (this.skin === 'alien' && alienCatImg.complete && alienCatImg.naturalWidth > 0) {
                     ctx.drawImage(alienCatImg, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
+                } else if (typeof this.skin === 'number') {
+                    const entry = uploadedImages.find(e => e.id === this.skin);
+                    if (entry && entry.img.complete && entry.img.naturalWidth > 0) {
+                        ctx.drawImage(entry.img, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
+                    } else {
+                        ctx.fillStyle = this.color; ctx.fill();
+                    }
                 } else {
-                    ctx.fillStyle = this.color;
-                    ctx.fill();
+                    ctx.fillStyle = this.color; ctx.fill();
                 }
                 ctx.restore();
             }
         }
 
-        // ── Spawn / resize ───────────────────────────────────────────────────
         function handleWindowResize() {
             canvas.width  = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -321,9 +501,17 @@
             const target = canvas.width * canvas.height * 0.20;
             let area = 0;
             while (area < target) { const b = new Ball(); balls.push(b); area += b.getArea(); }
-            applyAlienCount(targetAlienCount);
-            syncSliderMax();
-            catCountEl.textContent = balls.filter(b => b.isImageBall).length;
+
+            // Re-apply all skins
+            setSkinCount('alien', targetAlienCount);
+            uploadedImages.forEach(entry => {
+                const apply = Math.min(entry.count, freeBalls().length);
+                setSkinCount(entry.id, apply);
+                entry.count = apply;
+            });
+
+            refreshAlienUI();
+            refreshAllUploadRows();
         }
 
         window.addEventListener('resize', handleWindowResize);
@@ -335,7 +523,10 @@
             if (allowSpawning) handleWindowResize();
         });
 
-        // ── Pointer events ───────────────────────────────────────────────────
+        // ── Multi-pointer ────────────────────────────────────────────────────
+        const pointers = new Map();
+        const ballToPointer = new Map();
+
         canvas.addEventListener('pointerdown', e => {
             e.preventDefault();
             for (let i = balls.length - 1; i >= 0; i--) {
@@ -357,18 +548,15 @@
             e.preventDefault();
             const p = pointers.get(e.pointerId);
             if (!p) return;
-            p.vx = e.clientX - p.x;
-            p.vy = e.clientY - p.y;
-            p.x  = e.clientX;
-            p.y  = e.clientY;
+            p.vx = e.clientX - p.x; p.vy = e.clientY - p.y;
+            p.x = e.clientX; p.y = e.clientY;
         });
 
         function releasePointer(e) {
             const p = pointers.get(e.pointerId);
             if (!p) return;
             p.ball.isDragged = false;
-            p.ball.vx = p.vx;
-            p.ball.vy = p.vy;
+            p.ball.vx = p.vx; p.ball.vy = p.vy;
             pointers.delete(e.pointerId);
         }
         canvas.addEventListener('pointerup',     releasePointer);
@@ -391,7 +579,6 @@
 
         // ── Physics ──────────────────────────────────────────────────────────
         const SUBSTEPS = 8;
-        const ballToPointer = new Map();
 
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -399,22 +586,18 @@
 
             ballToPointer.clear();
             pointers.forEach(p => ballToPointer.set(p.ball, p));
-
-            // Safety net: orphaned dragged balls get freed
             balls.forEach(b => { if (b.isDragged && !ballToPointer.has(b)) b.isDragged = false; });
 
             for (let step = 0; step < SUBSTEPS; step++) {
                 balls.forEach(b => {
                     if (b.isDragged) {
                         const p = ballToPointer.get(b);
-                        b.x += (p.x - b.x) * 0.5;
-                        b.y += (p.y - b.y) * 0.5;
+                        b.x += (p.x - b.x) * 0.5; b.y += (p.y - b.y) * 0.5;
                         b.vx = p.vx; b.vy = p.vy;
                     } else {
-                        b.vx += gravityX * dt;
-                        b.vy += gravityY * dt;
+                        b.vx += gravityX * dt; b.vy += gravityY * dt;
                         b.vx *= 0.999; b.vy *= 0.999;
-                        b.x  += b.vx * dt; b.y  += b.vy * dt;
+                        b.x += b.vx * dt; b.y += b.vy * dt;
                     }
                 });
 
@@ -451,10 +634,10 @@
 
                 balls.forEach(b => {
                     if (b.isDragged) return;
-                    if (b.x - b.radius < 0)                { b.x = b.radius;               if (b.vx < 0) b.vx *= Math.abs(b.vx) > 1.5 ? -b.bounce : 0; }
-                    else if (b.x + b.radius > canvas.width) { b.x = canvas.width - b.radius;  if (b.vx > 0) b.vx *= Math.abs(b.vx) > 1.5 ? -b.bounce : 0; }
-                    if (b.y - b.radius < 0)                { b.y = b.radius;               if (b.vy < 0) b.vy *= Math.abs(b.vy) > 1.5 ? -b.bounce : 0; }
-                    else if (b.y + b.radius > canvas.height){ b.y = canvas.height - b.radius; if (b.vy > 0) b.vy *= b.vy > 1.5 ? -b.bounce : 0; b.vx *= 0.95; }
+                    if (b.x - b.radius < 0)                 { b.x = b.radius;               if (b.vx < 0) b.vx *= Math.abs(b.vx) > 1.5 ? -b.bounce : 0; }
+                    else if (b.x + b.radius > canvas.width)  { b.x = canvas.width - b.radius;  if (b.vx > 0) b.vx *= Math.abs(b.vx) > 1.5 ? -b.bounce : 0; }
+                    if (b.y - b.radius < 0)                 { b.y = b.radius;               if (b.vy < 0) b.vy *= Math.abs(b.vy) > 1.5 ? -b.bounce : 0; }
+                    else if (b.y + b.radius > canvas.height) { b.y = canvas.height - b.radius; if (b.vy > 0) b.vy *= b.vy > 1.5 ? -b.bounce : 0; b.vx *= 0.95; }
                 });
             }
 
