@@ -18,6 +18,7 @@
         .top-btn {
             position: absolute; right: 20px;
             padding: 11px 16px;
+            min-width: 200px; text-align: center;
             background-color: rgba(255,255,255,0.1); color: #fff;
             border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
             font-size: 13px; font-weight: 600; cursor: pointer;
@@ -35,9 +36,12 @@
         #alienDockBtn { top: 65px; }
         #uploadBtn    { top: 110px; }
 
+        @media (max-width: 600px) {
+            .top-btn { min-width: 0; }
+        }
         #gyroBtn {
             position: absolute; top: 155px; right: 20px;
-            padding: 10px 16px;
+            padding: 10px 16px; min-width: 0;
             background-color: rgba(90,200,250,0.15); color: #5AC8FA;
             border: 1px solid rgba(90,200,250,0.35); border-radius: 8px;
             font-size: 13px; font-weight: 600; cursor: pointer;
@@ -203,12 +207,12 @@
     <div id="gyroToast"></div>
 
     <!-- Alien cat dock -->
-    <div id="alienDock" class="panel">
+    <div id="alienDock" class="panel hidden">
         <label>
             Alien cats
             <span><span id="alienCount">6</span> / <span id="alienTotal">0</span></span>
         </label>
-        <input type="range" id="alienSlider" class="slider" min="0" max="100" value="6" step="1">
+        <input type="range" id="alienSlider" class="slider" min="0" max="100" value="0" step="1">
         <div class="panel-hint">drag · 0 = none · max = all</div>
     </div>
 
@@ -339,18 +343,22 @@
         blockCanvasEvents(uploadPanel);
 
         // ── Panel toggles ────────────────────────────────────────────────────
-        let alienVisible = true, uploadVisible = false;
+        let alienVisible = false, uploadVisible = false;
         alienDockBtn.addEventListener('click', () => {
             alienVisible = !alienVisible;
             alienDock.classList.toggle('hidden', !alienVisible);
+            // close the other panel
+            if (alienVisible) { uploadVisible = false; uploadPanel.classList.add('hidden'); }
         });
         uploadBtn.addEventListener('click', () => {
             uploadVisible = !uploadVisible;
             uploadPanel.classList.toggle('hidden', !uploadVisible);
+            // close the other panel
+            if (uploadVisible) { alienVisible = false; alienDock.classList.add('hidden'); }
         });
 
         // ── Alien slider ─────────────────────────────────────────────────────
-        let targetAlienCount = 6;
+        let targetAlienCount = 0;
         alienSlider.addEventListener('input', () => {
             targetAlienCount = parseInt(alienSlider.value);
             setSkinCount('alien', targetAlienCount);
@@ -477,7 +485,7 @@
         // ── Ball class ───────────────────────────────────────────────────────
         let allowSpawning = true;
         let balls = [];
-        let targetAlienCount_save = 6;
+        let targetAlienCount_save = 0;
         const colors = ['#FF3B30','#FF9500','#FFCC00','#4CD964','#5AC8FA','#5856D6','#FF2D55'];
         const alienCatImg = new Image();
         alienCatImg.src = 'https://media.tenor.com/-TO4hXAw_MQAAAAj/alien-alien-cat.gif';
