@@ -258,7 +258,9 @@
 
         // ── Gravity / gyro ───────────────────────────────────────────────────
         let gravityX = 0, gravityY = 0.6;
-        const GRAV = 0.6;
+        let targetGravX = 0, targetGravY = 0.6;
+        const GRAV = 0.5;
+        const GRAV_LERP = 0.04; // how quickly gravity follows the tilt (lower = smoother)
         const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
         let betaBaseline = null, gyroActive = false;
 
@@ -274,7 +276,7 @@
                 if (!gyroActive) {
                     gyroBtn.textContent = 'Enable Tilt 🌀';
                     gyroBtn.style.display = 'block';
-                    showToast('Motion blocked — in Brave: Settings → Privacy & Security → Motion Sensors → Allow', 8000);
+                    showToast('Tilt blocked — enable Motion Sensors in your browser settings and try again.', 8000);
                 }
             }, 2000);
             window.addEventListener('deviceorientation', e => {
@@ -287,8 +289,8 @@
                 }
                 const tx = Math.max(-45, Math.min(45, e.gamma)) / 45;
                 const ty = Math.max(-45, Math.min(45, e.beta - betaBaseline)) / 45;
-                gravityX = tx * GRAV;
-                gravityY = ty * GRAV + 0.1;
+                targetGravX = tx * GRAV;
+                targetGravY = ty * GRAV + 0.1;
             }, true);
         }
 
@@ -530,20 +532,22 @@
         }
 
         function handleWindowResize() {
-            canvas.width  = window.innerWidth;
-            canvas.height = window.innerHeight;
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width  = window.innerWidth  * dpr;
+            canvas.height = window.innerHeight * dpr;
+            ctx.scale(dpr, dpr);
             if (!allowSpawning) {
                 balls.forEach(b => {
                     if (b.isDragged) return;
-                    if (b.x > canvas.width  - b.radius) b.x = canvas.width  - b.radius;
-                    if (b.y > canvas.height - b.radius) b.y = canvas.height - b.radius;
+                    if (b.x > window.innerWidth  - b.radius) b.x = window.innerWidth  - b.radius;
+                    if (b.y > window.innerHeight - b.radius) b.y = window.innerHeight - b.radius;
                 });
                 return;
             }
             pointers.forEach(p => { p.ball.isDragged = false; });
             pointers.clear();
             balls = [];
-            const target = canvas.width * canvas.height * 0.20;
+            const target = window.innerWidth * window.innerHeight * 0.20;
             let area = 0;
             while (area < target) { const b = new Ball(); balls.push(b); area += b.getArea(); }
 
@@ -624,12 +628,16 @@
         const SUBSTEPS = 8;
 
         function animate() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
             const dt = 1.0 / SUBSTEPS;
 
             ballToPointer.clear();
             pointers.forEach(p => ballToPointer.set(p.ball, p));
             balls.forEach(b => { if (b.isDragged && !ballToPointer.has(b)) b.isDragged = false; });
+
+            // Smoothly ease gravity toward the target tilt — prevents the "magnetic" snap
+            gravityX += (targetGravX - gravityX) * GRAV_LERP;
+            gravityY += (targetGravY - gravityY) * GRAV_LERP;
 
             for (let step = 0; step < SUBSTEPS; step++) {
                 balls.forEach(b => {
@@ -678,9 +686,9 @@
                 balls.forEach(b => {
                     if (b.isDragged) return;
                     if (b.x - b.radius < 0)                 { b.x = b.radius;               if (b.vx < 0) b.vx *= Math.abs(b.vx) > 1.5 ? -b.bounce : 0; }
-                    else if (b.x + b.radius > canvas.width)  { b.x = canvas.width - b.radius;  if (b.vx > 0) b.vx *= Math.abs(b.vx) > 1.5 ? -b.bounce : 0; }
+                    else if (b.x + b.radius > window.innerWidth)  { b.x = window.innerWidth - b.radius;  if (b.vx > 0) b.vx *= Math.abs(b.vx) > 1.5 ? -b.bounce : 0; }
                     if (b.y - b.radius < 0)                 { b.y = b.radius;               if (b.vy < 0) b.vy *= Math.abs(b.vy) > 1.5 ? -b.bounce : 0; }
-                    else if (b.y + b.radius > canvas.height) { b.y = canvas.height - b.radius; if (b.vy > 0) b.vy *= b.vy > 1.5 ? -b.bounce : 0; b.vx *= 0.95; }
+                    else if (b.y + b.radius > window.innerHeight) { b.y = window.innerHeight - b.radius; if (b.vy > 0) b.vy *= b.vy > 1.5 ? -b.bounce : 0; b.vx *= 0.95; }
                 });
             }
 
