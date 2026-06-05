@@ -399,14 +399,18 @@
             reader.onload = ev => {
                 const url = ev.target.result;
                 const img = new Image();
-                img.src = url;
                 const entry = {
                     id: nextImageId++,
                     name: file.name.replace(/\.[^.]+$/, ''),
-                    url, img, count: 0,
+                    url, img, count: 0, circleCanvas: null,
                     _updateRow: null
                 };
+                img.onload = () => {
+                    entry.circleCanvas = makeCircleCanvas(img);
+                };
+                img.src = url;
                 uploadedImages.push(entry);
+                imageMap.set(entry.id, entry);
                 renderUploadRow(entry);
                 updateBadge();
             };
@@ -473,6 +477,7 @@
             setSkinCount(id, 0);
             const idx = uploadedImages.findIndex(e => e.id === id);
             if (idx !== -1) uploadedImages.splice(idx, 1);
+            imageMap.delete(id);
             const row = uploadList.querySelector(`.upload-row[data-id="${id}"]`);
             if (row) row.remove();
             updateBadge();
@@ -492,6 +497,35 @@
         const alienCatImg = new Image();
         alienCatImg.src = 'https://media.tenor.com/-TO4hXAw_MQAAAAj/alien-alien-cat.gif';
 
+        const CIRCLE_SIZE = 128; // offscreen canvas resolution for pre-rendered image balls
+        const imageMap = new Map(); // id → entry, for O(1) lookup
+
+        // Renders an image into a circle-clipped offscreen canvas once,
+        // so Ball.draw() never has to call ctx.clip() at runtime.
+        function makeCircleCanvas(imgEl) {
+            const oc = document.createElement('canvas');
+            oc.width = oc.height = CIRCLE_SIZE;
+            const octx = oc.getContext('2d');
+            octx.beginPath();
+            octx.arc(CIRCLE_SIZE / 2, CIRCLE_SIZE / 2, CIRCLE_SIZE / 2, 0, Math.PI * 2);
+            octx.clip();
+            octx.drawImage(imgEl, 0, 0, CIRCLE_SIZE, CIRCLE_SIZE);
+            return oc;
+        }
+
+        // Alien cat — pre-render once loaded, refresh every 80 ms to keep GIF animating
+        let alienCircleCanvas = null;
+        function refreshAlienCircle() {
+            if (alienCatImg.complete && alienCatImg.naturalWidth > 0)
+                alienCircleCanvas = makeCircleCanvas(alienCatImg);
+        }
+        alienCatImg.onload = () => {
+            refreshAlienCircle();
+            setInterval(refreshAlienCircle, 80);
+        };
+        // In case it's already cached by the browser
+        if (alienCatImg.complete) { refreshAlienCircle(); setInterval(refreshAlienCircle, 80); }
+
         class Ball {
             constructor() {
                 this.radius = Math.random() * 8 + 18;
@@ -507,32 +541,44 @@
             }
             getArea() { return Math.PI * this.radius * this.radius; }
             draw() {
-                ctx.save();
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.clip();
-                ctx.shadowBlur = this.isDragged ? 25 : 6;
-                ctx.shadowColor = this.isDragged ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.4)';
-                if (!this.isDragged) ctx.shadowOffsetY = 3;
+                const x = this.x, y = this.y, r = this.radius;
+                const d = r * 2;
 
-                if (this.skin === 'alien' && alienCatImg.complete && alienCatImg.naturalWidth > 0) {
-                    ctx.drawImage(alienCatImg, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
+                if (this.skin === 'alien' && alienCircleCanvas) {
+                    // Fast path: single drawImage, no clip
+                    ctx.drawImage(alienCircleCanvas, x - r, y - r, d, d);
                 } else if (typeof this.skin === 'number') {
-                    const entry = uploadedImages.find(e => e.id === this.skin);
-                    if (entry && entry.img.complete && entry.img.naturalWidth > 0) {
-                        ctx.drawImage(entry.img, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
+                    const entry = imageMap.get(this.skin);
+                    if (entry?.circleCanvas) {
+                        ctx.drawImage(entry.circleCanvas, x - r, y - r, d, d);
                     } else {
-                        ctx.fillStyle = this.color; ctx.fill();
+                        // Image not ready yet — draw colour fallback
+                        ctx.beginPath();
+                        ctx.arc(x, y, r, 0, Math.PI * 2);
+                        ctx.fillStyle = this.color;
+                        ctx.fill();
                     }
                 } else {
-                    ctx.fillStyle = this.color; ctx.fill();
+                    // Plain colour ball — cheapest possible draw
+                    ctx.beginPath();
+                    ctx.arc(x, y, r, 0, Math.PI * 2);
+                    ctx.fillStyle = this.color;
+                    ctx.fill();
                 }
-                ctx.restore();
+
+                // Drag highlight — cheap stroke, no shadowBlur
+                if (this.isDragged) {
+                    ctx.beginPath();
+                    ctx.arc(x, y, r, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                }
             }
         }
 
         function handleWindowResize() {
-            const dpr = window.devicePixelRatio || 1;
+            const dpr = Math.min(window.devicePixelRatio || 1, 2); // cap at 2× — 3× gives no visible gain but 3× the pixels
             canvas.width  = window.innerWidth  * dpr;
             canvas.height = window.innerHeight * dpr;
             ctx.scale(dpr, dpr);
@@ -625,7 +671,7 @@
         });
 
         // ── Physics ──────────────────────────────────────────────────────────
-        const SUBSTEPS = 8;
+        const SUBSTEPS = isMobile ? 4 : 8;
 
         function animate() {
             ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
