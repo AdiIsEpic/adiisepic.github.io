@@ -197,6 +197,89 @@
             text-align: center; color: rgba(255,59,48,0.7);
             font-size: 11px; margin-top: 8px; display: none; flex-shrink: 0;
         }
+
+        /* ── BG button (top-left) ── */
+        #bgBtn {
+            position: absolute; top: 20px; left: 20px;
+            padding: 10px 18px;
+            background-color: rgba(255,255,255,0.1); color: #fff;
+            border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
+            font-size: 13px; font-weight: 700; cursor: pointer;
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            transition: background 0.2s, transform 0.1s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10;
+            touch-action: auto; letter-spacing: 0.04em;
+        }
+        #bgBtn:hover  { background-color: rgba(255,255,255,0.2); }
+        #bgBtn:active { transform: scale(0.95); }
+
+        /* ── BG panel ── */
+        #bgPanel {
+            position: absolute; top: 68px; left: 20px;
+            width: 230px; padding: 16px;
+        }
+        #bgPanel.hidden { transform: translateY(-12px); }
+
+        #bgPanel .panel-title { color: #fff; font-size: 13px; font-weight: 700; margin-bottom: 14px; display: block; }
+
+        .bg-section { margin-bottom: 14px; }
+        .bg-section:last-child { margin-bottom: 0; }
+        .bg-label {
+            font-size: 11px; color: rgba(255,255,255,0.45);
+            font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+            margin-bottom: 8px; display: block;
+        }
+
+        /* Colour swatch row */
+        .bg-presets {
+            display: flex; gap: 7px; flex-wrap: wrap; align-items: center;
+        }
+        .bg-swatch {
+            width: 26px; height: 26px; border-radius: 50%;
+            border: 2px solid transparent; cursor: pointer;
+            transition: transform 0.12s, border-color 0.12s;
+            flex-shrink: 0;
+        }
+        .bg-swatch:hover  { transform: scale(1.15); }
+        .bg-swatch.active { border-color: #fff; }
+
+        /* Native colour wheel trigger */
+        #bgColorWrap {
+            position: relative; width: 26px; height: 26px; flex-shrink: 0;
+        }
+        #bgColorInput {
+            position: absolute; inset: 0; opacity: 0; cursor: pointer;
+            width: 100%; height: 100%; padding: 0; border: none;
+            touch-action: auto;
+        }
+        #bgColorSwatch {
+            width: 26px; height: 26px; border-radius: 50%;
+            border: 2px dashed rgba(255,255,255,0.4);
+            background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+            pointer-events: none;
+        }
+
+        /* Upload BG image button */
+        #bgImgBtn {
+            width: 100%; padding: 8px;
+            background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8);
+            border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
+            font-size: 12px; font-weight: 600; cursor: pointer;
+            transition: background 0.15s; text-align: center;
+            touch-action: auto;
+        }
+        #bgImgBtn:hover { background: rgba(255,255,255,0.15); }
+
+        /* Clear BG button */
+        #bgClearBtn {
+            width: 100%; padding: 7px;
+            background: rgba(255,59,48,0.12); color: rgba(255,100,90,0.9);
+            border: 1px solid rgba(255,59,48,0.25); border-radius: 8px;
+            font-size: 12px; font-weight: 600; cursor: pointer;
+            transition: background 0.15s; text-align: center; margin-top: 8px;
+            touch-action: auto;
+        }
+        #bgClearBtn:hover { background: rgba(255,59,48,0.25); }
     </style>
 </head>
 <body>
@@ -232,6 +315,38 @@
     </div>
 
     <input type="file" id="fileInput" accept="image/*" multiple style="display:none">
+    <input type="file" id="bgFileInput" accept="image/*" style="display:none">
+
+    <!-- BG button + panel -->
+    <button id="bgBtn">BG</button>
+    <div id="bgPanel" class="panel hidden">
+        <span class="panel-title">Background <span id="bgDims" style="font-size:11px;font-weight:400;color:rgba(255,255,255,0.35);margin-left:6px;"></span></span>
+
+        <div class="bg-section">
+            <span class="bg-label">Colour</span>
+            <div class="bg-presets">
+                <div class="bg-swatch active" data-color="#1c1c1e" style="background:#1c1c1e"></div>
+                <div class="bg-swatch" data-color="#000000" style="background:#000000"></div>
+                <div class="bg-swatch" data-color="#ffffff" style="background:#ffffff"></div>
+                <div class="bg-swatch" data-color="#0a0a2e" style="background:#0a0a2e"></div>
+                <div class="bg-swatch" data-color="#1a1a2e" style="background:#1a1a2e"></div>
+                <div class="bg-swatch" data-color="#0d2137" style="background:#0d2137"></div>
+                <div class="bg-swatch" data-color="#2d1b33" style="background:#2d1b33"></div>
+                <!-- Custom colour wheel -->
+                <div id="bgColorWrap">
+                    <div id="bgColorSwatch"></div>
+                    <input type="color" id="bgColorInput" value="#1c1c1e">
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-section">
+            <span class="bg-label">Image</span>
+            <button id="bgImgBtn">📁 Upload Image</button>
+            <button id="bgClearBtn">✕ Remove Image</button>
+        </div>
+    </div>
+
     <canvas id="physicsCanvas"></canvas>
 
     <script>
@@ -545,11 +660,20 @@
                 const d = r * 2;
 
                 if (this.skin === 'alien' && alienCircleCanvas) {
-                    // Fast path: single drawImage, no clip
+                    // Solid backing so transparent GIF pixels don't glitch
+                    ctx.beginPath();
+                    ctx.arc(x, y, r, 0, Math.PI * 2);
+                    ctx.fillStyle = bgColor;
+                    ctx.fill();
                     ctx.drawImage(alienCircleCanvas, x - r, y - r, d, d);
                 } else if (typeof this.skin === 'number') {
                     const entry = imageMap.get(this.skin);
                     if (entry?.circleCanvas) {
+                        // Solid backing so transparent PNG pixels don't glitch
+                        ctx.beginPath();
+                        ctx.arc(x, y, r, 0, Math.PI * 2);
+                        ctx.fillStyle = bgColor;
+                        ctx.fill();
                         ctx.drawImage(entry.circleCanvas, x - r, y - r, d, d);
                     } else {
                         // Image not ready yet — draw colour fallback
@@ -670,11 +794,86 @@
             canvas.style.cursor = hover ? 'pointer' : 'default';
         });
 
+        // ── Background ───────────────────────────────────────────────────────
+        let bgColor  = '#1c1c1e';
+        let bgImage  = null; // HTMLImageElement or null
+
+        const bgBtn       = document.getElementById('bgBtn');
+        const bgPanel     = document.getElementById('bgPanel');
+        const bgFileInput = document.getElementById('bgFileInput');
+        const bgColorInput= document.getElementById('bgColorInput');
+        const bgClearBtn  = document.getElementById('bgClearBtn');
+        const bgImgBtn    = document.getElementById('bgImgBtn');
+
+        const bgDims = document.getElementById('bgDims');
+        let bgVisible = false;
+        bgBtn.addEventListener('click', () => {
+            bgVisible = !bgVisible;
+            bgPanel.classList.toggle('hidden', !bgVisible);
+        });
+        blockCanvasEvents(bgPanel);
+
+        // Preset swatches
+        document.querySelectorAll('.bg-swatch').forEach(sw => {
+            sw.addEventListener('click', () => {
+                bgImage = null;
+                bgColor = sw.dataset.color;
+                bgColorInput.value = bgColor;
+                bgDims.textContent = '';
+                document.querySelectorAll('.bg-swatch').forEach(s => s.classList.remove('active'));
+                sw.classList.add('active');
+            });
+        });
+
+        // Custom colour wheel
+        bgColorInput.addEventListener('input', () => {
+            bgImage = null;
+            bgColor = bgColorInput.value;
+            bgDims.textContent = '';
+            document.querySelectorAll('.bg-swatch').forEach(s => s.classList.remove('active'));
+        });
+        bgColorInput.addEventListener('pointerdown', e => e.stopPropagation());
+
+        // Upload background image
+        bgImgBtn.addEventListener('click', () => bgFileInput.click());
+        bgFileInput.addEventListener('change', () => {
+            const file = bgFileInput.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = ev => {
+                const img = new Image();
+                img.onload = () => {
+                    bgImage = img;
+                    bgDims.textContent = `${img.naturalWidth}×${img.naturalHeight}px`;
+                };
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+            bgFileInput.value = '';
+        });
+
+        // Clear background image
+        bgClearBtn.addEventListener('click', () => { bgImage = null; bgDims.textContent = ''; });
+
+        function drawBackground() {
+            // Always fill solid colour first — ensures transparent bg images
+            // don't bleed the previous frame through their transparent pixels
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+            if (bgImage) {
+                const iw = bgImage.naturalWidth, ih = bgImage.naturalHeight;
+                const cw = window.innerWidth,    ch = window.innerHeight;
+                const scale = Math.max(cw / iw, ch / ih);
+                const dw = iw * scale, dh = ih * scale;
+                ctx.drawImage(bgImage, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+            }
+        }
+
         // ── Physics ──────────────────────────────────────────────────────────
         const SUBSTEPS = isMobile ? 4 : 8;
 
         function animate() {
-            ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+            drawBackground();
             const dt = 1.0 / SUBSTEPS;
 
             ballToPointer.clear();
