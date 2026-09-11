@@ -167,9 +167,13 @@
   /* powder: pixel-art sand pile, water, and a fire, on the game's dark canvas */
   .icon-powder{ background:#141416; }
 
+  /* drift: a paper boat on a river at dusk */
+  .icon-drift{ background:linear-gradient(180deg, #141c36 0%, #25406a 100%); }
+
   .icon-snake svg,
   .icon-flappy svg,
-  .icon-powder svg{ width:100%; height:100%; display:block; }
+  .icon-powder svg,
+  .icon-drift svg{ width:100%; height:100%; display:block; }
 
   /* 2048: the gold winning tile itself */
   .icon-2048{
@@ -396,6 +400,60 @@
       <div class="tile-text">
         <div class="app-label">Powder</div>
         <div class="app-note">Pour sand, water, fire and lava</div>
+      </div>
+    </a>
+
+    <a class="app-tile" href="Drift/" aria-label="Play Drift">
+      <div class="game-icon icon-drift">
+        <svg viewBox="0 0 60 60" aria-hidden="true">
+          <defs>
+            <radialGradient id="drift-sun" cx="0.5" cy="0" r="0.8">
+              <stop offset="0" stop-color="#ff965a" stop-opacity="0.45"/>
+              <stop offset="1" stop-color="#ff965a" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="drift-glow">
+              <stop offset="0" stop-color="#ffbe64" stop-opacity="0.75"/>
+              <stop offset="1" stop-color="#ff963c" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+
+          <rect width="60" height="60" fill="url(#drift-sun)"/>
+
+          <!-- ripples -->
+          <g stroke="#bed2ff" stroke-opacity="0.22" stroke-width="1.2" stroke-linecap="round">
+            <path d="M20 12 H26 M33 26 H41 M18 30 H23 M36 48 H42"/>
+          </g>
+
+          <!-- floating lantern -->
+          <circle cx="38" cy="17" r="11" fill="url(#drift-glow)"/>
+          <ellipse cx="38" cy="17" rx="3.4" ry="4.2" fill="#ff9f45"/>
+          <ellipse cx="37.4" cy="16.8" rx="1.5" ry="2.4" fill="#ffd98a"/>
+
+          <!-- banks -->
+          <path d="M0 0 H15 C10 20 19 38 12 60 H0 Z" fill="#16251d"/>
+          <path d="M60 0 H47 C51 22 42 40 49 60 H60 Z" fill="#16251d"/>
+          <path d="M15 0 C10 20 19 38 12 60" fill="none" stroke="#25402f" stroke-width="2"/>
+          <path d="M47 0 C51 22 42 40 49 60" fill="none" stroke="#25402f" stroke-width="2"/>
+
+          <!-- wake -->
+          <g fill="none" stroke="#dcebff" stroke-linecap="round">
+            <path d="M22 52 Q24.5 55 27 52" stroke-opacity="0.35" stroke-width="1"/>
+            <path d="M29 55 Q31.5 58 34 55" stroke-opacity="0.25" stroke-width="1"/>
+          </g>
+
+          <!-- paper boat, from above -->
+          <g transform="translate(28.5 38) rotate(-8)">
+            <path d="M0 -13 L7 -5 L7 6 L0 11 L-7 6 L-7 -5 Z" fill="#efe6d2" stroke="#a99d86" stroke-width="0.9"/>
+            <path d="M0 -9 L4.8 5.5 L0 5.5 Z" fill="#d8ccb2"/>
+            <path d="M0 -9 L-4.8 5.5 L0 5.5 Z" fill="#fbf6ea"/>
+            <path d="M0 -9 V5.5" stroke="#b9ad95" stroke-width="0.7"/>
+            <circle cx="0" cy="9" r="1.4" fill="#ffd27a"/>
+          </g>
+        </svg>
+      </div>
+      <div class="tile-text">
+        <div class="app-label">Drift</div>
+        <div class="app-note">Steer a paper boat, catch lanterns</div>
       </div>
     </a>
 
