@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1d1d21">
+<title>Powder</title>
+<style>
+  :root{
+    --page:#141416;
+    --panel:#1d1d21;
+    --line:rgba(255,255,255,0.08);
+    --ink:#ecebe8;
+    --dim:#8f8c86;
+    --accent:#f0ac53;
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  html,body{
+    margin:0;
+    height:100%;
+    background:var(--page);
+    color:var(--ink);
+    font-family:'Segoe UI', system-ui, -apple-system, sans-serif;
+    overflow:hidden;
+    overscroll-behavior:none;
+    -webkit-user-select:none;
+    user-select:none;
+  }
+
+  body{ display:flex; flex-direction:column; height:100vh; height:100dvh; }
+
+  /* ---- top bar ---- */
+  .bar{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:8px 12px;
+    padding-top:max(8px, env(safe-area-inset-top));
+    background:var(--panel);
+    border-bottom:1px solid var(--line);
+    flex-wrap:wrap;
+  }
+  .bar h1{ margin:0 4px 0 0; font-size:16px; font-weight:800; letter-spacing:0.3px; }
+  .spacer{ flex:1; }
+  .ctl{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--dim); }
+  .num{ font-variant-numeric:tabular-nums; min-width:1.6em; }
+  input[type=range]{ width:110px; accent-color:var(--accent); }
+
+  button{
+    font:inherit;
+    font-size:13px;
+    font-weight:700;
+    color:var(--ink);
+    background:#2a2a30;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:6px 12px;
+    cursor:pointer;
+  }
+  button:hover{ background:#34343b; }
+  button:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
+
+  /* ---- canvas ---- */
+  .view{
+    position:relative;
+    flex:1;
+    min-height:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:8px;
+  }
+
+  canvas{
+    display:block;
+    image-rendering:pixelated;
+    image-rendering:crisp-edges;
+    touch-action:none;
+    cursor:crosshair;
+    border-radius:6px;
+    box-shadow:0 0 0 1px var(--line);
+  }
+
+  .start-hint{
+    position:absolute;
+    left:50%;
+    top:50%;
+    transform:translate(-50%, -50%);
+    padding:10px 16px;
+    border-radius:10px;
+    background:rgba(20,20,24,0.8);
+    color:var(--dim);
+    font-size:13px;
+    text-align:center;
+    line-height:1.5;
+    pointer-events:none;
+    transition:opacity .3s ease;
+  }
+  .start-hint b{ color:var(--ink); }
+  .start-hint.gone{ opacity:0; }
+
+  /* ---- element picker ---- */
+  .tools{
+    display:flex;
+    gap:6px;
+    padding:8px 10px calc(8px + env(safe-area-inset-bottom));
+    background:var(--panel);
+    border-top:1px solid var(--line);
+    overflow-x:auto;
+    scrollbar-width:thin;
+  }
+  .tool{
+    flex:none;
+    display:flex;
+    align-items:center;
+    gap:7px;
+    padding:6px 11px;
+    background:#26262b;
+    border:1px solid transparent;
+    font-weight:600;
+  }
+  .tool .sw{
+    width:14px;
+    height:14px;
+    border-radius:4px;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,0.18);
+  }
+  .tool[aria-pressed="true"]{ border-color:var(--accent); background:#34302a; }
+
+  @media (max-width:760px){
+    .keys{ display:none; }
+    input[type=range]{ width:80px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <h1>Powder</h1>
+  <button id="pause" type="button">Pause</button>
+  <button id="clear" type="button">Clear</button>
+  <label class="ctl">Brush <input type="range" id="size" min="1" max="24" value="4"><span class="num" id="size-val">4</span></label>
+  <div class="spacer"></div>
+  <div class="ctl keys">Right-click erases &middot; scroll resizes &middot; Space pauses</div>
+  <div class="ctl num" id="count">0</div>
+</div>
+
+<div class="view" id="view">
+  <canvas id="c"></canvas>
+  <div class="start-hint" id="hint">Pick an element below, then <b>draw</b>.<br>Try sand on water, or fire on wood.</div>
+</div>
+
+<div class="tools" id="tools"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ---------- elements ----------
+  var EMPTY = 0, WALL = 1, SAND = 2, WATER = 3, WOOD = 4, FIRE = 5, OIL = 6, LAVA = 7,
+      STONE = 8, PLANT = 9, ACID = 10, STEAM = 11, SMOKE = 12, GUNPOWDER = 13, ICE = 14,
+      ERASE = 255;
+
+  var POWDER = 1, LIQUID = 2, GAS = 3, SOLID = 4, FLAME = 5;
+
+  var KIND  = new Uint8Array(256);
+  var DENS  = new Float32Array(256);
+  var MOVES = new Uint8Array(256);    // can a heavier particle push through it?
+  var FLAM  = new Float32Array(256);  // chance per fire contact to catch
+  var PAL   = new Uint32Array(256 * 4);
+
+  function abgr(hex){
+    var n = parseInt(hex.slice(1), 16);
+    return ((255 << 24) | ((n & 255) << 16) | (n & 0xff00) | ((n >> 16) & 255)) >>> 0;
+  }
+
+  function def(id, kind, dens, moves, flam, shades){
+    KIND[id] = kind; DENS[id] = dens; MOVES[id] = moves ? 1 : 0; FLAM[id] = flam;
+    for(var k = 0; k < 4; k++) PAL[id * 4 + k] = abgr(shades[k]);
+  }
+
+  def(EMPTY,     0,      0,    1, 0,    ['#0c0c0e','#0c0c0e','#0c0c0e','#0c0c0e']);
+  def(WALL,      SOLID,  99,   0, 0,    ['#7d7d82','#86868b','#75757a','#8e8e93']);
+  def(SAND,      POWDER, 3,    0, 0,    ['#e2c275','#d9b865','#ebcd85','#d1ae5c']);
+  def(WATER,     LIQUID, 1,    1, 0,    ['#2f7be0','#3584ea','#2a72d4','#3b8cf0']);
+  def(WOOD,      SOLID,  99,   0, 0.05, ['#7a4a24','#83522b','#6f421f','#8a5a30']);
+  def(FIRE,      FLAME,  0.05, 1, 0,    ['#ff8c2a','#ff8c2a','#ff8c2a','#ff8c2a']);
+  def(OIL,       LIQUID, 0.8,  1, 0.35, ['#5b4126','#654a2c','#523a21','#6e5231']);
+  def(LAVA,      LIQUID, 2.5,  1, 0,    ['#ff5a14','#ff7a1e','#f0480f','#ff9a2a']);
+  def(STONE,     POWDER, 3.5,  0, 0,    ['#6e6a66','#77736e','#65615d','#807b76']);
+  def(PLANT,     SOLID,  99,   0, 0.12, ['#3fae3f','#48b948','#379f37','#52c452']);
+  def(ACID,      LIQUID, 1.1,  1, 0,    ['#9cf03a','#a8f550','#8fe02e','#b5fa62']);
+  def(STEAM,     GAS,    0.1,  1, 0,    ['#b9c6d3','#c6d2de','#aebbc8','#d2dde8']);
+  def(SMOKE,     GAS,    0.12, 1, 0,    ['#4a4a4e','#545458','#424246','#5c5c60']);
+  def(GUNPOWDER, POWDER, 3,    0, 1,    ['#3d3a38','#48443f','#34312f','#524d47']);
+  def(ICE,       SOLID,  99,   0, 0,    ['#a8e0ff','#b6e6ff','#9ad8fa','#c4ecff']);
+
+  // fire colour follows its remaining life: dim embers up to bright young flame
+  var FIRE_PAL = ['#5a1a08','#8c2208','#c2310c','#e84a12','#ff6a1a','#ff8c2a','#ffb347','#ffe07a'].map(abgr);
+  var BG = PAL[EMPTY * 4];
+
+  // [id, label, swatch]
+  var TOOLS = [
+    [SAND, 'Sand', '#e2c275'], [WATER, 'Water', '#2f7be0'], [WALL, 'Wall', '#86868b'],
+    [WOOD, 'Wood', '#7a4a24'], [FIRE, 'Fire', '#ff8c2a'], [OIL, 'Oil', '#654a2c'],
+    [LAVA, 'Lava', '#ff6a1a'], [PLANT, 'Plant', '#3fae3f'], [ACID, 'Acid', '#9cf03a'],
+    [ICE, 'Ice', '#a8e0ff'], [GUNPOWDER, 'Gunpowder', '#48443f'], [STONE, 'Stone', '#77736e'],
+    [STEAM, 'Steam', '#c6d2de'], [ERASE, 'Eraser', 'transparent']
+  ];
+
+  // ---------- grid, sized from the space available ----------
+  var view = document.getElementById('view');
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+
+  var W = 0, H = 0, N = 0, built = false;
+  var grid, life, shade, stamp, img, buf;   // stamp: which tick last moved a cell, so nothing moves twice
+  var tick = 1;
+
+  // returns false while the view has no real size yet (background tab, hidden frame)
+  function build(){
+    var aw = view.clientWidth - 16, ah = view.clientHeight - 16;
+    if(aw < 100 || ah < 80) return false;
+    var cell = window.innerWidth < 700 ? 3 : 4;
+    var w = Math.floor(aw / cell), h = Math.floor(ah / cell);
+    while(w * h > 75000){ cell++; w = Math.floor(aw / cell); h = Math.floor(ah / cell); }
+
+    W = w; H = h; N = W * H;
+    canvas.width = W;
+    canvas.height = H;
+    grid  = new Uint8Array(N);
+    life  = new Uint8Array(N);
+    shade = new Uint8Array(N);
+    stamp = new Uint8Array(N);
+    img = ctx.createImageData(W, H);
+    buf = new Uint32Array(img.data.buffer);
+    built = true;
+    return true;
+  }
+
+  function isEmpty(){
+    for(var i = 0; i < N; i++) if(grid[i] !== EMPTY) return false;
+    return true;
+  }
+
+  // reshape the grid to the new space, but only while there's nothing on it to lose
+  function onResize(){
+    if(!built || isEmpty()) build();
+    fit();
+  }
+
+  function fit(){
+    var aw = view.clientWidth - 16, ah = view.clientHeight - 16;
+    if(!built || aw <= 0 || ah <= 0) return;
+    var s = Math.min(aw / W, ah / H);
+    canvas.style.width = Math.floor(W * s) + 'px';
+    canvas.style.height = Math.floor(H * s) + 'px';
+  }
+
+  // ---------- cell helpers ----------
+  function startLife(t){
+    if(t === FIRE)  return 20 + (Math.random() * 20 | 0);
+    if(t === STEAM) return 80 + (Math.random() * 140 | 0);
+    if(t === SMOKE) return 30 + (Math.random() * 50 | 0);
+    return 0;
+  }
+
+  function set(i, t){
+    grid[i] = t;
+    life[i] = startLife(t);
+    shade[i] = Math.random() * 4 | 0;
+    stamp[i] = tick;
+  }
+
+  function swap(i, j){
+    var v = grid[i]; grid[i] = grid[j]; grid[j] = v;
+    v = life[i]; life[i] = life[j]; life[j] = v;
+    v = shade[i]; shade[i] = shade[j]; shade[j] = v;
+    stamp[i] = tick; stamp[j] = tick;
+  }
+
+  function canEnter(a, b){ return b === EMPTY || (MOVES[b] && DENS[b] < DENS[a]); }
+
+  function moveTo(i, j){
+    if(canEnter(grid[i], grid[j])){ swap(i, j); return true; }
+    return false;
+  }
+
+  var NX = [0, 1, 0, -1, 1, 1, -1, -1];
+  var NY = [-1, 0, 1, 0, -1, 1, 1, -1];
+
+  function neighbour(x, y){
+    var k = Math.random() * 8 | 0;
+    var nx = x + NX[k], ny = y + NY[k];
+    if(nx < 0 || nx >= W || ny < 0 || ny >= H) return -1;
+    return ny * W + nx;
+  }
+
+  function ignite(j){
+    var n = grid[j];
+    if(n === GUNPOWDER){ explode(j % W, (j / W) | 0); return; }
+    set(j, FIRE);
+    if(n === WOOD) life[j] = 60 + (Math.random() * 60 | 0);      // wood burns long
+    else if(n === OIL) life[j] = 25 + (Math.random() * 20 | 0);
+  }
+
+  function explode(cx, cy){
+    var r = 7;
+    for(var dy = -r; dy <= r; dy++){
+      for(var dx = -r; dx <= r; dx++){
+        if(dx * dx + dy * dy > r * r) continue;
+        var x = cx + dx, y = cy + dy;
+        if(x < 0 || x >= W || y < 0 || y >= H) continue;
+        var j = y * W + x, n = grid[j];
+        if(n === WATER){ set(j, STEAM); continue; }
+        // blast burns air, fuel and gas; leaves walls, stone and sand standing
+        if(n === EMPTY || FLAM[n] > 0 || KIND[n] === GAS || KIND[n] === FLAME){
+          if(Math.random() < 0.75){ set(j, FIRE); life[j] = 10 + (Math.random() * 25 | 0); }
+          else grid[j] = EMPTY;
+        }
+      }
+    }
+  }
+
+  // ---------- behaviours ----------
+  function updPowder(i, x, y){
+    if(y + 1 >= H) return;
+    var below = i + W;
+    if(moveTo(i, below)) return;
+    var d = Math.random() < 0.5 ? -1 : 1;
+    if(x + d >= 0 && x + d < W && moveTo(i, below + d)) return;
+    if(x - d >= 0 && x - d < W) moveTo(i, below - d);
+  }
+
+  function slide(i, x, y, d){
+    var cur = i, cx = x, moved = false;
+    for(var s = 0; s < 4; s++){
+      var nx = cx + d;
+      if(nx < 0 || nx >= W) break;
+      var j = cur + d;
+      if(!canEnter(grid[cur], grid[j])) break;
+      swap(cur, j);
+      cur = j; cx = nx; moved = true;
+      if(y + 1 < H && grid[j + W] === EMPTY) break;   // found a drop; gravity takes it next tick
+    }
+    return moved;
+  }
+
+  function updLiquid(i, x, y, t){
+    if(t === LAVA || t === ACID){
+      var j = neighbour(x, y);
+      if(j >= 0){
+        var n = grid[j];
+        if(t === LAVA){
+          if(n === WATER || n === ICE){ set(i, STONE); set(j, STEAM); return; }
+          if(FLAM[n] > 0 && Math.random() < 0.5) ignite(j);
+          else if(n === EMPTY && Math.random() < 0.003) set(j, FIRE);
+        } else if(n !== EMPTY && n !== WALL && n !== ACID && KIND[n] !== GAS && KIND[n] !== FLAME && Math.random() < 0.08){
+          grid[j] = Math.random() < 0.3 ? SMOKE : EMPTY;
+          if(grid[j] === SMOKE) life[j] = startLife(SMOKE);
+          if(Math.random() < 0.35){ grid[i] = EMPTY; return; }   // acid gets used up
+        }
+      }
+    }
+
+    if(y + 1 < H){
+      var below = i + W;
+      if(moveTo(i, below)) return;
+      var d = Math.random() < 0.5 ? -1 : 1;
+      if(x + d >= 0 && x + d < W && moveTo(i, below + d)) return;
+      if(x - d >= 0 && x - d < W && moveTo(i, below - d)) return;
+    }
+
+    if(t === LAVA && Math.random() < 0.75) return;   // thick and slow
+    var dir = Math.random() < 0.5 ? -1 : 1;
+    if(!slide(i, x, y, dir)) slide(i, x, y, -dir);
+  }
+
+  function updGas(i, x, y, t){
+    if(life[i] <= 1){
+      if(t === STEAM && Math.random() < 0.5) set(i, WATER);   // condenses back into rain
+      else grid[i] = EMPTY;
+      return;
+    }
+    life[i]--;
+
+    if(y > 0){
+      var d = (Math.random() * 3 | 0) - 1;
+      if(x + d >= 0 && x + d < W && moveTo(i, i - W + d)) return;
+      if(moveTo(i, i - W)) return;
+    }
+    var s = Math.random() < 0.5 ? -1 : 1;
+    if(x + s >= 0 && x + s < W) moveTo(i, i + s);
+  }
+
+  function updFire(i, x, y){
+    if(life[i] <= 1){
+      if(Math.random() < 0.3) set(i, SMOKE);
+      else grid[i] = EMPTY;
+      return;
+    }
+    life[i]--;
+
+    for(var k = 0; k < 2; k++){
+      var j = neighbour(x, y);
+      if(j < 0) continue;
+      var n = grid[j];
+      if(n === WATER){ set(j, STEAM); grid[i] = EMPTY; return; }
+      if(n === ICE){ set(j, WATER); continue; }
+      if(n === GUNPOWDER){ explode(j % W, (j / W) | 0); return; }
+      if(FLAM[n] > 0 && Math.random() < FLAM[n]) ignite(j);
+    }
+
+    // flicker upward
+    if(y > 0 && Math.random() < 0.55){
+      var d = (Math.random() * 3 | 0) - 1;
+      if(x + d >= 0 && x + d < W){
+        var up = i - W + d;
+        if(grid[up] === EMPTY) swap(i, up);
+      }
+    }
+  }
+
+  function updSolid(i, x, y, t){
+    if(Math.random() > 0.2) return;   // solids only need to look around now and then
+    var j = neighbour(x, y);
+    if(j < 0) return;
+    var n = grid[j];
+    if(t === PLANT){
+      if(n === WATER && Math.random() < 0.15) set(j, PLANT);   // grows by drinking water
+    } else if(t === ICE){
+      if(n === WATER && Math.random() < 0.08) set(j, ICE);
+      else if(n === LAVA || n === FIRE) set(i, WATER);
+    }
+  }
+
+  function step(){
+    tick = tick === 255 ? 1 : tick + 1;
+    var ltr = (tick & 1) === 1;      // alternate scan direction so nothing drifts one way
+    for(var y = H - 1; y >= 0; y--){
+      var row = y * W;
+      for(var k = 0; k < W; k++){
+        var x = ltr ? k : W - 1 - k;
+        var i = row + x;
+        var t = grid[i];
+        if(t === EMPTY || t === WALL || t === WOOD || stamp[i] === tick) continue;
+        stamp[i] = tick;
+        switch(KIND[t]){
+          case POWDER: updPowder(i, x, y); break;
+          case LIQUID: updLiquid(i, x, y, t); break;
+          case GAS:    updGas(i, x, y, t); break;
+          case FLAME:  updFire(i, x, y); break;
+          case SOLID:  updSolid(i, x, y, t); break;
+        }
+      }
+    }
+  }
+
+  // ---------- drawing ----------
+  var tool = SAND, brush = 4, paused = false;
+  var pointer = { x: -1, y: -1, down: false, erase: false, inside: false };
+  var lastPaint = null;
+
+  function render(){
+    var count = 0;
+    for(var i = 0; i < N; i++){
+      var t = grid[i];
+      if(t === EMPTY){ buf[i] = BG; continue; }
+      count++;
+      if(t === FIRE){
+        var f = (life[i] >> 2) - 1 + shade[i];
+        buf[i] = FIRE_PAL[f < 0 ? 0 : f > 7 ? 7 : f];
+      } else {
+        buf[i] = PAL[t * 4 + shade[i]];
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+
+    if(pointer.inside){
+      ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(pointer.x + 0.5, pointer.y + 0.5, Math.max(0.5, brush - 0.5), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    return count;
+  }
+
+  function paint(cx, cy, t){
+    var r = brush - 1;
+    var spray = t !== ERASE && (KIND[t] === POWDER || KIND[t] === LIQUID || KIND[t] === GAS);
+    for(var dy = -r; dy <= r; dy++){
+      for(var dx = -r; dx <= r; dx++){
+        if(dx * dx + dy * dy > r * r + r) continue;
+        var x = cx + dx, y = cy + dy;
+        if(x < 0 || x >= W || y < 0 || y >= H) continue;
+        var j = y * W + x;
+        if(t === ERASE){ grid[j] = EMPTY; continue; }
+        if(grid[j] !== EMPTY){
+          // painting fire onto fuel lights it
+          if(t === FIRE && (FLAM[grid[j]] > 0) && Math.random() < 0.3) ignite(j);
+          continue;
+        }
+        if(spray && Math.random() < 0.55) continue;
+        set(j, t);
+      }
+    }
+  }
+
+  function paintLine(x0, y0, x1, y1, t){
+    var dx = x1 - x0, dy = y1 - y0;
+    var steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / Math.max(1, brush / 2)));
+    for(var s = 0; s <= steps; s++){
+      paint(Math.round(x0 + dx * s / steps), Math.round(y0 + dy * s / steps), t);
+    }
+  }
+
+  function activeTool(){ return pointer.erase ? ERASE : tool; }
+
+  function toCell(e){
+    var r = canvas.getBoundingClientRect();
+    return {
+      x: Math.floor((e.clientX - r.left) / r.width * W),
+      y: Math.floor((e.clientY - r.top) / r.height * H)
+    };
+  }
+
+  // ---------- UI ----------
+  var toolsEl = document.getElementById('tools');
+  var hint = document.getElementById('hint');
+  var countEl = document.getElementById('count');
+  var sizeEl = document.getElementById('size');
+  var sizeVal = document.getElementById('size-val');
+  var pauseBtn = document.getElementById('pause');
+
+  TOOLS.forEach(function(entry, idx){
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'tool';
+    var sw = document.createElement('span');
+    sw.className = 'sw';
+    sw.style.background = entry[2];
+    if(entry[0] === ERASE) sw.style.boxShadow = 'inset 0 0 0 1px rgba(255,255,255,0.5)';
+    b.appendChild(sw);
+    b.appendChild(document.createTextNode(entry[1]));
+    if(idx < 10) b.title = entry[1] + ' (' + ((idx + 1) % 10) + ')';
+    b.addEventListener('click', function(){ select(entry[0]); });
+    toolsEl.appendChild(b);
+    entry.btn = b;
+  });
+
+  function select(t){
+    tool = t;
+    TOOLS.forEach(function(e){ e.btn.setAttribute('aria-pressed', e[0] === t ? 'true' : 'false'); });
+  }
+
+  function setBrush(v){
+    brush = Math.max(1, Math.min(24, v | 0));
+    sizeEl.value = brush;
+    sizeVal.textContent = brush;
+  }
+
+  function setPaused(p){
+    paused = p;
+    pauseBtn.textContent = p ? 'Play' : 'Pause';
+  }
+
+  sizeEl.addEventListener('input', function(){ setBrush(+sizeEl.value); });
+  pauseBtn.addEventListener('click', function(){ setPaused(!paused); pauseBtn.blur(); });
+  document.getElementById('clear').addEventListener('click', function(e){
+    if(built){ grid.fill(0); life.fill(0); }
+    e.currentTarget.blur();
+  });
+
+  canvas.addEventListener('pointerdown', function(e){
+    e.preventDefault();
+    if(!built) return;
+    canvas.setPointerCapture(e.pointerId);
+    var c = toCell(e);
+    pointer.down = true;
+    pointer.erase = e.button === 2;
+    pointer.x = c.x; pointer.y = c.y; pointer.inside = true;
+    lastPaint = c;
+    paint(c.x, c.y, activeTool());
+    hint.classList.add('gone');
+  });
+
+  canvas.addEventListener('pointermove', function(e){
+    var c = toCell(e);
+    pointer.x = c.x; pointer.y = c.y; pointer.inside = true;
+    if(pointer.down && lastPaint){
+      paintLine(lastPaint.x, lastPaint.y, c.x, c.y, activeTool());
+      lastPaint = c;
+    }
+  });
+
+  function lift(){ pointer.down = false; lastPaint = null; }
+  canvas.addEventListener('pointerup', lift);
+  canvas.addEventListener('pointercancel', lift);
+  canvas.addEventListener('pointerleave', function(){ if(!pointer.down) pointer.inside = false; });
+  canvas.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+  canvas.addEventListener('wheel', function(e){
+    e.preventDefault();
+    setBrush(brush + (e.deltaY < 0 ? 1 : -1));
+  }, { passive: false });
+
+  window.addEventListener('keydown', function(e){
+    if(e.target && e.target.tagName === 'INPUT') return;
+    if(e.key === ' '){ e.preventDefault(); setPaused(!paused); return; }
+    if(e.key === '['){ setBrush(brush - 1); return; }
+    if(e.key === ']'){ setBrush(brush + 1); return; }
+    if(/^[0-9]$/.test(e.key)){
+      var n = e.key === '0' ? 9 : +e.key - 1;
+      if(TOOLS[n]) select(TOOLS[n][0]);
+    }
+  });
+
+  if(window.ResizeObserver) new ResizeObserver(onResize).observe(view);
+  else window.addEventListener('resize', onResize);
+
+  // ---------- loop: fixed 60 ticks/s, so fast monitors don't run the sim faster ----------
+  var STEP_MS = 1000 / 60, acc = 0, last = performance.now(), frames = 0;
+
+  function loop(now){
+    requestAnimationFrame(loop);
+    if(!built){
+      if(!build()) return;   // keep waiting until the view has a real size
+      fit();
+    }
+    acc += Math.min(100, now - last);
+    last = now;
+    var n = 0;
+    while(acc >= STEP_MS && n < 3){
+      if(pointer.down) paint(pointer.x, pointer.y, activeTool());   // hold still to keep pouring
+      if(!paused) step();
+      acc -= STEP_MS;
+      n++;
+    }
+    if(n === 3) acc = 0;   // falling behind: drop the backlog rather than spiral
+    var count = render();
+    if((++frames & 15) === 0) countEl.textContent = count.toLocaleString() + ' particles';
+  }
+
+  select(SAND);
+  setBrush(4);
+  if(build()) fit();
+  requestAnimationFrame(loop);
+
+})();
+</script>
+
+</body>
+</html>
