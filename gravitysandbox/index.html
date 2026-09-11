@@ -3,8 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Physics Sandbox</title>
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1c1c1e">
+    <title>Gravity Sandbox</title>
+    <link rel="manifest" href="../manifest.webmanifest">
+    <link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
     <style>
+        :root {
+            --accent: #f0ac53;
+            --accent-bg: rgba(240,172,83,0.18);
+            --accent-line: rgba(240,172,83,0.42);
+        }
+
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
             overflow: hidden; background-color: #1c1c1e;
@@ -14,41 +25,55 @@
         }
         canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 
+        /* ── Glass buttons, shared look ── */
+        .top-btn, .chip {
+            padding: 11px 16px;
+            background-color: rgba(255,255,255,0.1); color: #fff;
+            border: 1px solid rgba(255,255,255,0.2); border-radius: 10px;
+            font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            transition: background 0.2s, border-color 0.2s, transform 0.1s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            white-space: nowrap; line-height: 1;
+            text-decoration: none;
+            touch-action: auto;
+        }
+        .top-btn:hover, .chip:hover  { background-color: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.4); }
+        .top-btn:active, .chip:active { transform: scale(0.95); }
+        .top-btn:focus-visible, .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
         /* ── Right-side stacked buttons ── */
         .top-btn {
             position: absolute; right: 20px;
-            padding: 11px 16px;
-            min-width: 200px; text-align: center;
-            background-color: rgba(255,255,255,0.1); color: #fff;
-            border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
-            font-size: 13px; font-weight: 600; cursor: pointer;
-            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-            transition: background 0.2s, border-color 0.2s, transform 0.1s;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10;
-            white-space: nowrap; line-height: 1;
-            touch-action: auto;
+            min-width: 170px; text-align: center;
+            z-index: 10;
         }
-        .top-btn:hover  { background-color: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.4); }
-        .top-btn:active { transform: scale(0.95); }
         .top-btn.disabled { background-color: rgba(255,59,48,0.2); border-color: rgba(255,59,48,0.4); color: #ff453a; }
 
-        #toggleBtn    { top: 20px; }
-        #alienDockBtn { top: 65px; }
-        #uploadBtn    { top: 110px; }
+        #toggleBtn { top: 20px; }
+        #uploadBtn { top: 65px; }
 
         @media (max-width: 600px) {
             .top-btn { min-width: 0; }
         }
         #gyroBtn {
-            position: absolute; top: 155px; right: 20px;
+            position: absolute; top: 110px; right: 20px;
             padding: 10px 16px; min-width: 0;
-            background-color: rgba(90,200,250,0.15); color: #5AC8FA;
-            border: 1px solid rgba(90,200,250,0.35); border-radius: 8px;
-            font-size: 13px; font-weight: 600; cursor: pointer;
+            background-color: var(--accent-bg); color: var(--accent);
+            border: 1px solid var(--accent-line); border-radius: 10px;
+            font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
             backdrop-filter: blur(10px); box-shadow: 0 4px 12px rgba(0,0,0,0.3);
             z-index: 10; display: none; white-space: nowrap;
             touch-action: auto;
         }
+
+        /* ── Top-left: back to the launcher, then background ── */
+        .corner {
+            position: absolute; top: 20px; left: 20px; z-index: 10;
+            display: flex; gap: 8px;
+        }
+        .chip { display: inline-flex; align-items: center; }
+        #bgBtn { font-weight: 700; letter-spacing: 0.04em; }
 
         #gyroToast {
             position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%);
@@ -59,6 +84,19 @@
             z-index: 20; display: none; text-align: center; max-width: 280px;
             pointer-events: none;
         }
+
+        /* ── First-visit hint, fades once you grab something ── */
+        #hint {
+            position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%);
+            padding: 9px 16px; border-radius: 999px;
+            background: rgba(28,28,30,0.72); color: rgba(255,255,255,0.82);
+            border: 1px solid rgba(255,255,255,0.12);
+            font-size: 13px; font-weight: 500; white-space: nowrap;
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            pointer-events: none; z-index: 5;
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+        #hint.gone { opacity: 0; transform: translateX(-50%) translateY(8px); }
 
         /* ── Shared panel base ── */
         .panel {
@@ -73,25 +111,6 @@
             touch-action: auto;
         }
         .panel.hidden { opacity: 0; pointer-events: none; }
-
-        /* ── Alien dock (bottom-centre) ── */
-        #alienDock {
-            bottom: 32px; left: 50%; transform: translateX(-50%);
-            padding: 18px 28px 16px; min-width: 300px;
-        }
-        #alienDock.hidden { transform: translateX(-50%) translateY(20px); }
-        #alienDock label {
-            display: flex; justify-content: space-between; align-items: center;
-            color: #fff; font-size: 13px; font-weight: 600;
-            margin-bottom: 12px; letter-spacing: 0.02em;
-        }
-        #alienDock label span { font-size: 12px; color: rgba(255,255,255,0.5); font-weight: 400; }
-        #alienCount {
-            display: inline-block; background: rgba(90,200,250,0.25); color: #5AC8FA;
-            border-radius: 6px; padding: 1px 8px; font-size: 13px; font-weight: 700;
-            min-width: 28px; text-align: center;
-        }
-        .panel-hint { text-align: center; color: rgba(255,255,255,0.3); font-size: 11px; margin-top: 10px; }
 
         /* ── Upload panel (bottom-right) ── */
         #uploadPanel {
@@ -117,13 +136,13 @@
 
         #uploadAddBtn {
             padding: 6px 14px;
-            background: rgba(90,200,250,0.2); color: #5AC8FA;
-            border: 1px solid rgba(90,200,250,0.4); border-radius: 8px;
-            font-size: 12px; font-weight: 700; cursor: pointer;
+            background: var(--accent-bg); color: var(--accent);
+            border: 1px solid var(--accent-line); border-radius: 8px;
+            font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
             transition: background 0.15s;
             touch-action: auto;
         }
-        #uploadAddBtn:hover { background: rgba(90,200,250,0.35); }
+        #uploadAddBtn:hover { background: rgba(240,172,83,0.32); }
         #uploadAddBtn:disabled {
             opacity: 0.4; cursor: not-allowed;
         }
@@ -180,13 +199,13 @@
         .slider::-webkit-slider-thumb {
             -webkit-appearance: none; appearance: none;
             width: 22px; height: 22px; border-radius: 50%;
-            background: #5AC8FA; box-shadow: 0 0 6px rgba(90,200,250,0.5);
+            background: var(--accent); box-shadow: 0 0 6px rgba(240,172,83,0.5);
             cursor: grab; transition: transform 0.1s;
         }
         .slider::-webkit-slider-thumb:active { cursor: grabbing; transform: scale(1.15); }
         .slider::-moz-range-thumb {
             width: 22px; height: 22px; border-radius: 50%;
-            background: #5AC8FA; border: none; cursor: grab;
+            background: var(--accent); border: none; cursor: grab;
         }
 
         #uploadEmpty {
@@ -197,21 +216,6 @@
             text-align: center; color: rgba(255,59,48,0.7);
             font-size: 11px; margin-top: 8px; display: none; flex-shrink: 0;
         }
-
-        /* ── BG button (top-left) ── */
-        #bgBtn {
-            position: absolute; top: 20px; left: 20px;
-            padding: 10px 18px;
-            background-color: rgba(255,255,255,0.1); color: #fff;
-            border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
-            font-size: 13px; font-weight: 700; cursor: pointer;
-            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-            transition: background 0.2s, transform 0.1s;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10;
-            touch-action: auto; letter-spacing: 0.04em;
-        }
-        #bgBtn:hover  { background-color: rgba(255,255,255,0.2); }
-        #bgBtn:active { transform: scale(0.95); }
 
         /* ── BG panel ── */
         #bgPanel {
@@ -264,7 +268,7 @@
             width: 100%; padding: 8px;
             background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8);
             border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
-            font-size: 12px; font-weight: 600; cursor: pointer;
+            font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
             transition: background 0.15s; text-align: center;
             touch-action: auto;
         }
@@ -275,7 +279,7 @@
             width: 100%; padding: 7px;
             background: rgba(255,59,48,0.12); color: rgba(255,100,90,0.9);
             border: 1px solid rgba(255,59,48,0.25); border-radius: 8px;
-            font-size: 12px; font-weight: 600; cursor: pointer;
+            font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
             transition: background 0.15s; text-align: center; margin-top: 8px;
             touch-action: auto;
         }
@@ -283,21 +287,16 @@
     </style>
 </head>
 <body>
+    <div class="corner">
+        <a class="chip" id="backBtn" href="../" aria-label="Back to games">&lsaquo; Games</a>
+        <button class="chip" id="bgBtn">BG</button>
+    </div>
+
     <button class="top-btn" id="toggleBtn">Spawning: ON</button>
-    <button class="top-btn" id="alienDockBtn">Alien Cat Slider 👽</button>
     <button class="top-btn" id="uploadBtn">Upload Image 🖼️</button>
     <button id="gyroBtn">Enable Tilt 🌀</button>
     <div id="gyroToast"></div>
-
-    <!-- Alien cat dock -->
-    <div id="alienDock" class="panel hidden">
-        <label>
-            Alien cats
-            <span><span id="alienCount">6</span> / <span id="alienTotal">0</span></span>
-        </label>
-        <input type="range" id="alienSlider" class="slider" min="0" max="100" value="0" step="1">
-        <div class="panel-hint">drag · 0 = none · max = all</div>
-    </div>
+    <div id="hint">Grab a ball and throw it</div>
 
     <!-- Upload panel -->
     <div id="uploadPanel" class="panel hidden">
@@ -317,8 +316,7 @@
     <input type="file" id="fileInput" accept="image/*" multiple style="display:none">
     <input type="file" id="bgFileInput" accept="image/*" style="display:none">
 
-    <!-- BG button + panel -->
-    <button id="bgBtn">BG</button>
+    <!-- BG panel -->
     <div id="bgPanel" class="panel hidden">
         <span class="panel-title">Background <span id="bgDims" style="font-size:11px;font-weight:400;color:rgba(255,255,255,0.35);margin-left:6px;"></span></span>
 
@@ -353,12 +351,7 @@
         const canvas       = document.getElementById('physicsCanvas');
         const ctx          = canvas.getContext('2d');
         const toggleBtn    = document.getElementById('toggleBtn');
-        const alienDockBtn = document.getElementById('alienDockBtn');
         const uploadBtn    = document.getElementById('uploadBtn');
-        const alienDock    = document.getElementById('alienDock');
-        const alienSlider  = document.getElementById('alienSlider');
-        const alienCountEl = document.getElementById('alienCount');
-        const alienTotalEl = document.getElementById('alienTotal');
         const uploadPanel  = document.getElementById('uploadPanel');
         const uploadAddBtn = document.getElementById('uploadAddBtn');
         const fileInput    = document.getElementById('fileInput');
@@ -368,8 +361,18 @@
         const imageCountBadge = document.getElementById('imageCountBadge');
         const gyroBtn      = document.getElementById('gyroBtn');
         const gyroToast    = document.getElementById('gyroToast');
+        const hintEl       = document.getElementById('hint');
 
         const MAX_IMAGES = 10;
+
+        // ── First-visit hint ─────────────────────────────────────────────────
+        let hintShown = true;
+        function hideHint() {
+            if (!hintShown) return;
+            hintShown = false;
+            hintEl.classList.add('gone');
+        }
+        setTimeout(hideHint, 7000);
 
         // ── Gravity / gyro ───────────────────────────────────────────────────
         let gravityX = 0, gravityY = 0.6;
@@ -429,7 +432,7 @@
         setupGyro();
 
         // ── Image registry ───────────────────────────────────────────────────
-        // Ball.skin = null | 'alien' | <imageId number>
+        // Ball.skin = null | <imageId number>
         const uploadedImages = [];
         let nextImageId = 0;
 
@@ -456,40 +459,14 @@
             ['pointerdown','pointermove','pointerup','pointercancel','touchstart','touchmove','touchend']
                 .forEach(type => el.addEventListener(type, e => e.stopPropagation(), { capture: false, passive: false }));
         }
-        blockCanvasEvents(alienDock);
         blockCanvasEvents(uploadPanel);
 
         // ── Panel toggles ────────────────────────────────────────────────────
-        let alienVisible = false, uploadVisible = false;
-        alienDockBtn.addEventListener('click', () => {
-            alienVisible = !alienVisible;
-            alienDock.classList.toggle('hidden', !alienVisible);
-            // close the other panel
-            if (alienVisible) { uploadVisible = false; uploadPanel.classList.add('hidden'); }
-        });
+        let uploadVisible = false;
         uploadBtn.addEventListener('click', () => {
             uploadVisible = !uploadVisible;
             uploadPanel.classList.toggle('hidden', !uploadVisible);
-            // close the other panel
-            if (uploadVisible) { alienVisible = false; alienDock.classList.add('hidden'); }
         });
-
-        // ── Alien slider ─────────────────────────────────────────────────────
-        let targetAlienCount = 0;
-        alienSlider.addEventListener('input', () => {
-            targetAlienCount = parseInt(alienSlider.value);
-            setSkinCount('alien', targetAlienCount);
-            refreshAlienUI();
-            refreshAllUploadRows();
-        });
-
-        function refreshAlienUI() {
-            const cur = ballsWithSkin('alien').length;
-            alienCountEl.textContent = cur;
-            alienSlider.value = cur;
-            alienSlider.max   = sliderMax('alien');
-            alienTotalEl.textContent = balls.length;
-        }
 
         // ── Upload panel ─────────────────────────────────────────────────────
         uploadAddBtn.addEventListener('click', () => fileInput.click());
@@ -576,7 +553,6 @@
                 setSkinCount(entry.id, parseInt(slider.value));
                 entry.count = ballsWithSkin(entry.id).length;
                 updateRow();
-                refreshAlienUI();
                 refreshAllUploadRows();
             });
 
@@ -596,7 +572,6 @@
             const row = uploadList.querySelector(`.upload-row[data-id="${id}"]`);
             if (row) row.remove();
             updateBadge();
-            refreshAlienUI();
             refreshAllUploadRows();
         }
 
@@ -607,10 +582,7 @@
         // ── Ball class ───────────────────────────────────────────────────────
         let allowSpawning = true;
         let balls = [];
-        let targetAlienCount_save = 0;
         const colors = ['#FF3B30','#FF9500','#FFCC00','#4CD964','#5AC8FA','#5856D6','#FF2D55'];
-        const alienCatImg = new Image();
-        alienCatImg.src = 'https://media.tenor.com/-TO4hXAw_MQAAAAj/alien-alien-cat.gif';
 
         const CIRCLE_SIZE = 128; // offscreen canvas resolution for pre-rendered image balls
         const imageMap = new Map(); // id → entry, for O(1) lookup
@@ -627,19 +599,6 @@
             octx.drawImage(imgEl, 0, 0, CIRCLE_SIZE, CIRCLE_SIZE);
             return oc;
         }
-
-        // Alien cat — pre-render once loaded, refresh every 80 ms to keep GIF animating
-        let alienCircleCanvas = null;
-        function refreshAlienCircle() {
-            if (alienCatImg.complete && alienCatImg.naturalWidth > 0)
-                alienCircleCanvas = makeCircleCanvas(alienCatImg);
-        }
-        alienCatImg.onload = () => {
-            refreshAlienCircle();
-            setInterval(refreshAlienCircle, 80);
-        };
-        // In case it's already cached by the browser
-        if (alienCatImg.complete) { refreshAlienCircle(); setInterval(refreshAlienCircle, 80); }
 
         class Ball {
             constructor() {
@@ -659,14 +618,7 @@
                 const x = this.x, y = this.y, r = this.radius;
                 const d = r * 2;
 
-                if (this.skin === 'alien' && alienCircleCanvas) {
-                    // Solid backing so transparent GIF pixels don't glitch
-                    ctx.beginPath();
-                    ctx.arc(x, y, r, 0, Math.PI * 2);
-                    ctx.fillStyle = bgColor;
-                    ctx.fill();
-                    ctx.drawImage(alienCircleCanvas, x - r, y - r, d, d);
-                } else if (typeof this.skin === 'number') {
+                if (typeof this.skin === 'number') {
                     const entry = imageMap.get(this.skin);
                     if (entry?.circleCanvas) {
                         // Solid backing so transparent PNG pixels don't glitch
@@ -721,13 +673,11 @@
             let area = 0;
             while (area < target) { const b = new Ball(); balls.push(b); area += b.getArea(); }
 
-            setSkinCount('alien', targetAlienCount);
             uploadedImages.forEach(entry => {
                 const n = Math.min(entry.count, freeBalls().length);
                 setSkinCount(entry.id, n);
                 entry.count = ballsWithSkin(entry.id).length;
             });
-            refreshAlienUI();
             refreshAllUploadRows();
         }
 
@@ -756,6 +706,7 @@
                     pointers.set(e.pointerId, { ball: b, x: e.clientX, y: e.clientY, vx: 0, vy: 0 });
                     canvas.setPointerCapture(e.pointerId);
                     balls.push(balls.splice(i, 1)[0]);
+                    hideHint();
                     break;
                 }
             }
@@ -812,6 +763,13 @@
             bgPanel.classList.toggle('hidden', !bgVisible);
         });
         blockCanvasEvents(bgPanel);
+
+        // Escape closes whatever panel is open
+        window.addEventListener('keydown', e => {
+            if (e.key !== 'Escape') return;
+            uploadVisible = false; uploadPanel.classList.add('hidden');
+            bgVisible = false;     bgPanel.classList.add('hidden');
+        });
 
         // Preset swatches
         document.querySelectorAll('.bg-swatch').forEach(sw => {
@@ -872,8 +830,9 @@
         // ── Physics ──────────────────────────────────────────────────────────
         const SUBSTEPS = isMobile ? 4 : 8;
 
-        function animate() {
-            drawBackground();
+        // One 60 Hz tick of the simulation. Running it on a fixed clock (below)
+        // keeps balls falling at the same speed on 60, 120 and 144 Hz screens.
+        function physicsTick() {
             const dt = 1.0 / SUBSTEPS;
 
             ballToPointer.clear();
@@ -936,14 +895,28 @@
                     else if (b.y + b.radius > window.innerHeight) { b.y = window.innerHeight - b.radius; if (b.vy > 0) b.vy *= b.vy > 1.5 ? -b.bounce : 0; b.vx *= 0.95; }
                 });
             }
+        }
 
-            balls.forEach(b => b.draw());
+        const TICK_MS = 1000 / 60;
+        let lastTime = performance.now(), tickAcc = 0;
+
+        function animate(now) {
             requestAnimationFrame(animate);
+            tickAcc += Math.min(100, now - lastTime);   // clamp the catch-up after a background tab
+            lastTime = now;
+            let ticks = 0;
+            while (tickAcc >= TICK_MS && ticks < 4) { physicsTick(); tickAcc -= TICK_MS; ticks++; }
+            if (ticks === 4) tickAcc = 0;               // falling behind: drop the backlog rather than spiral
+
+            drawBackground();
+            balls.forEach(b => b.draw());
         }
 
         updateBadge();
         handleWindowResize();
-        animate();
+        requestAnimationFrame(animate);
+
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js').catch(() => {});
     </script>
 </body>
 </html>
