@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1b1a18">
+<title>Tic Tac Toe</title>
+<style>
+  :root{
+    --page:#1b1a18;
+    --panel:#25211d;
+    --cell:#2d2823;
+    --cell-hover:#36302a;
+    --ink:#f6f1e8;
+    --dim:#a79d90;
+    --x:#ff7b54;
+    --o:#5ec4b6;
+    --accent:#f0ac53;
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  html,body{
+    margin:0;
+    min-height:100%;
+    background:var(--page);
+    color:var(--ink);
+    font-family:'Segoe UI', system-ui, -apple-system, sans-serif;
+    -webkit-text-size-adjust:100%;
+  }
+
+  body{
+    display:flex;
+    justify-content:center;
+    padding:max(16px, env(safe-area-inset-top)) 16px calc(20px + env(safe-area-inset-bottom));
+  }
+
+  .wrap{
+    width:min(92vw, 420px, calc(100dvh - 330px));
+    min-width:280px;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+
+  .back{
+    align-self:flex-start;
+    margin:-4px 0 -4px -10px;
+    padding:5px 10px;
+    border-radius:999px;
+    color:var(--dim);
+    text-decoration:none;
+    font-size:13px;
+    font-weight:700;
+    transition:color .15s ease, background .15s ease;
+  }
+  .back:hover{ color:var(--ink); background:rgba(255,255,255,0.06); }
+  .back:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  h1{ margin:0; font-size:clamp(28px, 8vw, 38px); font-weight:800; letter-spacing:-0.5px; line-height:1.1; }
+  h1 .x{ color:var(--x); }
+  h1 .o{ color:var(--o); }
+
+  /* ---- mode pickers ---- */
+  .modes{ display:flex; flex-wrap:wrap; gap:8px; }
+  .seg{ display:inline-flex; padding:3px; border-radius:10px; background:var(--panel); }
+  .seg[hidden]{ display:none; }
+  .seg button{
+    font:inherit;
+    font-size:13px;
+    font-weight:700;
+    color:var(--dim);
+    background:transparent;
+    border:none;
+    border-radius:8px;
+    padding:7px 12px;
+    cursor:pointer;
+    transition:background .15s ease, color .15s ease;
+  }
+  .seg button:hover{ color:var(--ink); }
+  .seg button[aria-pressed="true"]{ background:#3a332c; color:var(--ink); }
+  .seg button:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
+
+  /* ---- scoreboard ---- */
+  .scores{ display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+  .sc{
+    background:var(--panel);
+    border-radius:10px;
+    padding:8px 10px;
+    text-align:center;
+    border-bottom:3px solid #5a5148;
+    transition:box-shadow .2s ease;
+  }
+  .sc.x{ border-color:var(--x); }
+  .sc.o{ border-color:var(--o); }
+  .sc.turn{ box-shadow:inset 0 0 0 2px rgba(255,255,255,0.16); }
+  .sc .lbl{
+    display:block;
+    font-size:11px;
+    font-weight:700;
+    color:var(--dim);
+    text-transform:uppercase;
+    letter-spacing:0.6px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .sc .n{ display:block; font-size:22px; font-weight:800; line-height:1.2; font-variant-numeric:tabular-nums; }
+
+  .status{ text-align:center; font-size:16px; font-weight:700; min-height:1.4em; }
+  .status .x{ color:var(--x); }
+  .status .o{ color:var(--o); }
+  .status .sub{ color:var(--dim); font-weight:600; }
+
+  /* ---- board ---- */
+  .board{
+    position:relative;
+    width:100%;
+    aspect-ratio:1;
+    display:grid;
+    grid-template-columns:repeat(3, 1fr);
+    grid-template-rows:repeat(3, 1fr);
+    gap:10px;
+  }
+
+  .cell{
+    position:relative;
+    padding:0;
+    border:none;
+    border-radius:16px;
+    background:var(--cell);
+    cursor:pointer;
+    transition:background .15s ease, transform .1s ease;
+  }
+  .cell:hover{ background:var(--cell-hover); }
+  .cell:active{ transform:scale(0.97); }
+  .cell.taken{ cursor:default; }
+  .cell.taken:hover{ background:var(--cell); }
+  .cell:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .cell.win, .cell.win:hover{ background:#3b342d; }
+
+  .board.done .cell{ cursor:pointer; }
+  .board.done .cell:not(.win) svg{ opacity:0.3; transition:opacity .3s ease; }
+
+  .cell svg{ position:absolute; inset:14%; width:72%; height:72%; overflow:visible; }
+  .cell path, .cell circle{
+    fill:none;
+    stroke-width:12;
+    stroke-linecap:round;
+    stroke-dasharray:100;
+    stroke-dashoffset:100;
+    animation:draw .3s ease-out forwards;
+  }
+  .cell .mx{ stroke:var(--x); }
+  .cell .mo{ stroke:var(--o); }
+  .cell .mx + .mx{ animation-delay:.12s; }
+
+  .winline{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
+  .winline line{
+    stroke:var(--ink);
+    stroke-width:8;
+    stroke-linecap:round;
+    stroke-dasharray:100;
+    stroke-dashoffset:100;
+    opacity:0;
+  }
+  .winline.show line{ opacity:0.92; animation:draw .35s ease-out .15s forwards; }
+
+  @keyframes draw{ to{ stroke-dashoffset:0; } }
+
+  /* ---- actions ---- */
+  .actions{ display:flex; justify-content:center; align-items:center; gap:10px; }
+  .primary{
+    font:inherit;
+    font-size:14px;
+    font-weight:800;
+    color:#2a1a08;
+    background:linear-gradient(180deg, #ffc978, #f0a043);
+    border:none;
+    border-radius:999px;
+    padding:10px 24px;
+    cursor:pointer;
+    box-shadow:0 4px 14px rgba(240,160,70,0.25);
+  }
+  .primary:active{ transform:translateY(1px); }
+  .primary:focus-visible{ outline:2px solid var(--ink); outline-offset:2px; }
+  .ghost{
+    font:inherit;
+    font-size:13px;
+    font-weight:700;
+    color:var(--dim);
+    background:none;
+    border:none;
+    border-radius:999px;
+    padding:10px 14px;
+    cursor:pointer;
+  }
+  .ghost:hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .ghost:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  .hint{ margin:0; text-align:center; color:var(--dim); font-size:12px; }
+
+  @media (prefers-reduced-motion: reduce){
+    .cell path, .cell circle, .winline.show line{ animation-duration:.01ms; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <a class="back" href="../" aria-label="Back to games">&lsaquo; Games</a>
+
+  <h1>Tic <span class="x">Tac</span> <span class="o">Toe</span></h1>
+
+  <div class="modes">
+    <div class="seg" role="group" aria-label="Opponent">
+      <button type="button" data-mode="cpu">vs Computer</button>
+      <button type="button" data-mode="pvp">2 Players</button>
+    </div>
+    <div class="seg" id="diff" role="group" aria-label="Difficulty">
+      <button type="button" data-diff="easy">Easy</button>
+      <button type="button" data-diff="medium">Medium</button>
+      <button type="button" data-diff="hard">Hard</button>
+    </div>
+  </div>
+
+  <div class="scores">
+    <div class="sc x" id="card-x"><span class="lbl" id="lbl-x">You</span><span class="n" id="score-x">0</span></div>
+    <div class="sc d"><span class="lbl">Draws</span><span class="n" id="score-d">0</span></div>
+    <div class="sc o" id="card-o"><span class="lbl" id="lbl-o">Computer</span><span class="n" id="score-o">0</span></div>
+  </div>
+
+  <div class="status" id="status" aria-live="polite"></div>
+
+  <div class="board" id="board"></div>
+
+  <div class="actions">
+    <button type="button" class="primary" id="new">New round</button>
+    <button type="button" class="ghost" id="reset">Reset score</button>
+  </div>
+
+  <p class="hint">Keys 1&ndash;9 play a square &middot; N starts a new round</p>
+
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  var LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+
+  var boardEl  = document.getElementById('board');
+  var statusEl = document.getElementById('status');
+  var diffEl   = document.getElementById('diff');
+  var cardX    = document.getElementById('card-x');
+  var cardO    = document.getElementById('card-o');
+
+  var cells = [];
+  var board, turn, over, thinking, lastWin = null;
+  var starter = 'X';
+  var cpuTimer = 0;
+  var scores = { X: 0, O: 0, D: 0 };
+
+  function load(key, fallback){
+    try { return localStorage.getItem(key) || fallback; } catch(e){ return fallback; }
+  }
+  function save(key, v){ try { localStorage.setItem(key, v); } catch(e){} }
+
+  var mode = load('ttt.mode', 'cpu');
+  var diff = load('ttt.diff', 'medium');
+
+  // ---------- board ----------
+  function label(i){ return 'Row ' + (Math.floor(i / 3) + 1) + ', column ' + (i % 3 + 1); }
+
+  for(var i = 0; i < 9; i++){
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'cell';
+    b.addEventListener('click', onCell.bind(null, i));
+    boardEl.appendChild(b);
+    cells.push(b);
+  }
+
+  var svgNS = 'http://www.w3.org/2000/svg';
+  var winSvg = document.createElementNS(svgNS, 'svg');
+  winSvg.setAttribute('class', 'winline');
+  winSvg.setAttribute('aria-hidden', 'true');
+  var winLine = document.createElementNS(svgNS, 'line');
+  winLine.setAttribute('pathLength', '100');
+  winSvg.appendChild(winLine);
+  boardEl.appendChild(winSvg);
+
+  // ---------- rules ----------
+  function result(b){
+    for(var k = 0; k < 8; k++){
+      var l = LINES[k];
+      if(b[l[0]] && b[l[0]] === b[l[1]] && b[l[0]] === b[l[2]]) return { p: b[l[0]], line: l };
+    }
+    for(var i = 0; i < 9; i++) if(!b[i]) return null;
+    return { p: 'D' };
+  }
+
+  function other(p){ return p === 'X' ? 'O' : 'X'; }
+  function isCpu(p){ return mode === 'cpu' && p === 'O'; }
+
+  // ---------- computer ----------
+  // full minimax: wins sooner score higher, losses later score less badly
+  function minimax(b, player, me, depth){
+    var r = result(b);
+    if(r) return r.p === 'D' ? 0 : (r.p === me ? 10 - depth : depth - 10);
+    var best = player === me ? -Infinity : Infinity;
+    for(var i = 0; i < 9; i++){
+      if(b[i]) continue;
+      b[i] = player;
+      var s = minimax(b, other(player), me, depth + 1);
+      b[i] = null;
+      best = player === me ? Math.max(best, s) : Math.min(best, s);
+    }
+    return best;
+  }
+
+  function bestMove(b, me){
+    if(b.every(function(v){ return !v; })){
+      var opens = [0, 2, 4, 6, 8];            // an empty board: any corner or the centre
+      return opens[Math.random() * opens.length | 0];
+    }
+    var top = -Infinity, picks = [];
+    for(var i = 0; i < 9; i++){
+      if(b[i]) continue;
+      b[i] = me;
+      var s = minimax(b, other(me), me, 1);
+      b[i] = null;
+      if(s > top){ top = s; picks = [i]; }
+      else if(s === top) picks.push(i);
+    }
+    return picks[Math.random() * picks.length | 0];   // vary between equally good moves
+  }
+
+  function cpuMove(){
+    var smart = diff === 'hard' ? 1 : diff === 'medium' ? 0.7 : 0.25;
+    if(Math.random() < smart) return bestMove(board.slice(), 'O');
+    var empty = [];
+    for(var i = 0; i < 9; i++) if(!board[i]) empty.push(i);
+    return empty[Math.random() * empty.length | 0];
+  }
+
+  function maybeCpu(){
+    if(over || !isCpu(turn)) return;
+    thinking = true;
+    render();
+    cpuTimer = setTimeout(function(){
+      thinking = false;
+      place(cpuMove(), 'O');
+    }, 420 + Math.random() * 260);
+  }
+
+  // ---------- flow ----------
+  function newRound(){
+    clearTimeout(cpuTimer);
+    board = [null, null, null, null, null, null, null, null, null];
+    over = false;
+    thinking = false;
+    lastWin = null;
+    turn = starter;
+    starter = other(starter);                  // whoever didn't open this round opens the next
+    cells.forEach(function(c, i){
+      c.innerHTML = '';
+      c.className = 'cell';
+      c.setAttribute('aria-label', label(i) + ', empty');
+    });
+    boardEl.classList.remove('done');
+    winSvg.classList.remove('show');
+    render();
+    maybeCpu();
+  }
+
+  function place(i, p){
+    board[i] = p;
+    var c = cells[i];
+    c.innerHTML = p === 'X'
+      ? '<svg viewBox="0 0 100 100" aria-hidden="true"><path class="mx" pathLength="100" d="M22 22 L78 78"/><path class="mx" pathLength="100" d="M78 22 L22 78"/></svg>'
+      : '<svg viewBox="0 0 100 100" aria-hidden="true"><circle class="mo" pathLength="100" cx="50" cy="50" r="29" transform="rotate(-90 50 50)"/></svg>';
+    c.classList.add('taken');
+    c.setAttribute('aria-label', label(i) + ', ' + p);
+
+    var r = result(board);
+    if(r){ finish(r); return; }
+    turn = other(p);
+    render();
+    maybeCpu();
+  }
+
+  function onCell(i){
+    if(over){ newRound(); return; }          // after a result, any tap starts the next round
+    if(board[i] || thinking || isCpu(turn)) return;
+    place(i, turn);
+  }
+
+  function finish(r){
+    over = true;
+    if(r.p === 'D'){
+      scores.D++;
+    } else {
+      scores[r.p]++;
+      r.line.forEach(function(i){ cells[i].classList.add('win'); });
+      lastWin = r.line;
+      drawWinLine();
+    }
+    boardEl.classList.add('done');
+    render(r);
+  }
+
+  function drawWinLine(animate){
+    if(!lastWin) return;
+    var br = boardEl.getBoundingClientRect();
+    var a = cells[lastWin[0]].getBoundingClientRect();
+    var c = cells[lastWin[2]].getBoundingClientRect();
+    var x1 = a.left + a.width / 2 - br.left, y1 = a.top + a.height / 2 - br.top;
+    var x2 = c.left + c.width / 2 - br.left, y2 = c.top + c.height / 2 - br.top;
+    // run the line a little past the two end squares
+    var len = Math.hypot(x2 - x1, y2 - y1) || 1;
+    var ex = (x2 - x1) / len * a.width * 0.34, ey = (y2 - y1) / len * a.height * 0.34;
+    winSvg.setAttribute('viewBox', '0 0 ' + br.width + ' ' + br.height);
+    winLine.setAttribute('x1', x1 - ex);
+    winLine.setAttribute('y1', y1 - ey);
+    winLine.setAttribute('x2', x2 + ex);
+    winLine.setAttribute('y2', y2 + ey);
+    if(animate === false) return;            // resizing: just move it, don't redraw
+    winSvg.classList.remove('show');
+    void winSvg.getBoundingClientRect();     // restart the draw-in animation
+    winSvg.classList.add('show');
+  }
+
+  // ---------- display ----------
+  function mark(p){ return '<span class="' + p.toLowerCase() + '">' + p + '</span>'; }
+
+  function render(r){
+    var text;
+    if(r){
+      if(r.p === 'D') text = 'It’s a draw';
+      else if(mode === 'cpu') text = r.p === 'X' ? 'You win!' : 'Computer wins';
+      else text = mark(r.p) + ' wins!';
+      text += ' <span class="sub">&middot; tap to play again</span>';
+    } else if(thinking){
+      text = 'Computer is thinking…';
+    } else if(mode === 'cpu'){
+      text = 'Your turn (' + mark('X') + ')';
+    } else {
+      text = mark(turn) + '’s turn';
+    }
+    statusEl.innerHTML = text;
+
+    document.getElementById('score-x').textContent = scores.X;
+    document.getElementById('score-o').textContent = scores.O;
+    document.getElementById('score-d').textContent = scores.D;
+    document.getElementById('lbl-x').textContent = mode === 'cpu' ? 'You' : 'Player X';
+    document.getElementById('lbl-o').textContent = mode === 'cpu' ? 'Computer' : 'Player O';
+    cardX.classList.toggle('turn', !over && turn === 'X');
+    cardO.classList.toggle('turn', !over && turn === 'O');
+
+    document.querySelectorAll('[data-mode]').forEach(function(b){
+      b.setAttribute('aria-pressed', b.dataset.mode === mode ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-diff]').forEach(function(b){
+      b.setAttribute('aria-pressed', b.dataset.diff === diff ? 'true' : 'false');
+    });
+    diffEl.hidden = mode !== 'cpu';
+  }
+
+  function fresh(){
+    scores = { X: 0, O: 0, D: 0 };
+    starter = 'X';
+    newRound();
+  }
+
+  // ---------- controls ----------
+  document.querySelectorAll('[data-mode]').forEach(function(b){
+    b.addEventListener('click', function(){
+      if(mode === b.dataset.mode) return;
+      mode = b.dataset.mode;
+      save('ttt.mode', mode);
+      fresh();
+    });
+  });
+
+  document.querySelectorAll('[data-diff]').forEach(function(b){
+    b.addEventListener('click', function(){
+      if(diff === b.dataset.diff) return;
+      diff = b.dataset.diff;
+      save('ttt.diff', diff);
+      fresh();
+    });
+  });
+
+  document.getElementById('new').addEventListener('click', newRound);
+  document.getElementById('reset').addEventListener('click', function(){
+    scores = { X: 0, O: 0, D: 0 };
+    render(over ? result(board) : null);
+  });
+
+  window.addEventListener('keydown', function(e){
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    if(/^[1-9]$/.test(e.key)){ onCell(+e.key - 1); return; }
+    if(e.key === 'n' || e.key === 'N') newRound();
+  });
+
+  window.addEventListener('resize', function(){ drawWinLine(false); });
+
+  newRound();
+
+})();
+</script>
+
+</body>
+</html>
