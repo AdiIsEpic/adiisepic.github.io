@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,6 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1b1a18">
 <title>Snake</title>
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
 <style>
   :root{
     /* board shape; JS swaps these to a portrait grid on phones */
@@ -61,7 +62,19 @@
     font-weight:700;
   }
 
-  .brand{ font-size:17px; letter-spacing:0.3px; }
+  .back{
+    color:#fff;
+    text-decoration:none;
+    font-size:14px;
+    font-weight:700;
+    padding:5px 12px;
+    margin-left:-6px;
+    border-radius:999px;
+    background:rgba(0,0,0,0.14);
+    transition:background .15s ease;
+  }
+  .back:hover{ background:rgba(0,0,0,0.26); }
+  .back:focus-visible{ outline:2px solid #fff; outline-offset:2px; }
 
   .scores{ display:flex; align-items:center; gap:16px; font-size:16px; }
 
@@ -149,11 +162,6 @@
     text-align:center;
     line-height:1.5;
   }
-
-  @media (max-width:520px){
-    .brand{ display:none; }
-    .hud{ justify-content:center; }
-  }
 </style>
 </head>
 <body>
@@ -161,7 +169,7 @@
 <div class="wrap">
 
   <div class="hud">
-    <div class="brand">Snake</div>
+    <a class="back" href="../" aria-label="Back to games">&lsaquo; Games</a>
     <div class="scores">
       <div class="score"><span class="apple-dot"></span><span id="score">0</span></div>
       <div class="best">Best <span id="best">0</span></div>
@@ -537,6 +545,7 @@
 
   window.addEventListener('keydown', function(e){
     var k = e.key;
+    if(e.target && e.target.tagName === 'A' && (k === 'Enter' || k === ' ')) return;   // let a focused link work
     var nd = DIRS[k] || DIRS[k.toLowerCase && k.toLowerCase()];
 
     if(nd){
@@ -595,6 +604,10 @@
   requestAnimationFrame(frame);
 
 })();
+</script>
+
+<script>
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js').catch(function(){});
 </script>
 
 </body>
