@@ -182,6 +182,10 @@
   /* minesweeper: a corner of the classic grey minefield */
   .icon-mines{ background:#c0c0c0; }
 
+  /* solitaire: two cards on the green felt */
+  .icon-sol{ background:#008000; }
+  .icon-sol svg{ width:100%; height:100%; display:block; }
+
   .icon-snake svg,
   .icon-flappy svg,
   .icon-powder svg,
@@ -595,6 +599,30 @@
       <div class="tile-text">
         <div class="app-label">Minesweeper</div>
         <div class="app-note">The classic, Windows 98 style</div>
+      </div>
+    </a>
+
+    <a class="app-tile" href="Solitaire/" aria-label="Play Solitaire">
+      <div class="game-icon icon-sol">
+        <svg viewBox="0 0 60 60" aria-hidden="true">
+          <!-- a card back, tilted -->
+          <g transform="rotate(-12 22 32)">
+            <rect x="9" y="14" width="26" height="36" rx="3" fill="#1c4fb8" stroke="#000" stroke-width="1"/>
+            <path d="M12 22 L32 42 M12 30 L26 44 M18 17 L32 31 M26 17 L32 23 M12 38 L18 44 M32 22 L12 42 M32 30 L18 44 M26 17 L12 31 M18 17 L12 23 M32 38 L26 44"
+                  stroke="#fff" stroke-opacity="0.35" stroke-width="0.8"/>
+            <rect x="11.5" y="16.5" width="21" height="31" rx="1.5" fill="none" stroke="#fff" stroke-width="1.4"/>
+          </g>
+          <!-- the ace of hearts on top -->
+          <g transform="rotate(8 38 30)">
+            <rect x="25" y="10" width="26" height="36" rx="3" fill="#fff" stroke="#000" stroke-width="1"/>
+            <text x="30" y="19" font-family="Georgia, serif" font-weight="700" font-size="8" fill="#d00000" text-anchor="middle">A</text>
+            <path d="M38 37 C31 31.5 29.5 28.5 32 26 C34 24 36.5 24.8 38 27 C39.5 24.8 42 24 44 26 C46.5 28.5 45 31.5 38 37 Z" fill="#d00000"/>
+          </g>
+        </svg>
+      </div>
+      <div class="tile-text">
+        <div class="app-label">Solitaire</div>
+        <div class="app-note">Klondike, Windows 98 style</div>
       </div>
     </a>
 
