@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#12151f">
+<title>Drift</title>
+<style>
+  :root{
+    --page:#12151f;
+    --cream:#f6ecd9;
+    --dim:#b9ad9c;
+    --warm:#f0ac53;
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  html,body{
+    margin:0;
+    height:100%;
+    background:var(--page);
+    color:var(--cream);
+    overflow:hidden;
+    overscroll-behavior:none;
+    font-family:'Segoe UI', system-ui, -apple-system, sans-serif;
+    -webkit-user-select:none;
+    user-select:none;
+    -webkit-touch-callout:none;
+  }
+
+  body{ display:flex; align-items:center; justify-content:center; }
+
+  .stage{
+    --u:1;                  /* px per world unit, set from JS */
+    position:relative;
+    overflow:hidden;
+    touch-action:none;
+    cursor:pointer;
+  }
+  .stage.framed{
+    border-radius:20px;
+    box-shadow:0 24px 70px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,220,170,0.08);
+  }
+
+  canvas{ display:block; width:100%; height:100%; }
+
+  .overlay{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:calc(12px*var(--u));
+    text-align:center;
+    padding:calc(24px*var(--u));
+    pointer-events:none;
+  }
+  .overlay[hidden]{ display:none; }
+
+  .serif{ font-family:Georgia, 'Iowan Old Style', 'Times New Roman', serif; }
+
+  .ready h1{
+    margin:0;
+    font-size:calc(58px*var(--u));
+    font-weight:600;
+    letter-spacing:calc(1px*var(--u));
+    text-shadow:0 calc(3px*var(--u)) calc(18px*var(--u)) rgba(255,170,90,0.35);
+    animation:float 4s ease-in-out infinite;
+  }
+  .ready .tag{
+    margin:0;
+    max-width:calc(260px*var(--u));
+    font-size:calc(15px*var(--u));
+    line-height:1.5;
+    color:var(--dim);
+  }
+
+  .pill{
+    font-size:calc(12.5px*var(--u));
+    font-weight:600;
+    color:var(--cream);
+    background:rgba(10,14,28,0.55);
+    border:1px solid rgba(255,220,170,0.16);
+    padding:calc(7px*var(--u)) calc(14px*var(--u));
+    border-radius:999px;
+  }
+
+  .ready .best{ font-size:calc(13px*var(--u)); color:var(--warm); font-weight:600; min-height:1em; }
+
+  .paused{ background:rgba(8,12,24,0.35); }
+  .paused h2{ margin:0; font-size:calc(34px*var(--u)); font-weight:600; }
+
+  .over{ pointer-events:auto; cursor:default; background:rgba(8,12,24,0.28); }
+  .over h2{
+    margin:0;
+    font-size:calc(32px*var(--u));
+    font-weight:600;
+    animation:drop .4s cubic-bezier(.2,.8,.3,1.1) both;
+  }
+
+  .card{
+    display:grid;
+    grid-template-columns:repeat(3, auto);
+    gap:calc(6px*var(--u)) calc(22px*var(--u));
+    padding:calc(14px*var(--u)) calc(22px*var(--u));
+    border-radius:calc(14px*var(--u));
+    background:rgba(14,18,34,0.78);
+    border:1px solid rgba(255,220,170,0.18);
+    box-shadow:0 calc(10px*var(--u)) calc(30px*var(--u)) rgba(0,0,0,0.35);
+    animation:rise .45s cubic-bezier(.2,.8,.3,1) .06s both;
+  }
+  .k{
+    font-size:calc(10px*var(--u));
+    font-weight:700;
+    letter-spacing:calc(0.8px*var(--u));
+    text-transform:uppercase;
+    color:var(--dim);
+  }
+  .v{ font-size:calc(24px*var(--u)); font-weight:600; line-height:1.1; }
+  .v.warm{ color:var(--warm); }
+
+  .newbest{
+    font-size:calc(11.5px*var(--u));
+    font-weight:700;
+    color:#2a1a08;
+    background:var(--warm);
+    padding:calc(3px*var(--u)) calc(11px*var(--u));
+    border-radius:999px;
+  }
+
+  .again{
+    font:inherit;
+    font-weight:700;
+    font-size:calc(15px*var(--u));
+    color:#2a1a08;
+    background:linear-gradient(180deg, #ffc978, #f0a043);
+    border:none;
+    border-radius:999px;
+    padding:calc(10px*var(--u)) calc(26px*var(--u));
+    box-shadow:0 calc(4px*var(--u)) calc(16px*var(--u)) rgba(240,160,70,0.35);
+    cursor:pointer;
+    animation:rise .45s cubic-bezier(.2,.8,.3,1) .14s both;
+  }
+  .again:active{ transform:translateY(1px) scale(0.98); }
+  .again:focus-visible{ outline:2px solid var(--cream); outline-offset:3px; }
+
+  .mute{
+    position:absolute;
+    top:calc(12px*var(--u));
+    right:calc(12px*var(--u));
+    width:calc(32px*var(--u));
+    height:calc(32px*var(--u));
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0;
+    border:none;
+    border-radius:50%;
+    background:rgba(10,14,28,0.45);
+    color:var(--cream);
+    cursor:pointer;
+    z-index:2;
+  }
+  .mute svg{ width:58%; height:58%; }
+  .mute:focus-visible{ outline:2px solid var(--cream); outline-offset:2px; }
+
+  @keyframes rise{ from{ opacity:0; transform:translateY(calc(22px*var(--u))); } to{ opacity:1; transform:none; } }
+  @keyframes drop{ from{ opacity:0; transform:translateY(calc(-14px*var(--u))); } to{ opacity:1; transform:none; } }
+  @keyframes float{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(calc(-5px*var(--u))); } }
+
+  @media (prefers-reduced-motion: reduce){
+    .ready h1{ animation:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage" id="stage">
+  <canvas id="game"></canvas>
+
+  <button class="mute" id="mute" type="button" aria-label="Mute" aria-pressed="false">
+    <svg id="icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+      <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" stroke="none"/>
+      <path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>
+    </svg>
+    <svg id="icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="display:none">
+      <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" stroke="none"/>
+      <path d="M16 9l6 6M22 9l-6 6"/>
+    </svg>
+  </button>
+
+  <div class="overlay ready" id="ready">
+    <h1 class="serif">Drift</h1>
+    <p class="tag serif">A paper boat, a quiet river, and lanterns to catch.</p>
+    <div class="pill">Drag, or use &larr; &rarr; to steer &middot; tap to set sail</div>
+    <div class="best" id="ready-best"></div>
+  </div>
+
+  <div class="overlay paused" id="paused" hidden>
+    <h2 class="serif">Paused</h2>
+    <div class="pill">Tap or press Space to keep drifting</div>
+  </div>
+
+  <div class="overlay over" id="over" hidden>
+    <h2 class="serif" id="over-title">Bumped a rock</h2>
+    <div class="card">
+      <span class="k">Distance</span><span class="k">Lanterns</span><span class="k">Best</span>
+      <span class="v" id="ov-dist">0 m</span><span class="v warm" id="ov-lan">0</span><span class="v" id="ov-best">0 m</span>
+    </div>
+    <div class="newbest" id="newbest" hidden>New best!</div>
+    <button class="again" id="again" type="button">Sail again</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ---- world, in virtual units: height is always 640, width follows the screen ----
+  var VH = 640, VW = 360;
+  var BOAT_Y = VH * 0.8, BOAT_R = 10;
+  var STEP = 1 / 240;
+
+  var stage    = document.getElementById('stage');
+  var canvas   = document.getElementById('game');
+  var ctx      = canvas.getContext('2d');
+  var readyEl  = document.getElementById('ready');
+  var pausedEl = document.getElementById('paused');
+  var overEl   = document.getElementById('over');
+  var readyBest = document.getElementById('ready-best');
+  var overTitle = document.getElementById('over-title');
+  var ovDist   = document.getElementById('ov-dist');
+  var ovLan    = document.getElementById('ov-lan');
+  var ovBest   = document.getElementById('ov-best');
+  var newBestEl = document.getElementById('newbest');
+  var againBtn = document.getElementById('again');
+  var muteBtn  = document.getElementById('mute');
+  var iconOn   = document.getElementById('icon-on');
+  var iconOff  = document.getElementById('icon-off');
+
+  var state = 'ready';     // ready | playing | paused | crashed | over
+  var d = 0, startD = 0;   // distance along the river, in world units
+  var speed = 40, elapsed = 0;
+  var boat = { x: VW / 2, vx: 0, tilt: 0, sink: 0 };
+  var obstacles = [], lanterns = [], wake = [], sparks = [];
+  var nextObs = 0, nextLantern = 0, wakeTimer = 0;
+  var caught = 0, best = 0;
+  var keys = { left: false, right: false };
+  var drag = { on: false, x: 0 };
+  var t = 0, acc = 0, last = performance.now();
+  var shake = 0, crashT = 0, canRestartAt = 0;
+  var waterGrad, sunGlow, vignette;
+
+  function clamp(v, a, b){ return v < a ? a : v > b ? b : v; }
+  function hash(n){ var x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+
+  // the river winds and breathes as you travel; everything derives from distance
+  function river(wy){
+    var c = VW * 0.5 + Math.sin(wy * 0.0031) * VW * 0.1 + Math.sin(wy * 0.0078 + 1.3) * VW * 0.05;
+    var w = VW * 0.62 + Math.sin(wy * 0.0047 + 0.7) * VW * 0.07;
+    return { l: c - w / 2, r: c + w / 2, c: c };
+  }
+
+  function screenY(wy){ return VH - (wy - d); }
+  function boatWorldY(){ return d + (VH - BOAT_Y); }
+
+  // objects store a fraction across the river, so they stay in the water if the window resizes
+  function xAcross(wy, f, pad){
+    var rv = river(wy);
+    var lo = rv.l + pad, hi = rv.r - pad;
+    return lo + f * Math.max(0, hi - lo);
+  }
+  function padOf(o){ return o.type === 'rock' ? o.r + 6 : Math.abs(Math.cos(o.ang)) * o.len / 2 + 8; }
+
+  // ---------- storage ----------
+  function load(key, fallback){
+    try { var v = localStorage.getItem(key); return v === null ? fallback : v; }
+    catch(e){ return fallback; }
+  }
+  function save(key, v){ try { localStorage.setItem(key, String(v)); } catch(e){} }
+
+  // ---------- sound: soft synth tones, no files ----------
+  var actx = null;
+  var muted = load('drift.muted', '0') === '1';
+
+  function ensureAudio(){
+    if(!actx){
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if(AC){ try { actx = new AC(); } catch(e){} }
+    }
+    if(actx && actx.state === 'suspended') actx.resume();
+  }
+
+  function tone(f0, f1, dur, type, vol, delay){
+    if(muted || !actx) return;
+    var t0 = actx.currentTime + (delay || 0);
+    var o = actx.createOscillator(), g = actx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t0);
+    o.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g);
+    g.connect(actx.destination);
+    o.start(t0);
+    o.stop(t0 + dur + 0.05);
+  }
+
+  var sfx = {
+    sail:  function(){ tone(392, 523, 0.35, 'sine', 0.07); },
+    chime: function(){ tone(880, 880, 0.3, 'sine', 0.08); tone(1318, 1318, 0.45, 'sine', 0.05, 0.07); },
+    bump:  function(){ tone(170, 60, 0.35, 'triangle', 0.2); }
+  };
+
+  function renderMute(){
+    iconOn.style.display  = muted ? 'none' : '';
+    iconOff.style.display = muted ? '' : 'none';
+    muteBtn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+  }
+  function toggleMute(){ muted = !muted; save('drift.muted', muted ? '1' : '0'); renderMute(); }
+
+  // ---------- sizing ----------
+  function resize(){
+    var framed = window.innerWidth >= 700;
+    var pad = framed ? 28 : 0;
+    var maxW = window.innerWidth - pad * 2;
+    var maxH = window.innerHeight - pad * 2;
+    if(maxW <= 0 || maxH <= 0) return;   // hidden / zero-size viewport: keep the last layout
+
+    var aspect = clamp(maxW / maxH, 0.46, 0.72);
+    var h = maxH, w = h * aspect;
+    if(w > maxW){ w = maxW; h = w / aspect; }
+
+    VW = VH * aspect;
+    var scale = h / VH;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    stage.style.width  = w + 'px';
+    stage.style.height = h + 'px';
+    stage.style.setProperty('--u', scale.toFixed(4));
+    stage.classList.toggle('framed', framed);
+
+    canvas.width  = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+
+    waterGrad = ctx.createLinearGradient(0, 0, 0, VH);
+    waterGrad.addColorStop(0, '#141c36');
+    waterGrad.addColorStop(0.55, '#1c2b50');
+    waterGrad.addColorStop(1, '#25406a');
+
+    // last light of the sunset, reflected from upriver
+    sunGlow = ctx.createRadialGradient(VW / 2, -80, 10, VW / 2, -80, VH * 0.75);
+    sunGlow.addColorStop(0, 'rgba(255,150,90,0.26)');
+    sunGlow.addColorStop(1, 'rgba(255,150,90,0)');
+
+    vignette = ctx.createRadialGradient(VW / 2, VH * 0.55, VH * 0.3, VW / 2, VH * 0.55, VH * 0.8);
+    vignette.addColorStop(0, 'rgba(6,8,16,0)');
+    vignette.addColorStop(1, 'rgba(6,8,16,0.55)');
+
+    boat.x = clamp(boat.x, river(boatWorldY()).l + 14, river(boatWorldY()).r - 14);
+    render();
+  }
+
+  // ---------- game flow ----------
+  function toReady(){
+    state = 'ready';
+    obstacles = []; lanterns = []; sparks = [];
+    boat.vx = 0; boat.tilt = 0; boat.sink = 0;
+    boat.x = river(boatWorldY()).c;
+    readyBest.textContent = best > 0 ? 'Best ' + best + ' m' : '';
+    overEl.hidden = true;
+    pausedEl.hidden = true;
+    readyEl.hidden = false;
+  }
+
+  function start(){
+    state = 'playing';
+    readyEl.hidden = true;
+    startD = d;
+    elapsed = 0;
+    speed = 95;
+    caught = 0;
+    obstacles = []; lanterns = []; sparks = [];
+    nextObs = d + VH + 140;
+    nextLantern = d + VH + 60;
+    sfx.sail();
+  }
+
+  function meters(){ return Math.floor((d - startD) / 10); }
+
+  function crash(what){
+    state = 'crashed';
+    crashT = 0;
+    shake = 1;
+    overTitle.textContent = what === 'log' ? 'Snagged on a log' : 'Bumped a rock';
+    sfx.bump();
+    for(var i = 0; i < 26; i++){
+      var a = Math.random() * Math.PI * 2, s = 40 + Math.random() * 110;
+      sparks.push({ x: boat.x, y: BOAT_Y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1,
+                    color: '210,230,255', r: 1.5 + Math.random() * 2 });
+    }
+  }
+
+  function gameOver(){
+    state = 'over';
+    var m = meters();
+    var isNew = m > best;
+    if(isNew){ best = m; save('drift.best', best); }
+    ovDist.textContent = m + ' m';
+    ovLan.textContent = String(caught);
+    ovBest.textContent = best + ' m';
+    newBestEl.hidden = !isNew;
+    overEl.hidden = false;
+    canRestartAt = performance.now() + 500;
+  }
+
+  function tryRestart(){
+    if(state === 'over' && performance.now() >= canRestartAt){ toReady(); }
+  }
+
+  function pause(){
+    if(state !== 'playing') return;
+    state = 'paused';
+    keys.left = keys.right = false;
+    drag.on = false;
+    pausedEl.hidden = false;
+  }
+
+  function resume(){
+    if(state !== 'paused') return;
+    state = 'playing';
+    pausedEl.hidden = true;
+  }
+
+  // ---------- spawning ----------
+  function spawnObstacle(wy){
+    var o = { wy: wy, f: Math.random(), seed: Math.random() * 1000 };
+    if(Math.random() < 0.35){
+      o.type = 'log';
+      o.len = 54 + Math.random() * 30;
+      o.ang = (Math.random() - 0.5) * 0.6;
+    } else {
+      o.type = 'rock';
+      o.r = 11 + Math.random() * 9;
+    }
+    obstacles.push(o);
+  }
+
+  function spawnLantern(wy){
+    // nudge it clear of any rock or log so it's always catchable
+    for(var i = 0; i < obstacles.length; i++){
+      if(Math.abs(obstacles[i].wy - wy) < 45){ wy = obstacles[i].wy + 60; }
+    }
+    lanterns.push({ wy: wy, f: 0.15 + Math.random() * 0.7, seed: Math.random() * 100 });
+  }
+
+  // ---------- simulation: fixed step, so every screen plays the same ----------
+  function update(dt){
+    if(state === 'paused') return;
+    t += dt;
+    if(shake > 0) shake = Math.max(0, shake - dt * 3);
+
+    var i;
+
+    // sparks and splashes live in screen space
+    for(i = sparks.length - 1; i >= 0; i--){
+      var s = sparks[i];
+      s.x += s.vx * dt; s.y += s.vy * dt;
+      s.vx *= Math.exp(-3 * dt); s.vy *= Math.exp(-3 * dt);
+      s.life -= dt * 1.4;
+      if(s.life <= 0) sparks.splice(i, 1);
+    }
+
+    // wake rings sit in the water and slide away behind the boat
+    for(i = wake.length - 1; i >= 0; i--){
+      var w = wake[i];
+      w.x += w.vx * dt;
+      w.life -= dt * 0.9;
+      if(w.life <= 0) wake.splice(i, 1);
+    }
+
+    if(state === 'ready'){
+      d += 40 * dt;                      // the river keeps flowing on the title screen
+      boat.x += (river(boatWorldY()).c - boat.x) * Math.min(1, dt * 2);
+      emitWake(dt, 40);
+      return;
+    }
+
+    if(state === 'crashed'){
+      crashT += dt;
+      boat.sink = Math.min(1, crashT / 0.9);
+      if(crashT >= 1.0) gameOver();
+      return;
+    }
+
+    if(state !== 'playing') return;
+
+    elapsed += dt;
+    speed = Math.min(270, 95 + elapsed * 2.4);
+    d += speed * dt;
+
+    // steering: drag pulls the boat toward your finger, keys push it
+    var dir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+    if(drag.on){
+      var want = clamp((drag.x - boat.x) * 9, -280, 280);
+      boat.vx += (want - boat.vx) * Math.min(1, dt * 12);
+    } else if(dir){
+      boat.vx += dir * 1100 * dt;
+    } else {
+      boat.vx *= Math.exp(-5 * dt);
+    }
+    boat.vx = clamp(boat.vx, -280, 280);
+    boat.x += boat.vx * dt;
+
+    // banks are soft: they nudge you back instead of ending the run
+    var rv = river(boatWorldY());
+    if(boat.x < rv.l + 13){ boat.x = rv.l + 13; if(boat.vx < 0) boat.vx *= -0.3; }
+    if(boat.x > rv.r - 13){ boat.x = rv.r - 13; if(boat.vx > 0) boat.vx *= -0.3; }
+    boat.tilt += (clamp(boat.vx * 0.0022, -0.38, 0.38) - boat.tilt) * Math.min(1, dt * 10);
+
+    emitWake(dt, speed);
+
+    // spawn ahead, just past the top of the screen
+    var horizon = d + VH + 60;
+    while(nextObs < horizon){
+      spawnObstacle(nextObs);
+      nextObs += Math.max(95, 190 - elapsed * 1.1) + Math.random() * 70;
+    }
+    while(nextLantern < horizon){
+      spawnLantern(nextLantern);
+      nextLantern += 230 + Math.random() * 140;
+    }
+
+    // tidy up what's floated past
+    while(obstacles.length && screenY(obstacles[0].wy) > VH + 80) obstacles.shift();
+    while(lanterns.length && screenY(lanterns[0].wy) > VH + 80) lanterns.shift();
+
+    // lanterns
+    for(i = 0; i < lanterns.length; i++){
+      var ln = lanterns[i];
+      if(ln.taken) continue;
+      var lx = xAcross(ln.wy, ln.f, 14), ly = screenY(ln.wy);
+      var dx = lx - boat.x, dy = ly - BOAT_Y;
+      if(dx * dx + dy * dy < 24 * 24){
+        ln.taken = true;
+        caught++;
+        sfx.chime();
+        for(var k = 0; k < 14; k++){
+          var a = Math.random() * Math.PI * 2, sp = 30 + Math.random() * 70;
+          sparks.push({ x: lx, y: ly, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 30, life: 1,
+                        color: '255,200,110', r: 1.2 + Math.random() * 1.8 });
+        }
+      }
+    }
+
+    // rocks and logs
+    for(i = 0; i < obstacles.length; i++){
+      var o = obstacles[i];
+      var ox = xAcross(o.wy, o.f, padOf(o)), oy = screenY(o.wy);
+      if(oy < BOAT_Y - 80 || oy > BOAT_Y + 80) continue;
+      if(o.type === 'rock'){
+        var rx = boat.x - ox, ry = BOAT_Y - oy, rr = BOAT_R + o.r * 0.85;
+        if(rx * rx + ry * ry < rr * rr){ crash('rock'); return; }
+      } else {
+        // closest point on the log's centre line
+        var hx = Math.cos(o.ang) * o.len / 2, hy = Math.sin(o.ang) * o.len / 2;
+        var ax = ox - hx, ay = oy - hy, bx = ox + hx, by = oy + hy;
+        var abx = bx - ax, aby = by - ay;
+        var tt = clamp(((boat.x - ax) * abx + (BOAT_Y - ay) * aby) / (abx * abx + aby * aby), 0, 1);
+        var cx = ax + abx * tt - boat.x, cy = ay + aby * tt - BOAT_Y;
+        if(cx * cx + cy * cy < (BOAT_R + 7) * (BOAT_R + 7)){ crash('log'); return; }
+      }
+    }
+  }
+
+  function emitWake(dt, spd){
+    wakeTimer += dt;
+    var every = spd > 120 ? 0.04 : 0.07;
+    while(wakeTimer >= every){
+      wakeTimer -= every;
+      var wy = boatWorldY() - 15;
+      wake.push({ x: boat.x - 5, wy: wy, vx: -14 - Math.random() * 8, life: 1 });
+      wake.push({ x: boat.x + 5, wy: wy, vx:  14 + Math.random() * 8, life: 1 });
+    }
+  }
+
+  // ---------- drawing ----------
+  function drawRipples(){
+    var k0 = Math.floor(d / 26) - 1, k1 = Math.floor((d + VH) / 26) + 1;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 1.6;
+    for(var k = k0; k <= k1; k++){
+      var wy = k * 26, sy = screenY(wy), rv = river(wy);
+      for(var j = 0; j < 2; j++){
+        var h = hash(k * 3 + j);
+        var x = rv.l + 16 + h * Math.max(0, rv.r - rv.l - 32);
+        var len = 6 + hash(k * 3 + j + 7) * 16;
+        var a = 0.06 + 0.06 * Math.sin(t * 1.4 + k * 1.7 + j);
+        ctx.strokeStyle = 'rgba(190,210,255,' + a.toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.moveTo(x - len / 2, sy + j * 13);
+        ctx.lineTo(x + len / 2, sy + j * 13);
+        ctx.stroke();
+      }
+    }
+  }
+
+  function drawWake(){
+    ctx.lineWidth = 1.4;
+    for(var i = 0; i < wake.length; i++){
+      var w = wake[i];
+      var sy = screenY(w.wy);
+      var r = 2 + (1 - w.life) * 9;
+      ctx.strokeStyle = 'rgba(220,235,255,' + (w.life * 0.3).toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.arc(w.x, sy, r, 0.15 * Math.PI, 0.85 * Math.PI);
+      ctx.stroke();
+    }
+  }
+
+  function drawLanternGlows(){
+    ctx.globalCompositeOperation = 'lighter';
+    for(var i = 0; i < lanterns.length; i++){
+      var ln = lanterns[i];
+      if(ln.taken) continue;
+      var x = xAcross(ln.wy, ln.f, 14), y = screenY(ln.wy) + Math.sin(t * 2 + ln.seed) * 2;
+      var flick = 0.85 + 0.15 * Math.sin(t * 9 + ln.seed * 3);
+      var g = ctx.createRadialGradient(x, y, 2, x, y, 44);
+      g.addColorStop(0, 'rgba(255,190,100,' + (0.5 * flick).toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(255,150,60,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y, 44, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function drawLanterns(){
+    for(var i = 0; i < lanterns.length; i++){
+      var ln = lanterns[i];
+      if(ln.taken) continue;
+      var x = xAcross(ln.wy, ln.f, 14), y = screenY(ln.wy) + Math.sin(t * 2 + ln.seed) * 2;
+      ctx.fillStyle = '#5a3418';
+      ctx.fillRect(x - 4, y - 9, 8, 2.5);
+      ctx.fillRect(x - 4, y + 6.5, 8, 2.5);
+      ctx.fillStyle = '#ff9f45';
+      ctx.beginPath();
+      ctx.ellipse(x, y, 6.5, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffd98a';
+      ctx.beginPath();
+      ctx.ellipse(x - 1, y - 0.5, 3, 4.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function rockPath(x, y, r, seed){
+    ctx.beginPath();
+    for(var k = 0; k < 8; k++){
+      var a = (k / 8) * Math.PI * 2;
+      var rr = r * (0.82 + hash(seed + k) * 0.3);
+      var px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr * 0.9;
+      if(k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  }
+
+  function drawObstacles(){
+    for(var i = 0; i < obstacles.length; i++){
+      var o = obstacles[i];
+      var x = xAcross(o.wy, o.f, padOf(o)), y = screenY(o.wy);
+      if(y < -60 || y > VH + 60) continue;
+
+      if(o.type === 'rock'){
+        // foam ring where the current meets the rock
+        ctx.strokeStyle = 'rgba(210,230,255,0.2)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, o.r + 5 + Math.sin(t * 3 + o.seed) * 1.2, 0, Math.PI * 2);
+        ctx.stroke();
+
+        rockPath(x, y, o.r, o.seed);
+        ctx.fillStyle = '#474e61';
+        ctx.fill();
+        ctx.strokeStyle = '#2c3140';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        rockPath(x - o.r * 0.22, y - o.r * 0.25, o.r * 0.55, o.seed + 20);
+        ctx.fillStyle = '#626b82';
+        ctx.fill();
+      } else {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(o.ang);
+        var hl = o.len / 2;
+
+        ctx.strokeStyle = 'rgba(210,230,255,0.18)';
+        ctx.lineWidth = 2;
+        roundRect(-hl - 4, -12, o.len + 8, 24, 12);
+        ctx.stroke();
+
+        roundRect(-hl, -8, o.len, 16, 8);
+        ctx.fillStyle = '#6b4a30';
+        ctx.fill();
+        ctx.strokeStyle = '#3f2a1a';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // bark lines
+        ctx.strokeStyle = 'rgba(40,25,14,0.55)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-hl + 8, -3); ctx.lineTo(hl - 14, -3);
+        ctx.moveTo(-hl + 16, 3); ctx.lineTo(hl - 8, 3);
+        ctx.stroke();
+
+        // cut end
+        ctx.fillStyle = '#a07a52';
+        ctx.beginPath();
+        ctx.ellipse(hl - 3, 0, 4, 7, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#6b4a30';
+        ctx.beginPath();
+        ctx.ellipse(hl - 3, 0, 2, 3.5, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
+  function roundRect(x, y, w, h, r){
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function drawBanks(){
+    var stepY = 8, L = [], R = [], sy, rv, i;
+    for(sy = -stepY; sy <= VH + stepY; sy += stepY){
+      rv = river(d + (VH - sy));
+      L.push(rv.l, sy);
+      R.push(rv.r, sy);
+    }
+
+    ctx.fillStyle = '#16251d';
+    ctx.beginPath();
+    ctx.moveTo(-20, -stepY);
+    for(i = 0; i < L.length; i += 2) ctx.lineTo(L[i], L[i + 1]);
+    ctx.lineTo(-20, VH + stepY);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(VW + 20, -stepY);
+    for(i = 0; i < R.length; i += 2) ctx.lineTo(R[i], R[i + 1]);
+    ctx.lineTo(VW + 20, VH + stepY);
+    ctx.closePath();
+    ctx.fill();
+
+    // grassy lip, then a faint line of foam just inside the water
+    edge(L, 0, '#25402f', 7);
+    edge(R, 0, '#25402f', 7);
+    edge(L, 5, 'rgba(200,220,255,0.16)', 1.5);
+    edge(R, -5, 'rgba(200,220,255,0.16)', 1.5);
+  }
+
+  function edge(pts, off, color, width){
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for(var i = 0; i < pts.length; i += 2){
+      if(i === 0) ctx.moveTo(pts[i] + off, pts[i + 1]);
+      else ctx.lineTo(pts[i] + off, pts[i + 1]);
+    }
+    ctx.stroke();
+  }
+
+  function drawBankLife(){
+    var k0 = Math.floor(d / 46) - 1, k1 = Math.floor((d + VH) / 46) + 2;
+    var flies = [];
+    for(var k = k0; k <= k1; k++){
+      var wy = k * 46, sy = screenY(wy), rv = river(wy);
+      for(var side = 0; side < 2; side++){
+        var h = hash(k * 2 + side);
+        var span = side === 0 ? rv.l : VW - rv.r;
+        if(span < 8) continue;
+        var x = side === 0 ? rv.l - 10 - h * Math.max(0, span - 16)
+                           : rv.r + 10 + h * Math.max(0, span - 16);
+        var r = 9 + hash(k * 5 + side) * 10;
+
+        // a clump of dark bushes
+        ctx.fillStyle = '#0f1a14';
+        ctx.beginPath();
+        ctx.arc(x, sy, r, 0, Math.PI * 2);
+        ctx.arc(x + r * 0.7, sy + r * 0.4, r * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#1d3226';
+        ctx.beginPath();
+        ctx.arc(x - r * 0.25, sy - r * 0.3, r * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+
+        if(hash(k * 7 + side) > 0.45){
+          flies.push(x + (hash(k + side * 9) - 0.5) * 30 + Math.sin(t * 0.8 + k) * 5,
+                     sy - r - 6 + Math.cos(t * 1.1 + k) * 4,
+                     Math.max(0, Math.sin(t * 2.2 + h * 20)));
+        }
+      }
+    }
+
+    // fireflies blink over the banks
+    ctx.globalCompositeOperation = 'lighter';
+    for(var i = 0; i < flies.length; i += 3){
+      var a = flies[i + 2];
+      if(a < 0.05) continue;
+      var g = ctx.createRadialGradient(flies[i], flies[i + 1], 0, flies[i], flies[i + 1], 9);
+      g.addColorStop(0, 'rgba(255,230,140,' + (0.75 * a).toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(255,210,100,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(flies[i], flies[i + 1], 9, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function drawBoat(){
+    var bob = Math.sin(t * 2.4) * 1.2;
+    var s = 1 - boat.sink * 0.45;
+
+    ctx.save();
+    ctx.globalAlpha = 1 - boat.sink * 0.8;
+    ctx.translate(boat.x, BOAT_Y + bob + boat.sink * 6);
+    ctx.rotate(boat.tilt + boat.sink * 0.9);
+    ctx.scale(s, s);
+
+    // soft shadow on the water
+    ctx.fillStyle = 'rgba(5,8,18,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(2, 4, 11, 18, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // hull, seen from above: pointed bow and stern
+    ctx.beginPath();
+    ctx.moveTo(0, -19);
+    ctx.lineTo(9.5, -7);
+    ctx.lineTo(9.5, 9);
+    ctx.lineTo(0, 16);
+    ctx.lineTo(-9.5, 9);
+    ctx.lineTo(-9.5, -7);
+    ctx.closePath();
+    ctx.fillStyle = '#efe6d2';
+    ctx.fill();
+    ctx.strokeStyle = '#a99d86';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // folded sail: one face lit, one in shade
+    ctx.beginPath();
+    ctx.moveTo(0, -13); ctx.lineTo(6.5, 8); ctx.lineTo(0, 8); ctx.closePath();
+    ctx.fillStyle = '#d8ccb2';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(0, -13); ctx.lineTo(-6.5, 8); ctx.lineTo(0, 8); ctx.closePath();
+    ctx.fillStyle = '#fbf6ea';
+    ctx.fill();
+    ctx.strokeStyle = '#b9ad95';
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.moveTo(0, -13); ctx.lineTo(0, 8);
+    ctx.stroke();
+
+    ctx.restore();
+
+    // a little lantern riding at the stern
+    if(boat.sink < 0.6){
+      var lx = boat.x - Math.sin(boat.tilt) * 12, ly = BOAT_Y + bob + Math.cos(boat.tilt) * 12;
+      ctx.globalCompositeOperation = 'lighter';
+      var g = ctx.createRadialGradient(lx, ly, 0, lx, ly, 26);
+      g.addColorStop(0, 'rgba(255,200,110,' + (0.45 * (1 - boat.sink)).toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(255,160,70,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(lx, ly, 26, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = '#ffd27a';
+      ctx.beginPath();
+      ctx.arc(lx, ly, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawSparks(){
+    for(var i = 0; i < sparks.length; i++){
+      var s = sparks[i];
+      ctx.fillStyle = 'rgba(' + s.color + ',' + Math.max(0, s.life).toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawHud(){
+    if(state === 'ready' || state === 'over') return;
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.font = '600 30px Georgia, "Iowan Old Style", serif';
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillText(meters() + ' m', VW / 2 + 1, 22);
+    ctx.fillStyle = '#f6ecd9';
+    ctx.fillText(meters() + ' m', VW / 2, 20);
+
+    // lantern tally
+    var x = 22, y = 30;
+    ctx.globalCompositeOperation = 'lighter';
+    var g = ctx.createRadialGradient(x, y, 0, x, y, 16);
+    g.addColorStop(0, 'rgba(255,190,100,0.45)');
+    g.addColorStop(1, 'rgba(255,150,60,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#ff9f45';
+    ctx.beginPath(); ctx.ellipse(x, y, 5.5, 7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffd98a';
+    ctx.beginPath(); ctx.ellipse(x - 1, y, 2.4, 4, 0, 0, Math.PI * 2); ctx.fill();
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.font = '600 17px "Segoe UI", system-ui, sans-serif';
+    ctx.fillStyle = '#ffc978';
+    ctx.fillText(String(caught), x + 13, y + 1);
+  }
+
+  function render(){
+    // loaded while hidden: the first real size arrives later, so lay out then
+    if(!waterGrad){ resize(); if(!waterGrad) return; }
+    ctx.save();
+    if(shake > 0) ctx.translate((Math.random() - 0.5) * 7 * shake, (Math.random() - 0.5) * 7 * shake);
+
+    ctx.fillStyle = waterGrad;
+    ctx.fillRect(-10, -10, VW + 20, VH + 20);
+    ctx.fillStyle = sunGlow;
+    ctx.fillRect(-10, -10, VW + 20, VH + 20);
+
+    drawRipples();
+    drawWake();
+    drawLanternGlows();
+    drawObstacles();
+    drawLanterns();
+    drawBanks();
+    drawBankLife();
+    drawBoat();
+    drawSparks();
+    ctx.restore();
+
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, VW, VH);
+    drawHud();
+  }
+
+  // ---------- loop ----------
+  function frame(now){
+    requestAnimationFrame(frame);
+    var dt = Math.min(0.25, Math.max(0, (now - last) / 1000));
+    last = now;
+    acc += dt;
+    while(acc >= STEP){ update(STEP); acc -= STEP; }
+    render();
+  }
+
+  // ---------- input ----------
+  function toWorldX(clientX){
+    var r = stage.getBoundingClientRect();
+    return (clientX - r.left) / r.width * VW;
+  }
+
+  stage.addEventListener('pointerdown', function(e){
+    if(e.target.closest('button')) return;
+    if(e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    ensureAudio();
+    if(state === 'ready'){ start(); }
+    else if(state === 'paused'){ resume(); return; }
+    else if(state === 'over'){ return; }   // the button handles restarts, so stray taps don't
+    if(state === 'playing'){
+      stage.setPointerCapture(e.pointerId);
+      drag.on = true;
+      drag.x = toWorldX(e.clientX);
+    }
+  });
+
+  stage.addEventListener('pointermove', function(e){
+    if(drag.on) drag.x = toWorldX(e.clientX);
+  });
+
+  function release(){ drag.on = false; }
+  stage.addEventListener('pointerup', release);
+  stage.addEventListener('pointercancel', release);
+  stage.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+  window.addEventListener('keydown', function(e){
+    var k = e.key;
+    if(e.target && e.target.tagName === 'BUTTON' && (k === ' ' || k === 'Enter')) return;
+
+    if(k === 'ArrowLeft' || k === 'a' || k === 'A'){
+      e.preventDefault(); keys.left = true;
+      if(state === 'ready'){ ensureAudio(); start(); }
+    } else if(k === 'ArrowRight' || k === 'd' || k === 'D'){
+      e.preventDefault(); keys.right = true;
+      if(state === 'ready'){ ensureAudio(); start(); }
+    } else if(k === ' ' || k === 'Enter'){
+      e.preventDefault();
+      if(e.repeat) return;
+      ensureAudio();
+      if(state === 'ready') start();
+      else if(state === 'paused') resume();
+      else if(state === 'over') tryRestart();
+    } else if(k === 'p' || k === 'P' || k === 'Escape'){
+      if(state === 'playing') pause();
+      else if(state === 'paused') resume();
+    } else if(k === 'm' || k === 'M'){
+      toggleMute();
+    }
+  });
+
+  window.addEventListener('keyup', function(e){
+    var k = e.key;
+    if(k === 'ArrowLeft' || k === 'a' || k === 'A') keys.left = false;
+    if(k === 'ArrowRight' || k === 'd' || k === 'D') keys.right = false;
+  });
+
+  againBtn.addEventListener('click', function(){ tryRestart(); againBtn.blur(); });
+  muteBtn.addEventListener('click', function(){ ensureAudio(); toggleMute(); muteBtn.blur(); });
+
+  document.addEventListener('visibilitychange', function(){ if(document.hidden) pause(); });
+  window.addEventListener('blur', function(){
+    keys.left = keys.right = false;   // a key released while unfocused never sends keyup
+    pause();
+  });
+  window.addEventListener('resize', resize);
+
+  // ---------- go ----------
+  best = parseInt(load('drift.best', '0'), 10) || 0;
+  renderMute();
+  resize();
+  toReady();
+  requestAnimationFrame(frame);
+
+})();
+</script>
+
+</body>
+</html>
