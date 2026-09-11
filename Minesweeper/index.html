@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#008080">
+<title>Minesweeper</title>
+<style>
+  :root{
+    --face:#c0c0c0;
+    --light:#ffffff;
+    --shadow:#808080;
+    --dark:#0a0a0a;
+    --s:1.5;               /* scale of the game area: 1 = the original 16px cells */
+    --cell:24px;
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  html,body{
+    margin:0;
+    min-height:100%;
+    background:#008080;    /* the Windows 95 desktop */
+    font-family:Tahoma, 'Segoe UI', Verdana, sans-serif;
+    font-size:12px;
+    color:#000;
+    -webkit-user-select:none;
+    user-select:none;
+  }
+
+  body{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:max(14px, env(safe-area-inset-top)) 10px calc(24px + env(safe-area-inset-bottom));
+  }
+
+  .desk-link{
+    align-self:flex-start;
+    color:#fff;
+    text-decoration:none;
+    font-weight:700;
+    font-size:13px;
+    padding:4px 8px;
+    margin-bottom:10px;
+  }
+  .desk-link:hover{ text-decoration:underline; }
+  .desk-link:focus-visible{ outline:1px dotted #fff; }
+
+  /* ---- Windows 98 bevels ---- */
+  .raised{
+    background:var(--face);
+    box-shadow:inset -1px -1px var(--dark), inset 1px 1px #dfdfdf, inset -2px -2px var(--shadow), inset 2px 2px var(--light);
+  }
+  .btn98{
+    font:inherit;
+    min-width:75px;
+    padding:4px 12px;
+    background:var(--face);
+    border:none;
+    box-shadow:inset -1px -1px var(--dark), inset 1px 1px var(--light), inset -2px -2px var(--shadow), inset 2px 2px #dfdfdf;
+    cursor:pointer;
+  }
+  .btn98:active{ box-shadow:inset -1px -1px var(--light), inset 1px 1px var(--dark), inset -2px -2px #dfdfdf, inset 2px 2px var(--shadow); }
+  .btn98:focus-visible{ outline:1px dotted #000; outline-offset:-5px; }
+
+  /* ---- the window ---- */
+  .window{ padding:3px; max-width:calc(100vw - 20px); }
+
+  .title-bar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    height:20px;
+    padding:0 2px 0 4px;
+    background:linear-gradient(90deg, #000080, #1084d0);
+    color:#fff;
+    font-weight:700;
+  }
+  .title{ display:flex; align-items:center; gap:4px; white-space:nowrap; overflow:hidden; }
+  .title svg{ width:14px; height:14px; flex:none; }
+  .title-btns{ display:flex; gap:2px; }
+  .title-btns > *{
+    width:16px;
+    height:14px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0;
+    background:var(--face);
+    border:none;
+    color:#000;
+    text-decoration:none;
+    font:700 10px/1 Tahoma, sans-serif;
+    box-shadow:inset -1px -1px var(--dark), inset 1px 1px var(--light), inset -2px -2px var(--shadow), inset 2px 2px #dfdfdf;
+  }
+  .title-btns .off{ color:var(--shadow); cursor:default; }
+  .title-btns a{ margin-left:2px; }
+
+  .menu-bar{ position:relative; display:flex; padding:1px 0 2px; }
+  .menu-bar > button{
+    font:inherit;
+    background:none;
+    border:none;
+    padding:3px 7px;
+    cursor:pointer;
+  }
+  .menu-bar > button[aria-expanded="true"], .menu-bar > button:hover{ background:#000080; color:#fff; }
+
+  .menu{
+    position:absolute;
+    top:100%;
+    z-index:20;
+    min-width:170px;
+    padding:3px;
+    display:flex;
+    flex-direction:column;
+  }
+  .menu[hidden]{ display:none; }
+  .menu button{
+    font:inherit;
+    display:flex;
+    justify-content:space-between;
+    gap:24px;
+    text-align:left;
+    background:none;
+    border:none;
+    padding:4px 10px 4px 22px;
+    cursor:pointer;
+    position:relative;
+  }
+  .menu button:hover, .menu button:focus-visible{ background:#000080; color:#fff; outline:none; }
+  .menu button[aria-checked="true"]::before{ content:"✓"; position:absolute; left:7px; }
+  .menu hr{ border:none; border-top:1px solid var(--shadow); border-bottom:1px solid var(--light); margin:3px 1px; }
+  .menu .key{ opacity:0.8; }
+
+  /* ---- game area ---- */
+  .game{
+    padding:calc(6px * var(--s));
+    border-left:calc(3px * var(--s)) solid var(--light);
+    border-top:calc(3px * var(--s)) solid var(--light);
+  }
+
+  .header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:calc(4px * var(--s)) calc(5px * var(--s));
+    margin-bottom:calc(6px * var(--s));
+    border:calc(2px * var(--s)) solid;
+    border-color:var(--shadow) var(--light) var(--light) var(--shadow);
+  }
+
+  .led{
+    display:flex;
+    background:#000;
+    padding:1px;
+    border:1px solid;
+    border-color:var(--shadow) var(--light) var(--light) var(--shadow);
+  }
+  .led svg{ display:block; width:calc(13px * var(--s)); height:calc(23px * var(--s)); }
+
+  .face{
+    width:calc(26px * var(--s));
+    height:calc(26px * var(--s));
+    padding:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:var(--face);
+    border:none;
+    box-shadow:0 0 0 1px var(--shadow), inset -2px -2px var(--shadow), inset 2px 2px var(--light);
+    cursor:pointer;
+  }
+  .face:active, .face.down{ box-shadow:0 0 0 1px var(--shadow), inset 1px 1px var(--shadow); }
+  .face:active svg, .face.down svg{ transform:translate(1px, 1px); }
+  .face svg{ width:calc(17px * var(--s)); height:calc(17px * var(--s)); }
+  .face:focus-visible{ outline:1px dotted #000; outline-offset:-4px; }
+
+  .board-scroll{ max-width:calc(100vw - 40px); overflow:auto; }
+  .board{
+    display:inline-block;
+    border:calc(3px * var(--s)) solid;
+    border-color:var(--shadow) var(--light) var(--light) var(--shadow);
+    touch-action:manipulation;
+  }
+  .grid{ display:grid; }
+
+  /* unopened squares: raised */
+  .c{
+    width:var(--cell);
+    height:var(--cell);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:var(--face);
+    border-style:solid;
+    border-width:calc(2px * var(--s));
+    border-color:var(--light) var(--shadow) var(--shadow) var(--light);
+    font:700 calc(var(--cell) * 0.7)/1 Tahoma, Verdana, 'Segoe UI', sans-serif;
+    cursor:default;
+  }
+  .c svg{ width:78%; height:78%; display:block; }
+
+  /* opened (or being pressed): flat, with a thin grid line */
+  .c.open, .c.press{
+    border-width:1px 0 0 1px;
+    border-color:var(--shadow);
+  }
+  .c.boom{ background:#ff0000; }
+  .n1{ color:#0000ff; } .n2{ color:#008000; } .n3{ color:#ff0000; } .n4{ color:#000080; }
+  .n5{ color:#800000; } .n6{ color:#008080; } .n7{ color:#000000; } .n8{ color:#808080; }
+
+  /* ---- touch: flag mode ---- */
+  .touch-bar{ display:none; align-items:center; gap:10px; margin-top:12px; color:#fff; font-size:13px; }
+  .touch-bar label{ display:flex; align-items:center; gap:6px; cursor:pointer; }
+  .touch-bar input{ width:16px; height:16px; }
+  @media (hover:none), (pointer:coarse){ .touch-bar{ display:flex; } }
+
+  .hint{ margin-top:12px; color:rgba(255,255,255,0.82); font-size:12px; text-align:center; max-width:420px; line-height:1.5; }
+
+  /* ---- dialogs ---- */
+  .modal{
+    position:fixed;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:16px;
+    z-index:30;
+  }
+  .modal[hidden]{ display:none; }
+  .dialog{ padding:3px; min-width:240px; max-width:calc(100vw - 32px); }
+  .dialog .body{ padding:14px 14px 12px; line-height:1.5; }
+  .dialog .row{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin:6px 0; }
+  .dialog input{
+    font:inherit;
+    width:70px;
+    padding:3px 4px;
+    border:none;
+    background:#fff;
+    box-shadow:inset -1px -1px var(--light), inset 1px 1px var(--shadow), inset -2px -2px #dfdfdf, inset 2px 2px var(--dark);
+  }
+  .dialog .actions{ display:flex; justify-content:center; gap:8px; margin-top:12px; }
+  .dialog table{ border-collapse:collapse; width:100%; }
+  .dialog td{ padding:2px 6px 2px 0; }
+  .dialog td:last-child{ text-align:right; }
+</style>
+</head>
+<body>
+
+<a class="desk-link" href="../" aria-label="Back to games">&lsaquo; Games</a>
+
+<div class="window raised" id="win">
+  <div class="title-bar">
+    <div class="title">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5v13M1.5 8h13M3.4 3.4l9.2 9.2M12.6 3.4l-9.2 9.2" stroke="#fff" stroke-width="1.4"/><circle cx="8" cy="8" r="4.4" fill="#fff"/></svg>
+      Minesweeper
+    </div>
+    <div class="title-btns">
+      <span class="off" aria-hidden="true">_</span>
+      <span class="off" aria-hidden="true">□</span>
+      <a href="../" aria-label="Close and go back to games">✕</a>
+    </div>
+  </div>
+
+  <div class="menu-bar">
+    <button type="button" id="btn-game" aria-haspopup="true" aria-expanded="false"><u>G</u>ame</button>
+    <button type="button" id="btn-help" aria-haspopup="true" aria-expanded="false"><u>H</u>elp</button>
+
+    <div class="menu raised" id="menu-game" role="menu" hidden>
+      <button type="button" role="menuitem" data-act="new">New <span class="key">F2</span></button>
+      <hr>
+      <button type="button" role="menuitemradio" data-level="beginner">Beginner</button>
+      <button type="button" role="menuitemradio" data-level="intermediate">Intermediate</button>
+      <button type="button" role="menuitemradio" data-level="expert">Expert</button>
+      <button type="button" role="menuitemradio" data-level="custom">Custom...</button>
+      <hr>
+      <button type="button" role="menuitemcheckbox" data-act="marks">Marks (?)</button>
+      <hr>
+      <button type="button" role="menuitem" data-act="best">Best Times...</button>
+      <hr>
+      <button type="button" role="menuitem" data-act="exit">Exit</button>
+    </div>
+
+    <div class="menu raised" id="menu-help" role="menu" hidden style="left:44px">
+      <button type="button" role="menuitem" data-act="howto">How to Play</button>
+      <hr>
+      <button type="button" role="menuitem" data-act="about">About Minesweeper...</button>
+    </div>
+  </div>
+
+  <div class="game">
+    <div class="header">
+      <div class="led" id="led-mines" aria-label="Mines left"></div>
+      <button type="button" class="face" id="face" aria-label="New game"></button>
+      <div class="led" id="led-time" aria-label="Seconds"></div>
+    </div>
+    <div class="board-scroll">
+      <div class="board"><div class="grid" id="grid" role="grid" aria-label="Minefield"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="touch-bar">
+  <label><input type="checkbox" id="flag-mode"> Flag mode</label>
+  <span>&middot; or press and hold a square to flag it</span>
+</div>
+
+<p class="hint" id="hint">Left-click to open a square, right-click to flag a mine. Click a number whose mines are all flagged to open everything around it.</p>
+
+<div class="modal" id="dlg" hidden>
+  <div class="dialog raised" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+    <div class="title-bar"><div class="title" id="dlg-title">Minesweeper</div><div class="title-btns"><button type="button" id="dlg-x" aria-label="Close">✕</button></div></div>
+    <div class="body" id="dlg-body"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // [columns, rows, mines], as in Windows
+  var LEVELS = { beginner: [9, 9, 10], intermediate: [16, 16, 40], expert: [30, 16, 99] };
+  var LEVEL_NAMES = { beginner: 'Beginner', intermediate: 'Intermediate', expert: 'Expert' };
+
+  var gridEl = document.getElementById('grid');
+  var faceEl = document.getElementById('face');
+  var ledMines = document.getElementById('led-mines');
+  var ledTime = document.getElementById('led-time');
+  var flagModeEl = document.getElementById('flag-mode');
+
+  var level, cols, rows, mines, marks, custom;
+  var cells = [], els = [];
+  var placed, over, flags, opened, seconds, timerId = 0;
+  var pressed = [];
+
+  function load(k, d){ try { var v = localStorage.getItem(k); return v === null ? d : v; } catch(e){ return d; } }
+  function save(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
+  function loadBest(){ try { return JSON.parse(load('mines.best', '{}')) || {}; } catch(e){ return {}; } }
+
+  // ---------- pictures, all drawn as SVG ----------
+  var MINE_BODY = '<path d="M8 1.5v13M1.5 8h13M3.4 3.4l9.2 9.2M12.6 3.4l-9.2 9.2" stroke="#000" stroke-width="1.4"/>' +
+                  '<circle cx="8" cy="8" r="4.6" fill="#000"/><rect x="5.5" y="5.5" width="2" height="2" fill="#fff"/>';
+  var SVG_MINE  = '<svg viewBox="0 0 16 16" aria-hidden="true">' + MINE_BODY + '</svg>';
+  var SVG_WRONG = '<svg viewBox="0 0 16 16" aria-hidden="true">' + MINE_BODY +
+                  '<path d="M2.5 2.5l11 11M13.5 2.5l-11 11" stroke="#f00" stroke-width="1.6"/></svg>';
+  var SVG_FLAG  = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2.5 L3.5 5.5 L9.5 8.5 Z" fill="#f00"/>' +
+                  '<path d="M9.5 2.5 V11" stroke="#000" stroke-width="1.3"/>' +
+                  '<path d="M6.5 11.5 H12.5 M4.5 13.5 H14.5" stroke="#000" stroke-width="1.6"/></svg>';
+
+  function faceSvg(kind){
+    var s = '<svg viewBox="0 0 17 17" aria-hidden="true"><circle cx="8.5" cy="8.5" r="7.6" fill="#ff0" stroke="#000" stroke-width="1"/>';
+    if(kind === 'dead'){
+      s += '<path d="M4.6 5.2l2.2 2.2M6.8 5.2L4.6 7.4M10.2 5.2l2.2 2.2M12.4 5.2l-2.2 2.2" stroke="#000" stroke-width="1"/>' +
+           '<path d="M5.2 12.6 Q8.5 9.6 11.8 12.6" fill="none" stroke="#000" stroke-width="1.1"/>';
+    } else if(kind === 'cool'){
+      s += '<path d="M3.3 5.6 H13.7 L12.9 8.4 H9.8 L8.9 6.6 H8.1 L7.2 8.4 H4.1 Z" fill="#000"/>' +
+           '<path d="M5.2 11 Q8.5 13.8 11.8 11" fill="none" stroke="#000" stroke-width="1.1"/>';
+    } else {
+      s += '<rect x="5.2" y="5.4" width="1.8" height="1.8" fill="#000"/><rect x="10" y="5.4" width="1.8" height="1.8" fill="#000"/>';
+      s += kind === 'oh'
+        ? '<circle cx="8.5" cy="11.6" r="1.8" fill="none" stroke="#000" stroke-width="1.1"/>'
+        : '<path d="M5.2 10.6 Q8.5 13.6 11.8 10.6" fill="none" stroke="#000" stroke-width="1.1"/>';
+    }
+    return s + '</svg>';
+  }
+
+  var faceNow = '';
+  function setFace(kind){
+    if(faceNow === kind) return;
+    faceNow = kind;
+    faceEl.innerHTML = faceSvg(kind);
+  }
+
+  // red seven-segment counters
+  var SEG = {
+    a: '2.5,1 10.5,1 8.5,3 4.5,3',        b: '12,2.5 12,11 10,9.5 10,4.5',
+    c: '12,12 12,20.5 10,18.5 10,13.5',   d: '4.5,20 8.5,20 10.5,22 2.5,22',
+    e: '1,12 3,13.5 3,18.5 1,20.5',       f: '1,2.5 3,4.5 3,9.5 1,11',
+    g: '2.5,11.5 4,10.5 9,10.5 10.5,11.5 9,12.5 4,12.5'
+  };
+  var DIGITS = { '0': 'abcdef', '1': 'bc', '2': 'abged', '3': 'abgcd', '4': 'fgbc', '5': 'afgcd',
+                 '6': 'afgedc', '7': 'abc', '8': 'abcdefg', '9': 'abcdfg', '-': 'g' };
+
+  function digitSvg(ch){
+    var on = DIGITS[ch] || '', s = '<svg viewBox="0 0 13 23" aria-hidden="true">';
+    for(var k in SEG) s += '<polygon points="' + SEG[k] + '" fill="' + (on.indexOf(k) >= 0 ? '#ff0000' : '#400000') + '"/>';
+    return s + '</svg>';
+  }
+
+  function setLed(el, n, label){
+    n = Math.max(-99, Math.min(999, n));
+    var txt = n < 0 ? '-' + ('0' + (-n)).slice(-2) : ('00' + n).slice(-3);
+    el.setAttribute('aria-label', label + ' ' + n);
+    if(el.dataset.v === txt) return;
+    el.dataset.v = txt;
+    el.innerHTML = txt.split('').map(digitSvg).join('');
+  }
+
+  // ---------- board ----------
+  function around(i){
+    var x = i % cols, y = (i / cols) | 0, out = [];
+    for(var dy = -1; dy <= 1; dy++){
+      for(var dx = -1; dx <= 1; dx++){
+        if(!dx && !dy) continue;
+        var nx = x + dx, ny = y + dy;
+        if(nx >= 0 && nx < cols && ny >= 0 && ny < rows) out.push(ny * cols + nx);
+      }
+    }
+    return out;
+  }
+
+  function sizeBoard(){
+    // leave room for the window chrome, the counters and the hint text
+    var byW = (window.innerWidth - 34) / (cols + 1.2);
+    var byH = (window.innerHeight - 150) / (rows + 3.6);
+    var cell = Math.max(16, Math.min(32, Math.floor(Math.min(byW, byH))));
+    document.documentElement.style.setProperty('--cell', cell + 'px');
+    document.documentElement.style.setProperty('--s', (cell / 16).toFixed(3));
+    gridEl.style.gridTemplateColumns = 'repeat(' + cols + ', var(--cell))';
+  }
+
+  function build(){
+    gridEl.innerHTML = '';
+    els = [];
+    cells = [];
+    var frag = document.createDocumentFragment();
+    for(var i = 0; i < cols * rows; i++){
+      var d = document.createElement('div');
+      d.className = 'c';
+      d.dataset.i = i;
+      d.setAttribute('role', 'gridcell');
+      frag.appendChild(d);
+      els.push(d);
+      cells.push({ mine: false, n: 0, open: false, flag: 0, boom: false });
+    }
+    gridEl.appendChild(frag);
+    sizeBoard();
+  }
+
+  function drawCell(i){
+    var c = cells[i], cls = 'c', html = '';
+    if(c.open){
+      cls += ' open';
+      if(c.mine){ html = SVG_MINE; if(c.boom) cls += ' boom'; }
+      else if(c.n){ cls += ' n' + c.n; html = String(c.n); }
+    } else if(over && c.mine && c.flag !== 1){
+      cls += ' open'; html = SVG_MINE;                 // shown when the game is lost
+    } else if(over && c.flag === 1 && !c.mine){
+      cls += ' open'; html = SVG_WRONG;                // a flag that was wrong
+    } else if(c.flag === 1){
+      html = SVG_FLAG;
+    } else if(c.flag === 2){
+      html = '?';
+    }
+    if(pressed.indexOf(i) >= 0) cls += ' press';
+    var d = els[i];
+    if(d.className !== cls) d.className = cls;
+    if(d.innerHTML !== html) d.innerHTML = html;
+  }
+
+  function drawAll(){ for(var i = 0; i < cells.length; i++) drawCell(i); }
+
+  // ---------- rules ----------
+  function newGame(){
+    clearInterval(timerId);
+    placed = false; over = false;
+    flags = 0; opened = 0; seconds = 0;
+    pressed = [];
+    cells.forEach(function(c){ c.mine = false; c.n = 0; c.open = false; c.flag = 0; c.boom = false; });
+    drawAll();
+    setLed(ledMines, mines, 'Mines left');
+    setLed(ledTime, 0, 'Seconds');
+    setFace('smile');
+  }
+
+  // mines go down on the first click, never under it; if there's room, not next to it either,
+  // so the first click always opens up some space
+  function placeMines(safe){
+    var banned = {};
+    banned[safe] = true;
+    var zone = around(safe);
+    if(cols * rows - mines >= zone.length + 1) zone.forEach(function(j){ banned[j] = true; });
+    var pool = [];
+    for(var i = 0; i < cols * rows; i++) if(!banned[i]) pool.push(i);
+    for(var k = 0; k < mines; k++){
+      var r = k + (Math.random() * (pool.length - k) | 0);
+      var tmp = pool[k]; pool[k] = pool[r]; pool[r] = tmp;
+      cells[pool[k]].mine = true;
+    }
+    for(i = 0; i < cells.length; i++){
+      cells[i].n = around(i).reduce(function(n, j){ return n + (cells[j].mine ? 1 : 0); }, 0);
+    }
+    placed = true;
+  }
+
+  function startTimer(){
+    seconds = 1;                         // Windows shows 1 the moment you click
+    setLed(ledTime, seconds, 'Seconds');
+    clearInterval(timerId);
+    timerId = setInterval(function(){
+      seconds = Math.min(999, seconds + 1);
+      setLed(ledTime, seconds, 'Seconds');
+    }, 1000);
+  }
+
+  function flood(start){
+    var stack = [start];
+    while(stack.length){
+      var i = stack.pop(), c = cells[i];
+      if(c.open || c.flag === 1) continue;
+      c.open = true;
+      c.flag = 0;
+      opened++;
+      drawCell(i);
+      if(c.n === 0){
+        around(i).forEach(function(j){ if(!cells[j].open && !cells[j].mine) stack.push(j); });
+      }
+    }
+  }
+
+  function reveal(i){
+    var c = cells[i];
+    if(over || c.open || c.flag === 1) return;
+    if(!placed){ placeMines(i); startTimer(); }
+    if(c.mine){ c.open = true; c.boom = true; lose(); return; }
+    flood(i);
+    checkWin();
+  }
+
+  // a number with exactly that many flags around it opens everything else around it
+  function chord(i){
+    var c = cells[i];
+    if(over || !c.open || !c.n) return;
+    var nb = around(i), f = 0;
+    nb.forEach(function(j){ if(cells[j].flag === 1) f++; });
+    if(f !== c.n) return;
+    for(var k = 0; k < nb.length; k++){
+      var j = nb[k], o = cells[j];
+      if(o.open || o.flag === 1) continue;
+      if(o.mine){ o.open = true; o.boom = true; lose(); return; }
+      flood(j);
+    }
+    checkWin();
+  }
+
+  function toggleFlag(i){
+    var c = cells[i];
+    if(over || c.open) return;
+    if(c.flag === 0){ c.flag = 1; flags++; }
+    else if(c.flag === 1){ flags--; c.flag = marks ? 2 : 0; }
+    else c.flag = 0;
+    drawCell(i);
+    setLed(ledMines, mines - flags, 'Mines left');
+  }
+
+  function lose(){
+    over = true;
+    clearInterval(timerId);
+    pressed = [];
+    setFace('dead');
+    drawAll();
+  }
+
+  function checkWin(){
+    if(over || opened !== cols * rows - mines) return;
+    over = true;
+    clearInterval(timerId);
+    cells.forEach(function(c){ if(c.mine) c.flag = 1; });   // flag whatever's left, like Windows does
+    flags = mines;
+    setLed(ledMines, 0, 'Mines left');
+    setFace('cool');
+    drawAll();
+
+    var msg = 'You cleared the minefield in ' + seconds + ' second' + (seconds === 1 ? '' : 's') + '.';
+    if(level !== 'custom'){
+      var best = loadBest();
+      if(!best[level] || seconds < best[level]){
+        best[level] = seconds;
+        save('mines.best', JSON.stringify(best));
+        msg += '<br><b>That’s the fastest ' + LEVEL_NAMES[level] + ' time yet!</b>';
+      }
+    }
+    setTimeout(function(){ dialog('Congratulations', '<p>' + msg + '</p>', [['OK', closeDialog]]); }, 400);
+  }
+
+  // ---------- pressing: squares sink while the button is held, like the original ----------
+  function setPressed(list){
+    var old = pressed;
+    pressed = list;
+    old.concat(list).forEach(drawCell);
+  }
+
+  function preview(i, wide){
+    if(over || i < 0){ setPressed([]); return; }
+    var list = [];
+    var consider = wide || cells[i].open ? [i].concat(around(i)) : [i];
+    consider.forEach(function(j){ if(!cells[j].open && cells[j].flag !== 1) list.push(j); });
+    setPressed(list);
+  }
+
+  function cellAt(x, y){
+    var el = document.elementFromPoint(x, y);
+    var c = el && el.closest ? el.closest('.c') : null;
+    return c && gridEl.contains(c) ? +c.dataset.i : -1;
+  }
+
+  // ---------- mouse ----------
+  var lastTouch = 0;
+  var mouse = { left: false, right: false, middle: false, both: false, acted: false, i: -1 };
+
+  gridEl.addEventListener('mousedown', function(e){
+    if(Date.now() - lastTouch < 800) return;      // ignore the fake mouse events after a tap
+    var i = cellAt(e.clientX, e.clientY);
+    if(i < 0) return;
+    e.preventDefault();
+    if(over) return;
+    if(e.button === 0) mouse.left = true;
+    if(e.button === 1) mouse.middle = true;
+    if(e.button === 2) mouse.right = true;
+    if(e.button === 2 && !mouse.left){ toggleFlag(i); return; }   // right-click flags on press, like Windows
+    mouse.both = (mouse.left && mouse.right) || mouse.middle;
+    mouse.i = i;
+    preview(i, mouse.both);
+    setFace('oh');
+  });
+
+  window.addEventListener('mousemove', function(e){
+    if(!(mouse.left || mouse.middle) || over) return;
+    var i = cellAt(e.clientX, e.clientY);
+    if(i !== mouse.i){ mouse.i = i; preview(i, mouse.both); }
+  });
+
+  window.addEventListener('mouseup', function(e){
+    if(Date.now() - lastTouch < 800) return;
+    var active = mouse.left || mouse.middle || (mouse.both && mouse.right);
+    if(e.button === 0) mouse.left = false;
+    if(e.button === 1) mouse.middle = false;
+    if(e.button === 2) mouse.right = false;
+    if(!active) return;
+
+    // with both buttons down, act on the first release and ignore the second
+    if(!mouse.acted){
+      var i = mouse.i;
+      setPressed([]);
+      if(!over){
+        setFace('smile');
+        if(i >= 0){
+          if(mouse.both || cells[i].open) chord(i);
+          else reveal(i);
+        }
+      }
+      mouse.acted = true;
+    }
+    if(!mouse.left && !mouse.right && !mouse.middle){ mouse.acted = false; mouse.both = false; mouse.i = -1; }
+  });
+
+  gridEl.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+  // ---------- touch: tap opens, press-and-hold flags ----------
+  var touch = null, holdTimer = 0;
+
+  gridEl.addEventListener('pointerdown', function(e){
+    if(e.pointerType !== 'touch') return;
+    lastTouch = Date.now();
+    var i = cellAt(e.clientX, e.clientY);
+    if(i < 0 || over) return;
+    touch = { i: i, x: e.clientX, y: e.clientY, held: false };
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(function(){
+      if(!touch) return;
+      touch.held = true;
+      setPressed([]);
+      toggleFlag(touch.i);
+      if(navigator.vibrate) navigator.vibrate(15);
+    }, 380);
+    preview(i, false);
+    setFace('oh');
+  });
+
+  gridEl.addEventListener('pointermove', function(e){
+    if(e.pointerType !== 'touch' || !touch) return;
+    if(Math.abs(e.clientX - touch.x) + Math.abs(e.clientY - touch.y) > 12) cancelTouch();   // it's a scroll
+  });
+
+  function cancelTouch(){
+    clearTimeout(holdTimer);
+    touch = null;
+    setPressed([]);
+    if(!over) setFace('smile');
+  }
+
+  gridEl.addEventListener('pointerup', function(e){
+    if(e.pointerType !== 'touch') return;
+    lastTouch = Date.now();
+    clearTimeout(holdTimer);
+    if(!touch) return;
+    var t = touch;
+    touch = null;
+    setPressed([]);
+    if(!over) setFace('smile');
+    if(t.held || over) return;
+    if(cells[t.i].open) chord(t.i);
+    else if(flagModeEl.checked) toggleFlag(t.i);
+    else reveal(t.i);
+  });
+  gridEl.addEventListener('pointercancel', function(e){ if(e.pointerType === 'touch') cancelTouch(); });
+
+  faceEl.addEventListener('click', function(){ newGame(); faceEl.blur(); });
+
+  // ---------- menus ----------
+  var menus = {
+    game: { btn: document.getElementById('btn-game'), el: document.getElementById('menu-game') },
+    help: { btn: document.getElementById('btn-help'), el: document.getElementById('menu-help') }
+  };
+  var openName = null;
+
+  function openMenu(name){
+    closeMenus();
+    openName = name;
+    menus[name].el.hidden = false;
+    menus[name].btn.setAttribute('aria-expanded', 'true');
+  }
+  function closeMenus(){
+    openName = null;
+    Object.keys(menus).forEach(function(k){
+      menus[k].el.hidden = true;
+      menus[k].btn.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  Object.keys(menus).forEach(function(name){
+    var m = menus[name];
+    m.btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      if(openName === name) closeMenus(); else openMenu(name);
+    });
+    m.btn.addEventListener('mouseenter', function(){ if(openName && openName !== name) openMenu(name); });
+  });
+  document.addEventListener('mousedown', function(e){
+    if(openName && !e.target.closest('.menu-bar')) closeMenus();
+  });
+
+  function markMenu(){
+    document.querySelectorAll('[data-level]').forEach(function(b){
+      b.setAttribute('aria-checked', b.dataset.level === level ? 'true' : 'false');
+    });
+    document.querySelector('[data-act="marks"]').setAttribute('aria-checked', marks ? 'true' : 'false');
+  }
+
+  document.querySelectorAll('.menu button').forEach(function(b){
+    b.addEventListener('click', function(){
+      closeMenus();
+      var act = b.dataset.act, lv = b.dataset.level;
+      if(lv === 'custom') customDialog();
+      else if(lv) setLevel(lv);
+      else if(act === 'new') newGame();
+      else if(act === 'marks'){ marks = !marks; save('mines.marks', marks ? '1' : '0'); markMenu(); }
+      else if(act === 'best') bestDialog();
+      else if(act === 'exit') location.href = '../';
+      else if(act === 'howto') helpDialog();
+      else if(act === 'about') dialog('About Minesweeper', '<p>A tribute to the classic Windows game.<br>Everything here is drawn in code; no images.</p>', [['OK', closeDialog]]);
+    });
+  });
+
+  // ---------- dialogs ----------
+  var dlg = document.getElementById('dlg');
+  var dlgTitle = document.getElementById('dlg-title');
+  var dlgBody = document.getElementById('dlg-body');
+
+  function dialog(title, html, buttons){
+    dlgTitle.textContent = title;
+    dlgBody.innerHTML = html + '<div class="actions"></div>';
+    var bar = dlgBody.querySelector('.actions');
+    buttons.forEach(function(b){
+      var el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'btn98';
+      el.textContent = b[0];
+      el.addEventListener('click', b[1]);
+      bar.appendChild(el);
+    });
+    dlg.hidden = false;
+    var first = dlgBody.querySelector('input') || bar.querySelector('button');
+    if(first) first.focus();
+  }
+  function closeDialog(){ dlg.hidden = true; }
+  document.getElementById('dlg-x').addEventListener('click', closeDialog);
+
+  function customDialog(){
+    dialog('Custom Field',
+      '<div class="row"><label for="cf-h">Height:</label><input id="cf-h" type="number" min="9" max="24" value="' + custom[1] + '"></div>' +
+      '<div class="row"><label for="cf-w">Width:</label><input id="cf-w" type="number" min="9" max="30" value="' + custom[0] + '"></div>' +
+      '<div class="row"><label for="cf-m">Mines:</label><input id="cf-m" type="number" min="10" value="' + custom[2] + '"></div>',
+      [['OK', function(){
+        var h = Math.max(9, Math.min(24, parseInt(document.getElementById('cf-h').value, 10) || 9));
+        var w = Math.max(9, Math.min(30, parseInt(document.getElementById('cf-w').value, 10) || 9));
+        var m = Math.max(10, Math.min((w - 1) * (h - 1), parseInt(document.getElementById('cf-m').value, 10) || 10));
+        custom = [w, h, m];
+        save('mines.custom', JSON.stringify(custom));
+        closeDialog();
+        setLevel('custom');
+      }], ['Cancel', closeDialog]]);
+  }
+
+  function bestDialog(){
+    var best = loadBest();
+    var rowsHtml = Object.keys(LEVEL_NAMES).map(function(k){
+      return '<tr><td>' + LEVEL_NAMES[k] + ':</td><td>' + (best[k] ? best[k] + ' seconds' : '—') + '</td></tr>';
+    }).join('');
+    dialog('Fastest Mine Sweepers', '<table>' + rowsHtml + '</table>',
+      [['Reset Scores', function(){ save('mines.best', '{}'); bestDialog(); }], ['OK', closeDialog]]);
+  }
+
+  function helpDialog(){
+    dialog('How to Play',
+      '<p style="max-width:320px">Find every square that isn’t a mine.<br><br>' +
+      '<b>Click</b> a square to open it. A number tells you how many mines touch that square.<br>' +
+      '<b>Right-click</b> (or press and hold on a phone) to plant a flag where you think a mine is.<br>' +
+      '<b>Click a number</b> once all its mines are flagged to open everything around it.<br><br>' +
+      'Your first click is always safe. Press <b>F2</b> or the smiley for a new game.</p>',
+      [['OK', closeDialog]]);
+  }
+
+  // ---------- setup ----------
+  function setLevel(lv){
+    level = LEVELS[lv] || lv === 'custom' ? lv : 'beginner';
+    save('mines.level', level);
+    var d = level === 'custom' ? custom : LEVELS[level];
+    cols = d[0]; rows = d[1]; mines = d[2];
+    build();
+    newGame();
+    markMenu();
+  }
+
+  window.addEventListener('keydown', function(e){
+    if(e.key === 'F2'){ e.preventDefault(); newGame(); }
+    else if(e.key === 'Escape'){ closeMenus(); closeDialog(); }
+  });
+
+  window.addEventListener('resize', sizeBoard);
+
+  if(window.matchMedia('(hover: none), (pointer: coarse)').matches){
+    document.getElementById('hint').textContent =
+      'Tap to open a square. Press and hold to flag a mine. Tap a number whose mines are all flagged to open around it.';
+  }
+
+  marks = load('mines.marks', '1') === '1';
+  try { custom = JSON.parse(load('mines.custom', '[20,14,45]')); } catch(e){ custom = [20, 14, 45]; }
+  if(!Array.isArray(custom) || custom.length !== 3) custom = [20, 14, 45];
+  setLevel(load('mines.level', 'beginner'));
+
+})();
+</script>
+
+</body>
+</html>
