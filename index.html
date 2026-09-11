@@ -164,8 +164,12 @@
   /* flappy: sky, a pipe pair, and the bird lining up the gap */
   .icon-flappy{ background:linear-gradient(180deg, #4ec0ca 0%, #b4e8ec 100%); }
 
+  /* powder: pixel-art sand pile, water, and a fire, on the game's dark canvas */
+  .icon-powder{ background:#141416; }
+
   .icon-snake svg,
-  .icon-flappy svg{ width:100%; height:100%; display:block; }
+  .icon-flappy svg,
+  .icon-powder svg{ width:100%; height:100%; display:block; }
 
   /* 2048: the gold winning tile itself */
   .icon-2048{
@@ -357,6 +361,41 @@
       <div class="tile-text">
         <div class="app-label">2048</div>
         <div class="app-note">Slide and merge to 2048</div>
+      </div>
+    </a>
+
+    <a class="app-tile" href="Powder/" aria-label="Play Powder">
+      <div class="game-icon icon-powder">
+        <svg viewBox="0 0 60 60" shape-rendering="crispEdges" aria-hidden="true">
+          <!-- sand pouring onto a pile -->
+          <rect x="15" y="10" width="5" height="5" fill="#ebcd85"/>
+          <rect x="15" y="20" width="5" height="5" fill="#e2c275"/>
+          <rect x="15" y="30" width="5" height="5" fill="#d9b865"/>
+          <rect x="15" y="40" width="5" height="5" fill="#e2c275"/>
+          <rect x="10" y="45" width="15" height="5" fill="#d9b865"/>
+          <rect x="5"  y="50" width="25" height="5" fill="#e2c275"/>
+          <rect x="0"  y="55" width="35" height="5" fill="#d1ae5c"/>
+
+          <!-- water pooling beside it -->
+          <rect x="30" y="50" width="30" height="5" fill="#3b8cf0"/>
+          <rect x="35" y="55" width="25" height="5" fill="#2f7be0"/>
+          <rect x="35" y="40" width="5" height="5" fill="#c6d2de" opacity="0.75"/>
+
+          <!-- wood plank on fire -->
+          <rect x="40" y="30" width="15" height="5" fill="#7a4a24"/>
+          <rect x="40" y="25" width="15" height="5" fill="#ff6a1a"/>
+          <rect x="40" y="20" width="5" height="5" fill="#e84a12"/>
+          <rect x="45" y="20" width="5" height="5" fill="#ffb347"/>
+          <rect x="50" y="20" width="5" height="5" fill="#e84a12"/>
+          <rect x="45" y="15" width="5" height="5" fill="#ff8c2a"/>
+          <rect x="45" y="10" width="5" height="5" fill="#c2310c"/>
+          <rect x="50" y="5"  width="5" height="5" fill="#545458"/>
+          <rect x="45" y="0"  width="5" height="5" fill="#424246"/>
+        </svg>
+      </div>
+      <div class="tile-text">
+        <div class="app-label">Powder</div>
+        <div class="app-note">Pour sand, water, fire and lava</div>
       </div>
     </a>
 
