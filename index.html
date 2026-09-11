@@ -7,10 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#1a1512">
-<meta name="apple-mobile-web-app-title" content="adiisepic">
 <title>adiisepic — Game Launcher</title>
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <style>
   :root{
     --bg:#1d1712;
@@ -173,10 +170,22 @@
   /* drift: a paper boat on a river at dusk */
   .icon-drift{ background:linear-gradient(180deg, #141c36 0%, #25406a 100%); }
 
+  /* tic tac toe: a board mid-game */
+  .icon-ttt{ background:#25211d; }
+
+  /* water sort: three tubes of mixed colours */
+  .icon-water{ background:linear-gradient(180deg, #252838 0%, #1b1a18 100%); }
+
+  /* blocks: a stack with a piece on its way down */
+  .icon-blocks{ background:#15130f; }
+
   .icon-snake svg,
   .icon-flappy svg,
   .icon-powder svg,
-  .icon-drift svg{ width:100%; height:100%; display:block; }
+  .icon-drift svg,
+  .icon-ttt svg,
+  .icon-water svg,
+  .icon-blocks svg{ width:100%; height:100%; display:block; }
 
   /* 2048: the gold winning tile itself */
   .icon-2048{
@@ -460,6 +469,101 @@
       </div>
     </a>
 
+    <a class="app-tile" href="TicTacToe/" aria-label="Play Tic Tac Toe">
+      <div class="game-icon icon-ttt">
+        <svg viewBox="0 0 60 60" aria-hidden="true">
+          <path d="M23 10 V50 M37 10 V50 M10 23 H50 M10 37 H50" stroke="#4a4038" stroke-width="2.4" stroke-linecap="round"/>
+          <g stroke="#ff7b54" stroke-width="3.6" stroke-linecap="round">
+            <path d="M12.5 12.5 L20.5 20.5 M20.5 12.5 L12.5 20.5"/>
+            <path d="M26 26 L34 34 M34 26 L26 34"/>
+            <path d="M39.5 39.5 L47.5 47.5 M47.5 39.5 L39.5 47.5"/>
+          </g>
+          <g fill="none" stroke="#5ec4b6" stroke-width="3.6">
+            <circle cx="43.5" cy="16.5" r="4.4"/>
+            <circle cx="16.5" cy="43.5" r="4.4"/>
+          </g>
+        </svg>
+      </div>
+      <div class="tile-text">
+        <div class="app-label">Tic Tac Toe</div>
+        <div class="app-note">Beat the computer, or a friend</div>
+      </div>
+    </a>
+
+    <a class="app-tile" href="WaterSort/" aria-label="Play Water Sort">
+      <div class="game-icon icon-water">
+        <svg viewBox="0 0 60 60" aria-hidden="true">
+          <defs>
+            <clipPath id="ws-c1"><path d="M11 12 V44.5 a4.5 4.5 0 0 0 9 0 V12 Z"/></clipPath>
+            <clipPath id="ws-c2"><path d="M25.5 12 V44.5 a4.5 4.5 0 0 0 9 0 V12 Z"/></clipPath>
+            <clipPath id="ws-c3"><path d="M40 12 V44.5 a4.5 4.5 0 0 0 9 0 V12 Z"/></clipPath>
+          </defs>
+          <g clip-path="url(#ws-c1)">
+            <rect x="10" y="41" width="11" height="10" fill="#ff6b6b"/>
+            <rect x="10" y="32.5" width="11" height="8.5" fill="#4dabf7"/>
+            <rect x="10" y="24" width="11" height="8.5" fill="#40c057"/>
+            <rect x="10" y="15.5" width="11" height="8.5" fill="#ff6b6b"/>
+          </g>
+          <g clip-path="url(#ws-c2)">
+            <rect x="24.5" y="41" width="11" height="10" fill="#4dabf7"/>
+            <rect x="24.5" y="32.5" width="11" height="8.5" fill="#ffd43b"/>
+            <rect x="24.5" y="24" width="11" height="8.5" fill="#4dabf7"/>
+          </g>
+          <g clip-path="url(#ws-c3)">
+            <rect x="39" y="41" width="11" height="10" fill="#ffd43b"/>
+            <rect x="39" y="32.5" width="11" height="8.5" fill="#ffd43b"/>
+          </g>
+          <g fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1.6">
+            <path d="M10 11 V44.5 a5.5 5.5 0 0 0 11 0 V11"/>
+            <path d="M24.5 11 V44.5 a5.5 5.5 0 0 0 11 0 V11"/>
+            <path d="M39 11 V44.5 a5.5 5.5 0 0 0 11 0 V11"/>
+          </g>
+        </svg>
+      </div>
+      <div class="tile-text">
+        <div class="app-label">Water Sort</div>
+        <div class="app-note">Pour until every tube is one colour</div>
+      </div>
+    </a>
+
+    <a class="app-tile" href="Blocks/" aria-label="Play Blocks">
+      <div class="game-icon icon-blocks">
+        <svg viewBox="0 0 60 60" aria-hidden="true">
+          <!-- falling piece -->
+          <g fill="#5fb3b3">
+            <rect x="30.6" y="8.1" width="6.3" height="6.3" rx="1.6"/>
+            <rect x="23.1" y="15.6" width="6.3" height="6.3" rx="1.6"/>
+            <rect x="30.6" y="15.6" width="6.3" height="6.3" rx="1.6"/>
+            <rect x="38.1" y="15.6" width="6.3" height="6.3" rx="1.6"/>
+          </g>
+          <!-- the stack, with a gap waiting for it -->
+          <rect x="0.6" y="38.1" width="6.3" height="6.3" rx="1.6" fill="#e76f51"/>
+          <rect x="8.1" y="38.1" width="6.3" height="6.3" rx="1.6" fill="#e76f51"/>
+          <rect x="45.6" y="38.1" width="6.3" height="6.3" rx="1.6" fill="#b48ead"/>
+          <rect x="53.1" y="38.1" width="6.3" height="6.3" rx="1.6" fill="#b48ead"/>
+
+          <rect x="0.6" y="45.6" width="6.3" height="6.3" rx="1.6" fill="#e9c46a"/>
+          <rect x="8.1" y="45.6" width="6.3" height="6.3" rx="1.6" fill="#e76f51"/>
+          <rect x="15.6" y="45.6" width="6.3" height="6.3" rx="1.6" fill="#e76f51"/>
+          <rect x="38.1" y="45.6" width="6.3" height="6.3" rx="1.6" fill="#8ab17d"/>
+          <rect x="45.6" y="45.6" width="6.3" height="6.3" rx="1.6" fill="#8ab17d"/>
+          <rect x="53.1" y="45.6" width="6.3" height="6.3" rx="1.6" fill="#b48ead"/>
+
+          <rect x="0.6" y="53.1" width="6.3" height="6.3" rx="1.6" fill="#e9c46a"/>
+          <rect x="8.1" y="53.1" width="6.3" height="6.3" rx="1.6" fill="#e9c46a"/>
+          <rect x="15.6" y="53.1" width="6.3" height="6.3" rx="1.6" fill="#6d8fc5"/>
+          <rect x="23.1" y="53.1" width="6.3" height="6.3" rx="1.6" fill="#6d8fc5"/>
+          <rect x="38.1" y="53.1" width="6.3" height="6.3" rx="1.6" fill="#f4a261"/>
+          <rect x="45.6" y="53.1" width="6.3" height="6.3" rx="1.6" fill="#8ab17d"/>
+          <rect x="53.1" y="53.1" width="6.3" height="6.3" rx="1.6" fill="#f4a261"/>
+        </svg>
+      </div>
+      <div class="tile-text">
+        <div class="app-label">Blocks</div>
+        <div class="app-note">Stack them up, clear the rows</div>
+      </div>
+    </a>
+
     <div class="app-tile soon" aria-hidden="true">
       <div class="game-icon">+</div>
       <div class="tile-text">
@@ -470,10 +574,6 @@
 
   </div>
 </main>
-
-<script>
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function(){});
-</script>
 
 </body>
 </html>
