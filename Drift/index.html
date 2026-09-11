@@ -7,6 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#12151f">
 <title>Drift</title>
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
 <style>
   :root{
     --page:#12151f;
@@ -167,6 +169,24 @@
   .mute svg{ width:58%; height:58%; }
   .mute:focus-visible{ outline:2px solid var(--cream); outline-offset:2px; }
 
+  /* back to the launcher, mirrors the mute button */
+  .back{
+    position:absolute;
+    top:calc(12px*var(--u));
+    left:calc(12px*var(--u));
+    width:calc(32px*var(--u));
+    height:calc(32px*var(--u));
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:50%;
+    background:rgba(10,14,28,0.45);
+    color:var(--cream);
+    z-index:2;
+  }
+  .back svg{ width:56%; height:56%; }
+  .back:focus-visible{ outline:2px solid var(--cream); outline-offset:2px; }
+
   @keyframes rise{ from{ opacity:0; transform:translateY(calc(22px*var(--u))); } to{ opacity:1; transform:none; } }
   @keyframes drop{ from{ opacity:0; transform:translateY(calc(-14px*var(--u))); } to{ opacity:1; transform:none; } }
   @keyframes float{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(calc(-5px*var(--u))); } }
@@ -180,6 +200,10 @@
 
 <div class="stage" id="stage">
   <canvas id="game"></canvas>
+
+  <a class="back" href="../" aria-label="Back to games">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg>
+  </a>
 
   <button class="mute" id="mute" type="button" aria-label="Mute" aria-pressed="false">
     <svg id="icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
@@ -922,8 +946,8 @@
     ctx.fillStyle = '#f6ecd9';
     ctx.fillText(meters() + ' m', VW / 2, 20);
 
-    // lantern tally
-    var x = 22, y = 30;
+    // lantern tally, just right of the back button
+    var x = 62, y = 28;
     ctx.globalCompositeOperation = 'lighter';
     var g = ctx.createRadialGradient(x, y, 0, x, y, 16);
     g.addColorStop(0, 'rgba(255,190,100,0.45)');
@@ -987,7 +1011,7 @@
   }
 
   stage.addEventListener('pointerdown', function(e){
-    if(e.target.closest('button')) return;
+    if(e.target.closest('button, a')) return;
     if(e.pointerType === 'mouse' && e.button !== 0) return;
     e.preventDefault();
     ensureAudio();
@@ -1012,7 +1036,7 @@
 
   window.addEventListener('keydown', function(e){
     var k = e.key;
-    if(e.target && e.target.tagName === 'BUTTON' && (k === ' ' || k === 'Enter')) return;
+    if(e.target && (e.target.tagName === 'BUTTON' || e.target.tagName === 'A') && (k === ' ' || k === 'Enter')) return;
 
     if(k === 'ArrowLeft' || k === 'a' || k === 'A'){
       e.preventDefault(); keys.left = true;
@@ -1059,6 +1083,10 @@
   requestAnimationFrame(frame);
 
 })();
+</script>
+
+<script>
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js').catch(function(){});
 </script>
 
 </body>
