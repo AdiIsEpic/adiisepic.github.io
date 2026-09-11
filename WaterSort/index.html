@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1b1a18">
+<title>Water Sort</title>
+<style>
+  :root{
+    --page:#1b1a18;
+    --panel:#25211d;
+    --ink:#f6f1e8;
+    --dim:#a79d90;
+    --accent:#f0ac53;
+    --tw:52px;      /* tube width, set from JS */
+    --gap:16px;
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  html,body{
+    margin:0;
+    min-height:100%;
+    background:
+      radial-gradient(700px 500px at 50% -10%, rgba(90,140,220,0.12), transparent 70%),
+      var(--page);
+    color:var(--ink);
+    font-family:'Segoe UI', system-ui, -apple-system, sans-serif;
+    -webkit-text-size-adjust:100%;
+    -webkit-user-select:none;
+    user-select:none;
+  }
+
+  body{
+    display:flex;
+    justify-content:center;
+    padding:max(16px, env(safe-area-inset-top)) 12px calc(18px + env(safe-area-inset-bottom));
+  }
+
+  .wrap{
+    width:min(96vw, 760px);
+    min-height:calc(100dvh - 40px);
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+
+  .back{
+    align-self:flex-start;
+    margin:-4px 0 -4px -10px;
+    padding:5px 10px;
+    border-radius:999px;
+    color:var(--dim);
+    text-decoration:none;
+    font-size:13px;
+    font-weight:700;
+    transition:color .15s ease, background .15s ease;
+  }
+  .back:hover{ color:var(--ink); background:rgba(255,255,255,0.06); }
+  .back:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  .top{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+  h1{ margin:0; font-size:clamp(26px, 7vw, 36px); font-weight:800; letter-spacing:-0.5px; }
+  .meta{ display:flex; gap:14px; color:var(--dim); font-size:14px; font-weight:700; }
+  .meta b{ color:var(--ink); font-size:19px; font-variant-numeric:tabular-nums; }
+
+  /* ---- tubes ---- */
+  .tubes{
+    flex:1;
+    margin:0 auto;
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+    align-content:center;
+    gap:32px var(--gap);
+    padding:30px 0 10px;
+  }
+
+  .tube{
+    position:relative;
+    width:var(--tw);
+    height:calc(var(--tw) * 3.3);
+    padding:0;
+    border:none;
+    background:none;
+    cursor:pointer;
+    transition:transform .2s cubic-bezier(.2,.8,.3,1.25);
+  }
+  .tube.selected{ transform:translateY(-24px); }
+  .tube:focus-visible .glass{ outline:2px solid var(--accent); outline-offset:4px; }
+
+  .glass{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column-reverse;   /* first layer sits at the bottom */
+    overflow:hidden;
+    border:3px solid rgba(255,255,255,0.3);
+    border-top-color:rgba(255,255,255,0.12);
+    border-radius:7px 7px calc(var(--tw) / 2) calc(var(--tw) / 2);
+    background:rgba(255,255,255,0.045);
+    transition:border-color .3s ease, box-shadow .3s ease;
+  }
+
+  /* a streak of light down the glass */
+  .glass::after{
+    content:"";
+    position:absolute;
+    left:16%;
+    top:8%;
+    bottom:16%;
+    width:12%;
+    border-radius:99px;
+    background:linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0.04));
+    pointer-events:none;
+  }
+
+  .layer{ flex:0 0 21.5%; width:100%; }
+  .layer.top{ box-shadow:inset 0 3px 0 rgba(255,255,255,0.28); }
+  .layer.fill{ transform-origin:bottom; animation:fill .26s ease-out both; }
+
+  .tube.pour-from{ animation:tip .38s ease; }
+  .tube.shake{ animation:shake .3s ease; }
+  .tube.complete .glass{ border-color:rgba(255,236,200,0.55); box-shadow:0 0 18px rgba(255,220,160,0.18); }
+  .tube.just-done{ animation:pop .45s ease .2s; }
+
+  @keyframes fill{ from{ transform:scaleY(0); } to{ transform:scaleY(1); } }
+  @keyframes tip{ 0%{ transform:translateY(-24px); } 35%{ transform:translateY(-26px) rotate(-14deg); } 100%{ transform:none; } }
+  @keyframes shake{ 0%,100%{ transform:translateX(0); } 25%{ transform:translateX(-5px); } 75%{ transform:translateX(5px); } }
+  @keyframes pop{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.07); } }
+
+  /* ---- controls ---- */
+  .controls{ display:flex; justify-content:center; gap:10px; flex-wrap:wrap; }
+  .controls button{
+    font:inherit;
+    font-size:14px;
+    font-weight:700;
+    color:var(--ink);
+    background:var(--panel);
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:999px;
+    padding:10px 18px;
+    cursor:pointer;
+    transition:background .15s ease, opacity .15s ease;
+  }
+  .controls button:hover:not(:disabled){ background:#312b25; }
+  .controls button:disabled{ opacity:0.4; cursor:default; }
+  .controls button:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  .hint{ margin:0; text-align:center; color:var(--dim); font-size:12px; line-height:1.5; }
+
+  /* ---- level complete ---- */
+  .overlay{
+    position:fixed;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+    background:rgba(12,10,8,0.55);
+    backdrop-filter:blur(4px);
+    -webkit-backdrop-filter:blur(4px);
+    z-index:10;
+    animation:fade .3s ease both;
+  }
+  .overlay[hidden]{ display:none; }
+  .card{
+    text-align:center;
+    background:var(--panel);
+    border:1px solid rgba(255,220,170,0.15);
+    border-radius:18px;
+    padding:26px 30px 24px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.5);
+    animation:rise .4s cubic-bezier(.2,.8,.3,1.1) both;
+  }
+  .card h2{ margin:0 0 6px; font-size:28px; font-weight:800; }
+  .card p{ margin:0 0 18px; color:var(--dim); font-size:14px; }
+  .primary{
+    font:inherit;
+    font-size:15px;
+    font-weight:800;
+    color:#2a1a08;
+    background:linear-gradient(180deg, #ffc978, #f0a043);
+    border:none;
+    border-radius:999px;
+    padding:11px 28px;
+    cursor:pointer;
+    box-shadow:0 4px 16px rgba(240,160,70,0.3);
+  }
+  .primary:focus-visible{ outline:2px solid var(--ink); outline-offset:2px; }
+
+  @keyframes fade{ from{ opacity:0; } to{ opacity:1; } }
+  @keyframes rise{ from{ opacity:0; transform:translateY(16px) scale(0.97); } to{ opacity:1; transform:none; } }
+
+  @media (prefers-reduced-motion: reduce){
+    .tube, .layer.fill, .tube.pour-from, .tube.shake, .tube.just-done{ animation:none; transition:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <a class="back" href="../" aria-label="Back to games">&lsaquo; Games</a>
+
+  <div class="top">
+    <h1>Water Sort</h1>
+    <div class="meta">
+      <span>Level <b id="level">1</b></span>
+      <span>Moves <b id="moves">0</b></span>
+    </div>
+  </div>
+
+  <div class="tubes" id="tubes"></div>
+
+  <div class="controls">
+    <button type="button" id="undo">Undo</button>
+    <button type="button" id="restart">Restart</button>
+    <button type="button" id="extra">+1 Tube</button>
+  </div>
+
+  <p class="hint">Tap a tube, then tap where to pour it. You can pour onto the same colour or into an empty tube.</p>
+
+</div>
+
+<div class="overlay" id="win" hidden>
+  <div class="card" role="dialog" aria-labelledby="win-title">
+    <h2 id="win-title">Sorted!</h2>
+    <p id="win-text">Level 1 done.</p>
+    <button type="button" class="primary" id="next">Next level</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  var CAP = 4;
+  var PALETTE = ['#ff6b6b','#ffa94d','#ffd43b','#a9e34b','#40c057','#20c997','#4dabf7','#4263eb','#9775fa','#f06595','#a0703c','#f1e8d8'];
+  var NAMES   = ['red','orange','yellow','lime','green','teal','sky blue','blue','violet','pink','brown','cream'];
+
+  var tubesEl = document.getElementById('tubes');
+  var levelEl = document.getElementById('level');
+  var movesEl = document.getElementById('moves');
+  var undoBtn = document.getElementById('undo');
+  var extraBtn = document.getElementById('extra');
+  var winEl = document.getElementById('win');
+
+  var level, tubes, history, selected = -1, moves = 0, extraUsed = false, won = false;
+
+  function load(key){ try { return localStorage.getItem(key); } catch(e){ return null; } }
+  function save(key, v){ try { localStorage.setItem(key, String(v)); } catch(e){} }
+
+  // ---------- rules ----------
+  function top(t){ return t[t.length - 1]; }
+  function isComplete(t){ return t.length === CAP && t.every(function(c){ return c === t[0]; }); }
+  function isUniform(t){ return t.every(function(c){ return c === t[0]; }); }
+  function isSolved(s){ return s.every(function(t){ return t.length === 0 || isComplete(t); }); }
+
+  function canPour(s, i, j){
+    if(i === j || !s[i].length || s[j].length >= CAP) return false;
+    return !s[j].length || top(s[j]) === top(s[i]);
+  }
+
+  // pours as much of the top colour as fits; returns how many layers moved
+  function pour(s, i, j){
+    var c = top(s[i]), n = 0;
+    while(s[i].length && top(s[i]) === c && s[j].length < CAP){
+      s[j].push(s[i].pop());
+      n++;
+    }
+    return n;
+  }
+
+  function clone(s){ return s.map(function(t){ return t.slice(); }); }
+
+  // ---------- level generation ----------
+  function rng(seed){
+    return function(){
+      seed = seed + 0x6D2B79F5 | 0;
+      var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function colorsFor(lv){ return Math.min(PALETTE.length, 3 + Math.floor((lv - 1) / 2)); }
+
+  // depth-first search with a budget, just to prove a layout can be finished
+  function solvable(start){
+    var seen = new Set(), stack = [start], budget = 40000;
+    while(stack.length && budget-- > 0){
+      var s = stack.pop();
+      if(isSolved(s)) return true;
+      var key = s.map(function(t){ return t.join(','); }).sort().join('|');
+      if(seen.has(key)) continue;
+      seen.add(key);
+      var toEmpty = [], toMatch = [];
+      for(var i = 0; i < s.length; i++){
+        if(!s[i].length || isComplete(s[i])) continue;
+        for(var j = 0; j < s.length; j++){
+          if(!canPour(s, i, j)) continue;
+          if(!s[j].length){
+            if(isUniform(s[i])) continue;       // moving a single-colour stack into an empty tube is pointless
+            toEmpty.push([i, j]);
+          } else {
+            toMatch.push([i, j]);
+          }
+        }
+      }
+      // push the weaker moves first so the promising ones get explored first
+      toEmpty.concat(toMatch).forEach(function(m){
+        var n = clone(s);
+        pour(n, m[0], m[1]);
+        stack.push(n);
+      });
+    }
+    return false;
+  }
+
+  function makeLevel(lv){
+    var n = colorsFor(lv), last = null;
+    for(var attempt = 0; attempt < 25; attempt++){
+      var rand = rng(lv * 7919 + attempt * 104729);
+      var pool = [];
+      for(var c = 0; c < n; c++) for(var k = 0; k < CAP; k++) pool.push(c);
+      for(var i = pool.length - 1; i > 0; i--){
+        var j = rand() * (i + 1) | 0, tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+      }
+      var s = [];
+      for(var t = 0; t < n; t++) s.push(pool.slice(t * CAP, t * CAP + CAP));
+      s.push([], []);
+      last = s;
+      if(s.some(isComplete)) continue;           // don't hand out a tube that's already done
+      if(solvable(clone(s))) return s;
+    }
+    return last;
+  }
+
+  // ---------- layout ----------
+  function layout(){
+    var count = tubes.length;
+    var perRow = count <= 7 ? count : Math.ceil(count / 2);
+    var rows = Math.ceil(count / perRow);
+    var areaW = Math.min(window.innerWidth * 0.96, 760) - 8;
+    var areaH = window.innerHeight - 250;
+    var gapFrac = 0.34;
+    var byW = areaW / (perRow + (perRow - 1) * gapFrac);
+    var byH = (areaH - (rows - 1) * 32 - 34) / rows / 3.3;
+    var tw = Math.max(30, Math.min(64, byW, byH));
+    var gap = Math.max(10, tw * gapFrac);
+    document.documentElement.style.setProperty('--tw', tw.toFixed(1) + 'px');
+    document.documentElement.style.setProperty('--gap', gap.toFixed(1) + 'px');
+    tubesEl.style.maxWidth = Math.ceil(perRow * tw + (perRow - 1) * gap + 2) + 'px';
+  }
+
+  // ---------- drawing ----------
+  function describe(t){
+    return t.length ? t.map(function(c){ return NAMES[c]; }).join(', ') : 'empty';
+  }
+
+  function render(anim){
+    var focused = document.activeElement && document.activeElement.dataset
+      ? document.activeElement.dataset.i : undefined;
+    tubesEl.innerHTML = '';
+
+    tubes.forEach(function(t, i){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tube';
+      b.dataset.i = i;
+      b.setAttribute('aria-label', 'Tube ' + (i + 1) + ', bottom to top: ' + describe(t));
+      if(i === selected) b.classList.add('selected');
+      if(isComplete(t)) b.classList.add('complete');
+
+      var g = document.createElement('div');
+      g.className = 'glass';
+      t.forEach(function(c, k){
+        var l = document.createElement('div');
+        l.className = 'layer';
+        l.style.background = PALETTE[c];
+        if(k === t.length - 1) l.classList.add('top');
+        if(anim && anim.to === i && k >= t.length - anim.count){
+          l.classList.add('fill');
+          l.style.animationDelay = ((k - (t.length - anim.count)) * 70 + 60) + 'ms';
+        }
+        g.appendChild(l);
+      });
+      b.appendChild(g);
+
+      if(anim && anim.from === i) b.classList.add('pour-from');
+      if(anim && anim.to === i && isComplete(t)) b.classList.add('just-done');
+
+      b.addEventListener('click', function(){ onTube(i); });
+      tubesEl.appendChild(b);
+    });
+
+    if(focused !== undefined && tubesEl.children[focused]) tubesEl.children[focused].focus();
+
+    levelEl.textContent = level;
+    movesEl.textContent = moves;
+    undoBtn.disabled = !history.length;
+    extraBtn.disabled = extraUsed;
+  }
+
+  function markSelected(){
+    Array.prototype.forEach.call(tubesEl.children, function(b, i){
+      b.classList.toggle('selected', i === selected);
+    });
+  }
+
+  function shake(i){
+    var b = tubesEl.children[i];
+    if(!b) return;
+    b.classList.remove('shake');
+    void b.offsetWidth;
+    b.classList.add('shake');
+  }
+
+  // ---------- play ----------
+  function onTube(i){
+    if(won) return;
+
+    if(selected === -1){
+      if(!tubes[i].length || isComplete(tubes[i])){ shake(i); return; }
+      selected = i;
+      markSelected();
+      return;
+    }
+
+    if(selected === i){ selected = -1; markSelected(); return; }
+
+    if(canPour(tubes, selected, i)){
+      history.push(clone(tubes));
+      var from = selected;
+      var count = pour(tubes, from, i);
+      selected = -1;
+      moves++;
+      render({ from: from, to: i, count: count });
+      if(isSolved(tubes)) levelDone();
+      return;
+    }
+
+    // can't pour there: pick that tube up instead, if there's anything to pick up
+    if(tubes[i].length && !isComplete(tubes[i])){ selected = i; markSelected(); }
+    else { shake(selected); }
+  }
+
+  function levelDone(){
+    won = true;
+    save('watersort.level', level + 1);
+    document.getElementById('win-text').textContent =
+      'Level ' + level + ' done in ' + moves + ' move' + (moves === 1 ? '' : 's') + '.';
+    setTimeout(function(){
+      winEl.hidden = false;
+      document.getElementById('next').focus();
+    }, 650);
+  }
+
+  function startLevel(lv){
+    level = lv;
+    tubes = makeLevel(lv);
+    history = [];
+    selected = -1;
+    moves = 0;
+    extraUsed = false;
+    won = false;
+    winEl.hidden = true;
+    layout();
+    render();
+  }
+
+  undoBtn.addEventListener('click', function(){
+    if(!history.length || won) return;
+    tubes = history.pop();
+    selected = -1;
+    moves = Math.max(0, moves - 1);
+    render();
+  });
+
+  document.getElementById('restart').addEventListener('click', function(){ startLevel(level); });
+
+  extraBtn.addEventListener('click', function(){
+    if(extraUsed || won) return;
+    extraUsed = true;
+    tubes.push([]);
+    // keep the extra tube through any undo, too
+    history.forEach(function(s){ s.push([]); });
+    layout();
+    render();
+  });
+
+  document.getElementById('next').addEventListener('click', function(){ startLevel(level + 1); });
+
+  window.addEventListener('keydown', function(e){
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    if(e.target && e.target.tagName === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return;
+    var k = e.key;
+    if(k === 'u' || k === 'U') undoBtn.click();
+    else if(k === 'r' || k === 'R') startLevel(level);
+    else if(k === 'Escape'){ selected = -1; markSelected(); }
+    else if(/^[0-9]$/.test(k)){
+      var i = k === '0' ? 9 : +k - 1;
+      if(i < tubes.length) onTube(i);
+    }
+  });
+
+  window.addEventListener('resize', function(){ layout(); });
+
+  startLevel(Math.max(1, parseInt(load('watersort.level'), 10) || 1));
+
+})();
+</script>
+
+</body>
+</html>
