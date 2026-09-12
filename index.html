@@ -210,6 +210,12 @@
   .icon-sweet{ background:linear-gradient(160deg, #ffb3da, #b28dff); }
   .icon-sweet svg{ width:100%; height:100%; display:block; }
 
+  /* brick bounce, memory match, whack-a-mole */
+  .icon-brick{ background:linear-gradient(180deg, #2a1d6b, #140f35); }
+  .icon-memory{ background:linear-gradient(160deg, #9be8de, #7fc8f0); }
+  .icon-mole{ background:#7ccf5a; }
+  .icon-brick svg, .icon-memory svg, .icon-mole svg{ width:100%; height:100%; display:block; }
+
   .icon-snake svg,
   .icon-flappy svg,
   .icon-powder svg,
@@ -843,6 +849,61 @@
       <div class="tile-text">
         <div class="app-label">Sweet Swap</div>
         <div class="app-note">Match candies, make combos</div>
+      </div>
+    </a>
+
+    <a class="app-tile" href="BrickBounce/" aria-label="Play Brick Bounce">
+      <div class="game-icon icon-brick">
+        <svg viewBox="0 0 60 60" aria-hidden="true">
+          <rect x="6" y="9" width="14" height="6" rx="2" fill="#ff5d8f"/><rect x="23" y="9" width="14" height="6" rx="2" fill="#ff9f43"/><rect x="40" y="9" width="14" height="6" rx="2" fill="#ffd23f"/>
+          <rect x="6" y="18" width="14" height="6" rx="2" fill="#6bd968"/><rect x="40" y="18" width="14" height="6" rx="2" fill="#3bc9db"/>
+          <rect x="23" y="27" width="14" height="6" rx="2" fill="#b56dff"/>
+          <circle cx="27" cy="41" r="3.2" fill="#fff"/>
+          <circle cx="23" cy="37" r="2" fill="#ffd23f" opacity="0.45"/>
+          <rect x="16" y="49" width="24" height="5" rx="2.5" fill="#dfe4ff"/>
+        </svg>
+      </div>
+      <div class="tile-text">
+        <div class="app-label">Brick Bounce</div>
+        <div class="app-note">Smash bricks, grab power-ups</div>
+      </div>
+    </a>
+
+    <a class="app-tile" href="MemoryMatch/" aria-label="Play Memory Match">
+      <div class="game-icon icon-memory">
+        <svg viewBox="0 0 60 60" aria-hidden="true">
+          <rect x="7" y="8" width="20" height="26" rx="4" fill="#fff" stroke="#5fd68a" stroke-width="2"/>
+          <text x="17" y="26" font-size="14" text-anchor="middle">🐶</text>
+          <rect x="33" y="8" width="20" height="26" rx="4" fill="url(#mm-back)"/>
+          <text x="43" y="26" font-size="13" text-anchor="middle" fill="#fff" font-weight="700" font-family="sans-serif">?</text>
+          <rect x="7" y="38" width="20" height="16" rx="4" fill="url(#mm-back)"/>
+          <rect x="33" y="38" width="20" height="16" rx="4" fill="#fff" stroke="#5fd68a" stroke-width="2"/>
+          <text x="43" y="51" font-size="11" text-anchor="middle">🐶</text>
+          <defs><linearGradient id="mm-back" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6c8bff"/><stop offset="1" stop-color="#b56dff"/></linearGradient></defs>
+        </svg>
+      </div>
+      <div class="tile-text">
+        <div class="app-label">Memory Match</div>
+        <div class="app-note">Flip cards, find the pairs</div>
+      </div>
+    </a>
+
+    <a class="app-tile" href="WhackAMole/" aria-label="Play Whack-a-Mole">
+      <div class="game-icon icon-mole">
+        <svg viewBox="0 0 60 60" aria-hidden="true">
+          <ellipse cx="30" cy="46" rx="20" ry="7" fill="#3b2412"/>
+          <path d="M16 46 C16 28 44 28 44 46 Z" fill="#9c6b43"/>
+          <ellipse cx="30" cy="42" rx="7" ry="5" fill="#d9b38c"/>
+          <circle cx="25.5" cy="36" r="1.8" fill="#2b1a0e"/><circle cx="34.5" cy="36" r="1.8" fill="#2b1a0e"/>
+          <ellipse cx="30" cy="39.5" rx="2.2" ry="1.6" fill="#ff7aa2"/>
+          <rect x="28.4" y="41.2" width="1.4" height="2.2" fill="#fff"/><rect x="30.2" y="41.2" width="1.4" height="2.2" fill="#fff"/>
+          <path d="M10 46 A20 7 0 0 0 50 46 Z" fill="#8a5a2b"/>
+          <g transform="rotate(-30 44 16)"><rect x="42.5" y="14" width="3" height="18" fill="#b07a44"/><rect x="36" y="8" width="16" height="8" rx="1.5" fill="#ff5d5d"/></g>
+        </svg>
+      </div>
+      <div class="tile-text">
+        <div class="app-label">Whack-a-Mole</div>
+        <div class="app-note">Bop moles, dodge bombs</div>
       </div>
     </a>
 
