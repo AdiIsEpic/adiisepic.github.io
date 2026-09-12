@@ -1,0 +1,1411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#ff8fc8">
+<title>Sweet Swap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Lilita+One&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#5a2a55;
+    --font:'Fredoka', ui-rounded, 'SF Pro Rounded', 'Nunito', 'Segoe UI', system-ui, sans-serif;
+    --display:'Lilita One', 'Fredoka', 'Arial Black', system-ui, sans-serif;
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  html,body{
+    margin:0;
+    height:100%;
+    overflow:hidden;
+    overscroll-behavior:none;
+    background:linear-gradient(180deg, #ffb3da 0%, #d9a6ff 60%, #a98bff 100%);
+    color:var(--ink);
+    font-family:var(--font);
+    -webkit-user-select:none;
+    user-select:none;
+    -webkit-touch-callout:none;
+  }
+
+  #c{ position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  button{ font-family:var(--font); color:var(--ink); }
+
+  /* ---- top bar ---- */
+  .top{
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+    z-index:5;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:10px;
+    padding-top:max(10px, env(safe-area-inset-top));
+    pointer-events:none;
+  }
+  .top > *{ pointer-events:auto; }
+  .chip{ background:rgba(255,255,255,0.75); border:none; border-radius:14px; box-shadow:0 3px 0 rgba(120,40,110,0.18); }
+  .back{ padding:9px 12px; font-weight:600; font-size:15px; color:var(--ink); text-decoration:none; white-space:nowrap; flex:none; }
+  .back:focus-visible{ outline:3px solid #fff; }
+  .spacer{ flex:1; }
+  .level{ font:400 20px var(--display); letter-spacing:0.5px; padding:8px 16px; cursor:pointer; flex:none; }
+  .level:focus-visible{ outline:3px solid #fff; }
+  .round{ width:40px; height:40px; flex:none; border-radius:50%; font-size:17px; cursor:pointer; }
+  .round:focus-visible{ outline:3px solid #fff; }
+
+  /* ---- status panel ---- */
+  .status{
+    position:fixed;
+    left:50%;
+    z-index:5;
+    transform:translateX(-50%);
+    display:flex;
+    gap:8px;
+    width:min(calc(100% - 20px), 560px);
+    pointer-events:none;
+  }
+  .box{
+    flex:1;
+    min-width:0;
+    padding:6px 8px 8px;
+    border-radius:18px;
+    background:rgba(255,255,255,0.78);
+    box-shadow:0 4px 0 rgba(120,40,110,0.16);
+    text-align:center;
+  }
+  .box small{ display:block; font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; opacity:0.6; }
+  .box b{ display:block; font:400 30px/1.05 var(--display); color:#e8457f; }
+  .box.moves{ flex:0 0 82px; }
+  .box.moves b.low{ color:#ff3b3b; animation:throb .6s ease-in-out infinite alternate; }
+  @keyframes throb{ to{ transform:scale(1.12); } }
+  .box.score b{ font-size:22px; color:var(--ink); }
+  .goal-list{ display:flex; justify-content:center; gap:10px; align-items:center; min-height:34px; }
+  .goal-item{ display:flex; align-items:center; gap:3px; font:400 20px var(--display); color:var(--ink); }
+  .goal-item canvas{ width:28px; height:28px; }
+  .goal-item.done{ color:#2fae4a; }
+  .goal-score{ font:400 20px/1.6 var(--display); color:var(--ink); }
+  .bar{ position:relative; height:10px; margin:4px 4px 0; border-radius:5px; background:rgba(90,42,85,0.12); }
+  .bar i{ position:absolute; left:0; top:0; bottom:0; width:0; border-radius:5px; background:linear-gradient(90deg, #ff7eb6, #ffb13b); transition:width .3s ease; }
+  .bar span{ position:absolute; top:50%; transform:translate(-50%, -50%); font-size:14px; color:rgba(90,42,85,0.3); line-height:1; }
+  .bar span.on{ color:#ffc21f; text-shadow:0 0 6px rgba(255,190,0,0.8); }
+
+  /* ---- cards ---- */
+  .overlay{
+    position:fixed;
+    inset:0;
+    z-index:10;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:16px;
+    background:rgba(90,30,90,0.35);
+  }
+  .overlay[hidden]{ display:none; }
+  .card{
+    width:min(100%, 380px);
+    max-height:100%;
+    overflow:auto;
+    padding:22px 20px 20px;
+    text-align:center;
+    border-radius:28px;
+    background:#fff7fc;
+    box-shadow:0 20px 50px rgba(90,30,90,0.35), inset 0 -6px 0 rgba(255,150,200,0.25);
+    animation:pop .4s cubic-bezier(.2,.9,.3,1.3);
+  }
+  .card.wide{ width:min(100%, 520px); }
+  @keyframes pop{ from{ transform:scale(0.85); opacity:0; } to{ transform:none; opacity:1; } }
+  .card h2{ margin:0 0 4px; font:400 34px var(--display); color:#e8457f; letter-spacing:0.5px; }
+  .card p{ margin:0 0 14px; font-size:17px; opacity:0.8; }
+  .card .goal-list{ margin:6px 0 14px; }
+  .card .goal-item{ font-size:24px; }
+  .card .goal-item canvas{ width:40px; height:40px; }
+  .stars{ font-size:44px; letter-spacing:6px; margin:0 0 4px; }
+  .stars i{ font-style:normal; display:inline-block; color:rgba(90,42,85,0.15); }
+  .stars i.on{ color:#ffc21f; text-shadow:0 0 16px rgba(255,190,0,0.6); animation:star .5s cubic-bezier(.2,.9,.3,1.5) backwards; }
+  .stars i.on:nth-child(2){ animation-delay:.15s; }
+  .stars i.on:nth-child(3){ animation-delay:.3s; }
+  @keyframes star{ from{ transform:scale(0) rotate(-45deg); } }
+  .big{ font:400 44px/1 var(--display); color:var(--ink); margin:2px 0 14px; }
+  .row{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  .btn{
+    font:400 21px var(--display);
+    letter-spacing:0.5px;
+    border:none;
+    border-radius:18px;
+    padding:13px 26px;
+    color:#fff;
+    background:linear-gradient(180deg, #ff7eb6, #e8457f);
+    box-shadow:0 6px 0 #b82d61;
+    cursor:pointer;
+    text-shadow:0 2px 0 rgba(0,0,0,0.15);
+    transition:transform .08s ease;
+  }
+  .btn:active{ transform:translateY(4px); box-shadow:0 2px 0 #b82d61; }
+  .btn:focus-visible{ outline:3px solid #5a2a55; outline-offset:3px; }
+  .btn.alt{ background:linear-gradient(180deg, #b28dff, #8a5cf0); box-shadow:0 6px 0 #5f36b8; }
+  .btn.alt:active{ box-shadow:0 2px 0 #5f36b8; }
+
+  /* level map */
+  .pager{ display:flex; align-items:center; justify-content:center; gap:10px; margin:0 0 12px; }
+  .pager button{ width:40px; height:36px; border-radius:12px; border:none; background:#ffe3f1; font-size:18px; cursor:pointer; }
+  .pager button:disabled{ opacity:0.3; cursor:default; }
+  .pager span{ min-width:110px; font-weight:600; }
+  .lvgrid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(54px, 1fr)); gap:8px; margin-bottom:16px; }
+  .lvbtn{
+    aspect-ratio:1;
+    border:none;
+    border-radius:16px;
+    background:#ffe3f1;
+    font:400 19px var(--display);
+    cursor:pointer;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:1px;
+    padding:0;
+    box-shadow:0 3px 0 rgba(184,45,97,0.2);
+  }
+  .lvbtn small{ font-size:10px; color:#e0a800; min-height:12px; letter-spacing:1px; }
+  .lvbtn.done{ background:#ffd0e6; }
+  .lvbtn.cur{ outline:3px solid #e8457f; }
+  .lvbtn:disabled{ opacity:0.35; cursor:default; }
+  .lvbtn:focus-visible{ outline:3px solid #5a2a55; }
+
+  @media (max-width:520px){
+    .top{ gap:6px; padding-left:8px; padding-right:8px; }
+    .back{ padding:9px 10px; font-size:14px; }
+    .level{ font-size:18px; padding:8px 12px; }
+    .round{ width:36px; height:36px; font-size:15px; }
+    .box b{ font-size:26px; }
+    .box.moves{ flex-basis:70px; }
+    .box.score b{ font-size:19px; }
+    .goal-item{ font-size:17px; }
+    .goal-item canvas{ width:24px; height:24px; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div class="top">
+  <a class="back chip" href="../" aria-label="Back to games">&lsaquo; Games</a>
+  <div class="spacer"></div>
+  <button type="button" class="level chip" id="lv" aria-label="Pick a level">Level 1</button>
+  <div class="spacer"></div>
+  <button type="button" class="round chip" id="hint-btn" aria-label="Show a hint">💡</button>
+  <button type="button" class="round chip" id="mute" aria-label="Sound on" aria-pressed="false">🔊</button>
+</div>
+
+<div class="status" id="status">
+  <div class="box moves"><small>Moves</small><b id="moves">20</b></div>
+  <div class="box goal"><small id="goal-label">Goal</small><div class="goal-list" id="goal"></div></div>
+  <div class="box score">
+    <small>Score</small><b id="score">0</b>
+    <div class="bar"><i id="bar"></i><span id="st1">★</span><span id="st2">★</span><span id="st3">★</span></div>
+  </div>
+</div>
+
+<div class="overlay" id="intro" hidden>
+  <div class="card">
+    <h2 id="in-title">Level 1</h2>
+    <p id="in-text">Reach the target score</p>
+    <div class="goal-list" id="in-goal"></div>
+    <p id="in-moves">in 20 moves</p>
+    <button type="button" class="btn" id="in-play">▶ Play</button>
+  </div>
+</div>
+
+<div class="overlay" id="win" hidden>
+  <div class="card">
+    <div class="stars" id="win-stars"><i>★</i><i>★</i><i>★</i></div>
+    <h2 id="win-title">Sweet!</h2>
+    <div class="big" id="win-score">0</div>
+    <div class="row">
+      <button type="button" class="btn alt" id="win-replay">Replay</button>
+      <button type="button" class="btn" id="win-next">Next level ›</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="lose" hidden>
+  <div class="card">
+    <h2>Out of moves!</h2>
+    <p id="lose-text">So close!</p>
+    <div class="row">
+      <button type="button" class="btn alt" id="lose-levels">Levels</button>
+      <button type="button" class="btn" id="lose-retry">↻ Try again</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="levels" hidden>
+  <div class="card wide">
+    <h2>Levels</h2>
+    <p id="lv-note">New levels forever!</p>
+    <div class="pager">
+      <button type="button" id="pg-prev" aria-label="Earlier levels">‹</button>
+      <span id="pg-label">1 – 60</span>
+      <button type="button" id="pg-next" aria-label="Later levels">›</button>
+    </div>
+    <div class="lvgrid" id="lvgrid"></div>
+    <button type="button" class="btn alt" id="lv-close">Close</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ---------- helpers ----------
+  function clamp(v, a, b){ return v < a ? a : v > b ? b : v; }
+  function rnd(){ return Math.random(); }
+  function $(id){ return document.getElementById(id); }
+  function load(k, d){ try { var v = localStorage.getItem(k); return v === null ? d : v; } catch(e){ return d; } }
+  function save(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
+  function fmt(n){ return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function mulberry(a){
+    return function(){
+      a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // ---------- sound ----------
+  var actx = null, master = null, muted = load('sweet.muted', '0') === '1', lastSfx = {};
+  function audio(){
+    if(!actx){
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if(AC){
+        try {
+          actx = new AC();
+          master = actx.createGain();
+          master.gain.value = 0.7;
+          master.connect(actx.destination);
+        } catch(e){ actx = null; }
+      }
+    }
+    if(actx && actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function tone(f0, f1, dur, type, vol, delay, key, gap){
+    if(muted || simulating) return;
+    var a = audio();
+    if(!a) return;
+    if(key){
+      if(lastSfx[key] !== undefined && a.currentTime - lastSfx[key] < (gap || 0.04)) return;
+      lastSfx[key] = a.currentTime;
+    }
+    var t0 = a.currentTime + (delay || 0), o = a.createOscillator(), g = a.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t0);
+    o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(master);
+    o.start(t0); o.stop(t0 + dur + 0.05);
+  }
+  var POP_NOTES = [523, 587, 659, 784, 880, 1047, 1175, 1319];
+  var sfx = {
+    select: function(){ tone(660, 880, 0.06, 'sine', 0.05); },
+    swap:   function(){ tone(420, 620, 0.1, 'triangle', 0.05); },
+    nope:   function(){ tone(260, 180, 0.12, 'triangle', 0.06); tone(200, 150, 0.12, 'triangle', 0.05, 0.1); },
+    pop:    function(combo){ var f = POP_NOTES[clamp(combo - 1, 0, POP_NOTES.length - 1)]; tone(f, f * 1.5, 0.12, 'sine', 0.08, 0, 'pop', 0.05); tone(f * 2, f * 2.2, 0.08, 'triangle', 0.03, 0.02); },
+    striped:function(){ tone(900, 2400, 0.25, 'sawtooth', 0.035, 0, 'zap', 0.1); },
+    wrapped:function(){ tone(160, 60, 0.35, 'sine', 0.14, 0, 'boom', 0.1); },
+    bomb:   function(){ [1047, 1319, 1568, 2093].forEach(function(f, i){ tone(f, f * 0.8, 0.15, 'triangle', 0.05, i * 0.05); }); },
+    make:   function(){ tone(700, 1400, 0.18, 'triangle', 0.06); },
+    shuffle:function(){ [400, 500, 600, 500, 400].forEach(function(f, i){ tone(f, f, 0.06, 'sine', 0.04, i * 0.05); }); },
+    win:    function(){ [523, 659, 784, 1047, 1319, 1568].forEach(function(f, i){ tone(f, f, 0.22, 'triangle', 0.07, i * 0.09); }); },
+    lose:   function(){ [440, 392, 349, 262].forEach(function(f, i){ tone(f, f * 0.97, 0.26, 'triangle', 0.07, i * 0.15); }); },
+    click:  function(){ tone(700, 900, 0.05, 'triangle', 0.05); }
+  };
+
+  var muteBtn = $('mute');
+  function renderMute(){
+    muteBtn.textContent = muted ? '🔈' : '🔊';
+    muteBtn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+    muteBtn.setAttribute('aria-label', muted ? 'Sound off' : 'Sound on');
+  }
+  muteBtn.addEventListener('click', function(){
+    muted = !muted;
+    save('sweet.muted', muted ? '1' : '0');
+    renderMute();
+    if(!muted) sfx.click();
+    muteBtn.blur();
+  });
+
+  // ---------- candies ----------
+  // each colour has its own shape too, so they're easy to tell apart
+  var CANDY = [
+    { name: 'red',    light: '#ff9aa9', base: '#ff3b5c', dark: '#c81e3e' },
+    { name: 'orange', light: '#ffc57a', base: '#ff8c1a', dark: '#cc5f08' },
+    { name: 'yellow', light: '#fff29a', base: '#ffd21f', dark: '#d19d00' },
+    { name: 'green',  light: '#9af29a', base: '#35c84a', dark: '#1d8a31' },
+    { name: 'blue',   light: '#9fd6ff', base: '#2f8cff', dark: '#1a5bc4' },
+    { name: 'purple', light: '#dcb0ff', base: '#a454ff', dark: '#6f22cc' }
+  ];
+
+  function shapePath(g, t, cx, cy, R){
+    g.beginPath();
+    if(t === 0){
+      // jelly bean
+      g.save(); g.translate(cx, cy); g.rotate(-0.4);
+      var w = R * 1.9, h = R * 1.15, r = h / 2;
+      g.moveTo(-w / 2 + r, -h / 2); g.lineTo(w / 2 - r, -h / 2); g.arc(w / 2 - r, 0, r, -Math.PI / 2, Math.PI / 2);
+      g.lineTo(-w / 2 + r, h / 2); g.arc(-w / 2 + r, 0, r, Math.PI / 2, Math.PI * 1.5);
+      g.restore();
+    } else if(t === 1){
+      g.arc(cx, cy, R * 0.92, 0, Math.PI * 2);
+    } else if(t === 2){
+      for(var k = 0; k < 10; k++){
+        var a = -Math.PI / 2 + k * Math.PI / 5, rr = k % 2 ? R * 0.5 : R * 1.02;
+        if(k) g.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); else g.moveTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+      }
+      g.closePath();
+    } else if(t === 3){
+      var s = R * 1.6, q = R * 0.4, x0 = cx - s / 2, y0 = cy - s / 2;
+      g.moveTo(x0 + q, y0); g.lineTo(x0 + s - q, y0); g.quadraticCurveTo(x0 + s, y0, x0 + s, y0 + q);
+      g.lineTo(x0 + s, y0 + s - q); g.quadraticCurveTo(x0 + s, y0 + s, x0 + s - q, y0 + s);
+      g.lineTo(x0 + q, y0 + s); g.quadraticCurveTo(x0, y0 + s, x0, y0 + s - q);
+      g.lineTo(x0, y0 + q); g.quadraticCurveTo(x0, y0, x0 + q, y0);
+    } else if(t === 4){
+      // a drop
+      g.moveTo(cx, cy - R * 1.05);
+      g.bezierCurveTo(cx + R * 0.35, cy - R * 0.5, cx + R * 0.9, cy - R * 0.05, cx + R * 0.9, cy + R * 0.3);
+      g.arc(cx, cy + R * 0.3, R * 0.9, 0, Math.PI);
+      g.bezierCurveTo(cx - R * 0.9, cy - R * 0.05, cx - R * 0.35, cy - R * 0.5, cx, cy - R * 1.05);
+    } else {
+      // a heart
+      g.moveTo(cx, cy + R * 0.9);
+      g.bezierCurveTo(cx - R * 1.4, cy - R * 0.1, cx - R * 0.7, cy - R * 1.2, cx, cy - R * 0.45);
+      g.bezierCurveTo(cx + R * 0.7, cy - R * 1.2, cx + R * 1.4, cy - R * 0.1, cx, cy + R * 0.9);
+    }
+    g.closePath();
+  }
+
+  function paintCandy(g, t, cx, cy, R){
+    var col = CANDY[t], grd = g.createLinearGradient(cx - R, cy - R, cx + R, cy + R);
+    grd.addColorStop(0, col.light);
+    grd.addColorStop(0.45, col.base);
+    grd.addColorStop(1, col.dark);
+    shapePath(g, t, cx, cy, R);
+    g.fillStyle = grd;
+    g.fill();
+    g.lineWidth = Math.max(1.5, R * 0.1);
+    g.lineJoin = 'round';
+    g.strokeStyle = col.dark;
+    g.stroke();
+    if(t === 1){
+      g.strokeStyle = 'rgba(255,255,255,0.7)';
+      g.lineWidth = R * 0.14;
+      g.beginPath(); g.arc(cx, cy, R * 0.45, 0.3, Math.PI * 1.4); g.stroke();
+    }
+    g.fillStyle = 'rgba(255,255,255,0.6)';
+    g.beginPath(); g.ellipse(cx - R * 0.32, cy - R * 0.38, R * 0.28, R * 0.16, -0.6, 0, Math.PI * 2); g.fill();
+  }
+
+  var spriteCache = {};
+  function sprite(t, sp, S){
+    var key = t + '|' + sp + '|' + S, cv0 = spriteCache[key];
+    if(cv0) return cv0;
+    cv0 = document.createElement('canvas');
+    cv0.width = cv0.height = S;
+    var g = cv0.getContext('2d'), cx = S / 2, cy = S / 2, R = S * 0.36;
+    if(sp === 'c'){
+      // colour bomb: a chocolate ball covered in sprinkles
+      var gr = g.createRadialGradient(cx - R * 0.3, cy - R * 0.3, R * 0.1, cx, cy, R * 1.05);
+      gr.addColorStop(0, '#8a5a3a');
+      gr.addColorStop(1, '#3b2012');
+      g.fillStyle = gr;
+      g.beginPath(); g.arc(cx, cy, R * 1.02, 0, Math.PI * 2); g.fill();
+      var sr = mulberry(7), cols = ['#ff3b5c', '#ffd21f', '#35c84a', '#2f8cff', '#a454ff', '#ffffff', '#ff8c1a'];
+      for(var k = 0; k < 22; k++){
+        var a = sr() * Math.PI * 2, d = Math.sqrt(sr()) * R * 0.85, rot = sr() * Math.PI;
+        g.save(); g.translate(cx + Math.cos(a) * d, cy + Math.sin(a) * d); g.rotate(rot);
+        g.fillStyle = cols[k % cols.length];
+        g.fillRect(-R * 0.13, -R * 0.045, R * 0.26, R * 0.09);
+        g.restore();
+      }
+      g.fillStyle = 'rgba(255,255,255,0.35)';
+      g.beginPath(); g.ellipse(cx - R * 0.35, cy - R * 0.4, R * 0.3, R * 0.16, -0.6, 0, Math.PI * 2); g.fill();
+    } else if(sp === 'w'){
+      // wrapped: the candy sits in a shiny wrapper with twisted ends
+      var col = CANDY[t];
+      g.fillStyle = col.light;
+      g.strokeStyle = col.dark;
+      g.lineWidth = Math.max(1.5, R * 0.08);
+      g.beginPath(); g.moveTo(cx - R * 0.9, cy); g.lineTo(cx - R * 1.35, cy - R * 0.45); g.lineTo(cx - R * 1.35, cy + R * 0.45); g.closePath(); g.fill(); g.stroke();
+      g.beginPath(); g.moveTo(cx + R * 0.9, cy); g.lineTo(cx + R * 1.35, cy - R * 0.45); g.lineTo(cx + R * 1.35, cy + R * 0.45); g.closePath(); g.fill(); g.stroke();
+      g.beginPath(); g.arc(cx, cy, R * 0.98, 0, Math.PI * 2);
+      g.fillStyle = col.light; g.fill(); g.stroke();
+      paintCandy(g, t, cx, cy, R * 0.68);
+      g.strokeStyle = 'rgba(255,255,255,0.8)';
+      g.lineWidth = R * 0.08;
+      g.beginPath(); g.arc(cx, cy, R * 0.86, -2.6, -1.4); g.stroke();
+    } else {
+      paintCandy(g, t, cx, cy, R);
+      if(sp === 'h' || sp === 'v'){
+        // stripes show which way it will blast
+        g.save();
+        shapePath(g, t, cx, cy, R);
+        g.clip();
+        g.fillStyle = 'rgba(255,255,255,0.75)';
+        for(var s = -2; s <= 2; s++){
+          if(sp === 'h') g.fillRect(cx - R * 1.5, cy + s * R * 0.42 - R * 0.09, R * 3, R * 0.18);
+          else g.fillRect(cx + s * R * 0.42 - R * 0.09, cy - R * 1.5, R * 0.18, R * 3);
+        }
+        g.restore();
+        shapePath(g, t, cx, cy, R);
+        g.strokeStyle = CANDY[t].dark;
+        g.lineWidth = Math.max(1.5, R * 0.1);
+        g.stroke();
+      }
+    }
+    spriteCache[key] = cv0;
+    return cv0;
+  }
+
+  // ---------- levels ----------
+  // odd levels: reach a score; every third level: collect candies of two colours
+  function levelInfo(n){
+    var colours = n <= 3 ? 5 : 6;
+    var moves = clamp(26 - Math.floor(n / 3), 16, 26);
+    var kind = n % 3 === 2 ? 'collect' : 'score';
+    var info = { n: n, colours: colours, moves: moves, kind: kind };
+    // these numbers come from simulating thousands of moves: roughly what random moves earn,
+    // so early levels are easy wins and later ones need some clever swaps
+    var perMove = colours === 5 ? 950 : 430, perColour = colours === 5 ? 1.45 : 0.66;
+    if(kind === 'score'){
+      var ramp = clamp(0.5 + n * 0.015, 0.5, 0.95);
+      var target = Math.round(perMove * moves * ramp / 100) * 100;
+      info.target = target;
+      info.stars = [target, Math.round(target * 1.35 / 100) * 100, Math.round(target * 1.75 / 100) * 100];
+    } else {
+      var r = mulberry(n * 131 + 7), a = Math.floor(r() * colours), b = a;
+      while(b === a) b = Math.floor(r() * colours);
+      var count = Math.max(8, Math.round(moves * perColour * clamp(0.55 + n * 0.012, 0.55, 0.95)));
+      info.collect = [{ t: a, n: count }, { t: b, n: count }];
+      var base = Math.round(perMove * moves * 0.6 / 100) * 100;
+      info.stars = [0, base, Math.round(base * 1.5 / 100) * 100];
+    }
+    return info;
+  }
+
+  // ---------- the board: just the rules, no drawing ----------
+  var N = 8, K = 6, board = [], nextId = 1, simulating = false;
+  var score = 0, movesLeft = 0, collected = [0, 0, 0, 0, 0, 0], combo = 0;
+
+  function idx(c, r){ return r * N + c; }
+  function colOf(i){ return i % N; }
+  function rowOf(i){ return (i / N) | 0; }
+  function newCandy(t, sp){ return { t: t, sp: sp || '', id: nextId++, x: 0, y: 0, vy: 0, s: 1, used: false }; }
+  // a colour bomb has no colour, so it never lines up with anything
+  function colorAt(i){ var k = board[i]; return k && k.sp !== 'c' ? k.t : -1; }
+  function randType(){ return Math.floor(rnd() * K); }
+  function adjacentCells(a, b){ return Math.abs(colOf(a) - colOf(b)) + Math.abs(rowOf(a) - rowOf(b)) === 1; }
+  function swapCells(a, b){ var t = board[a]; board[a] = board[b]; board[b] = t; }
+
+  // a fresh board with no lines already made and at least one move
+  function fillBoard(){
+    for(var tries = 0; tries < 300; tries++){
+      board = new Array(N * N);
+      for(var r = 0; r < N; r++){
+        for(var c = 0; c < N; c++){
+          var t, guard = 0;
+          do { t = randType(); } while(guard++ < 30 && (
+            (c >= 2 && colorAt(idx(c - 1, r)) === t && colorAt(idx(c - 2, r)) === t) ||
+            (r >= 2 && colorAt(idx(c, r - 1)) === t && colorAt(idx(c, r - 2)) === t)));
+          var k = newCandy(t);
+          k.x = c;
+          k.y = r;
+          board[idx(c, r)] = k;
+        }
+      }
+      if(!findRuns().length && findMove()) return;
+    }
+  }
+
+  // every straight line of 3 or more of one colour
+  function findRuns(){
+    var runs = [], c, r, t, e, k, cells;
+    for(r = 0; r < N; r++){
+      c = 0;
+      while(c < N){
+        t = colorAt(idx(c, r));
+        e = c;
+        if(t >= 0) while(e + 1 < N && colorAt(idx(e + 1, r)) === t) e++;
+        if(t >= 0 && e - c >= 2){ cells = []; for(k = c; k <= e; k++) cells.push(idx(k, r)); runs.push({ dir: 'h', t: t, cells: cells }); }
+        c = e + 1;
+      }
+    }
+    for(c = 0; c < N; c++){
+      r = 0;
+      while(r < N){
+        t = colorAt(idx(c, r));
+        e = r;
+        if(t >= 0) while(e + 1 < N && colorAt(idx(c, e + 1)) === t) e++;
+        if(t >= 0 && e - r >= 2){ cells = []; for(k = r; k <= e; k++) cells.push(idx(c, k)); runs.push({ dir: 'v', t: t, cells: cells }); }
+        r = e + 1;
+      }
+    }
+    return runs;
+  }
+
+  // lines of the same colour that touch make one group (that's how L and T shapes happen)
+  function groupRuns(runs){
+    var groups = [];
+    runs.forEach(function(run){
+      var merged = { t: run.t, runs: [run], set: {} };
+      run.cells.forEach(function(i){ merged.set[i] = true; });
+      groups = groups.filter(function(g){
+        if(g.t !== run.t || !run.cells.some(function(i){ return g.set[i]; })) return true;
+        g.runs.forEach(function(rr){ merged.runs.push(rr); });
+        Object.keys(g.set).forEach(function(i){ merged.set[i] = true; });
+        return false;
+      });
+      groups.push(merged);
+    });
+    groups.forEach(function(g){
+      g.cells = Object.keys(g.set).map(Number);
+      var maxLen = 0, hasH = false, hasV = false;
+      g.runs.forEach(function(rr){ maxLen = Math.max(maxLen, rr.cells.length); if(rr.dir === 'h') hasH = true; else hasV = true; });
+      g.kind = maxLen >= 5 ? 'five' : hasH && hasV ? 'lt' : maxLen === 4 ? 'four' : 'three';
+    });
+    return groups;
+  }
+
+  // which squares get cleared, and which special candies get made
+  function planClear(groups, swapped){
+    var clear = {}, create = [];
+    groups.forEach(function(g){
+      g.cells.forEach(function(i){ clear[i] = true; });
+      if(g.kind === 'three') return;
+      var sp = g.kind === 'five' ? 'c' : g.kind === 'lt' ? 'w' : '', at = -1;
+      if(g.kind === 'four'){
+        var run4 = g.runs.filter(function(rr){ return rr.cells.length === 4; })[0];
+        // matching 4 across makes a candy that blasts a column, and the other way round
+        sp = run4.dir === 'h' ? 'v' : 'h';
+      }
+      if(swapped) swapped.forEach(function(i){ if(at < 0 && g.set[i]) at = i; });
+      if(at < 0 && g.kind === 'lt'){
+        var hs = {}, vs = {};
+        g.runs.forEach(function(rr){ rr.cells.forEach(function(i){ (rr.dir === 'h' ? hs : vs)[i] = true; }); });
+        for(var key in hs) if(vs[key]){ at = +key; break; }
+      }
+      if(at < 0){
+        var longest = g.runs.slice().sort(function(a, b){ return b.cells.length - a.cells.length; })[0];
+        at = longest.cells[Math.floor(longest.cells.length / 2)];
+      }
+      create.push({ i: at, t: g.t, sp: sp });
+    });
+    return { clear: clear, create: create, fx: [], bonus: 0 };
+  }
+
+  function commonColour(){
+    var n = [0, 0, 0, 0, 0, 0], best = 0;
+    board.forEach(function(q){ if(q && q.sp !== 'c' && q.t < 6) n[q.t]++; });
+    for(var t = 1; t < 6; t++) if(n[t] > n[best]) best = t;
+    return best;
+  }
+
+  function blastCells(i, k){
+    var c = colOf(i), r = rowOf(i), out = [], x, y;
+    if(k.sp === 'h') for(x = 0; x < N; x++) out.push(idx(x, r));
+    else if(k.sp === 'v') for(y = 0; y < N; y++) out.push(idx(c, y));
+    else if(k.sp === 'w'){ for(y = r - 1; y <= r + 1; y++) for(x = c - 1; x <= c + 1; x++) if(x >= 0 && y >= 0 && x < N && y < N) out.push(idx(x, y)); }
+    else if(k.sp === 'c'){
+      // a colour bomb caught in a blast clears the commonest colour
+      var t = commonColour();
+      board.forEach(function(q, j){ if(q && q.sp !== 'c' && q.t === t) out.push(j); });
+      out.push(i);
+    }
+    return out;
+  }
+
+  // special candies caught in the clear go off, which can set off more
+  function expandBlasts(clear, fx){
+    var queue = Object.keys(clear).map(Number), fired = {};
+    while(queue.length){
+      var i = queue.pop();
+      if(fired[i]) continue;
+      var k = board[i];
+      if(!k || !k.sp || k.used) continue;
+      fired[i] = true;
+      var cells = blastCells(i, k);
+      fx.push({ kind: k.sp, i: i, t: k.t, cells: cells });
+      for(var j = 0; j < cells.length; j++){ clear[cells[j]] = true; if(!fired[cells[j]]) queue.push(cells[j]); }
+    }
+  }
+
+  function matchPlan(swapped){
+    var groups = groupRuns(findRuns());
+    if(!groups.length) return null;
+    var plan = planClear(groups, swapped);
+    plan.groups = groups;
+    expandBlasts(plan.clear, plan.fx);
+    return plan;
+  }
+
+  // swapping a colour bomb, or two specials together, sets off something big
+  function specialSwap(a, b){
+    var ka = board[a], kb = board[b];
+    if(!ka || !kb) return null;
+    var plan = { clear: {}, create: [], fx: [], bonus: 0 }, x, y, i;
+    function mark(j){ plan.clear[j] = true; }
+    if(ka.sp === 'c' || kb.sp === 'c'){
+      var bi = ka.sp === 'c' ? a : b, oi = bi === a ? b : a, other = board[oi];
+      if(other.sp === 'c'){
+        for(i = 0; i < N * N; i++) mark(i);
+        ka.used = kb.used = true;
+        plan.fx.push({ kind: 'nuke', i: b, cells: [] });
+        plan.bonus = 3000;
+      } else {
+        var t = other.t, targets = [];
+        board.forEach(function(q, j){ if(q && q.sp !== 'c' && q.t === t) targets.push(j); });
+        targets.forEach(function(j){
+          var q = board[j];
+          if(other.sp === 'h' || other.sp === 'v') q.sp = rnd() < 0.5 ? 'h' : 'v';
+          else if(other.sp === 'w') q.sp = 'w';
+          mark(j);
+        });
+        board[bi].used = true;
+        mark(bi);
+        plan.fx.push({ kind: 'bomb', i: bi, cells: targets });
+        plan.bonus = 1000;
+      }
+    } else if(ka.sp && kb.sp){
+      var sa = ka.sp === 'h' || ka.sp === 'v', sb = kb.sp === 'h' || kb.sp === 'v', cb = colOf(b), rb = rowOf(b);
+      ka.used = kb.used = true;
+      mark(a);
+      mark(b);
+      if(sa && sb){
+        for(x = 0; x < N; x++) mark(idx(x, rb));
+        for(y = 0; y < N; y++) mark(idx(cb, y));
+        plan.fx.push({ kind: 'h', i: b, cells: [] }, { kind: 'v', i: b, cells: [] });
+      } else if(sa || sb){
+        for(var d = -1; d <= 1; d++){
+          if(rb + d >= 0 && rb + d < N) for(x = 0; x < N; x++) mark(idx(x, rb + d));
+          if(cb + d >= 0 && cb + d < N) for(y = 0; y < N; y++) mark(idx(cb + d, y));
+        }
+        plan.fx.push({ kind: 'big', i: b, cells: [] });
+      } else {
+        for(y = rb - 2; y <= rb + 2; y++) for(x = cb - 2; x <= cb + 2; x++) if(x >= 0 && y >= 0 && x < N && y < N) mark(idx(x, y));
+        plan.fx.push({ kind: 'w2', i: b, cells: [] });
+      }
+      plan.bonus = 600;
+    } else return null;
+    expandBlasts(plan.clear, plan.fx);
+    return plan;
+  }
+
+  function removeCells(plan){
+    var removed = [];
+    Object.keys(plan.clear).forEach(function(key){
+      var i = +key, k = board[i];
+      if(!k) return;
+      removed.push({ k: k, i: i });
+      board[i] = null;
+      if(k.sp !== 'c' && k.t >= 0 && k.t < 6) collected[k.t]++;
+    });
+    plan.create.forEach(function(cr){
+      var k = newCandy(cr.t, cr.sp);
+      k.x = colOf(cr.i);
+      k.y = rowOf(cr.i);
+      k.s = 0.2;
+      board[cr.i] = k;
+    });
+    var pts = removed.length * 60 * Math.max(1, combo) + plan.create.length * 200 + (plan.bonus || 0);
+    score += pts;
+    return { removed: removed, pts: pts };
+  }
+
+  // candies drop into the gaps and new ones fall in from the top
+  function applyGravity(){
+    for(var c = 0; c < N; c++){
+      var write = N - 1, r;
+      for(r = N - 1; r >= 0; r--){
+        var k = board[idx(c, r)];
+        if(k){
+          if(r !== write){ board[idx(c, write)] = k; board[idx(c, r)] = null; }
+          write--;
+        }
+      }
+      for(r = write; r >= 0; r--){
+        var nk = newCandy(randType());
+        nk.x = c;
+        nk.y = r - (write + 1) - 0.3;
+        board[idx(c, r)] = nk;
+      }
+    }
+  }
+
+  function isValidSwap(a, b){
+    var ka = board[a], kb = board[b];
+    if(!ka || !kb || !adjacentCells(a, b)) return false;
+    if(ka.sp === 'c' || kb.sp === 'c') return true;
+    if(ka.sp && kb.sp) return true;
+    swapCells(a, b);
+    var ok = findRuns().length > 0;
+    swapCells(a, b);
+    return ok;
+  }
+
+  function findMove(){
+    for(var i = 0; i < N * N; i++){
+      if(colOf(i) < N - 1 && isValidSwap(i, i + 1)) return [i, i + 1];
+      if(rowOf(i) < N - 1 && isValidSwap(i, i + N)) return [i, i + N];
+    }
+    return null;
+  }
+
+  // no moves left: mix the candies up (keeping any specials) until there's a move again
+  function shuffleBoard(){
+    var list = board.slice();
+    for(var tries = 0; tries < 300; tries++){
+      for(var k = list.length - 1; k > 0; k--){ var j = Math.floor(rnd() * (k + 1)), tmp = list[k]; list[k] = list[j]; list[j] = tmp; }
+      board = list.slice();
+      if(!findRuns().length && findMove()) return;
+    }
+    fillBoard();
+  }
+
+  // plays a move straight through with no animation (used to test the rules)
+  function resolveSync(plan){
+    var steps = 0;
+    combo = 0;
+    while(plan && steps < 200){
+      steps++;
+      combo++;
+      removeCells(plan);
+      applyGravity();
+      plan = matchPlan(null);
+    }
+    board.forEach(function(k, i){ if(k){ k.x = colOf(i); k.y = rowOf(i); k.s = 1; k.vy = 0; } });
+    return steps;
+  }
+
+  // ---------- the screen ----------
+  var cv = $('c'), cx = cv.getContext('2d');
+  var W = 0, H = 0, DPR = 1, BX = 0, BY = 0, CS = 40;
+
+  // ---------- playing a level ----------
+  var level = 1, info = null, phase = 'idle';   // idle | swap | back | pop | fall | over
+  var sel = -1, hint = null, idleT = 0, swapAnim = null, popT = 0, popLen = 0.22, finale = false;
+  var popping = [], fxList = [], texts = [], parts = [], drag = null;
+  var progress = { max: 1, cur: 1, stars: {} };
+
+  function loadProgress(){
+    try {
+      var p = JSON.parse(load('sweet.progress', 'null'));
+      if(p && p.max >= 1){
+        progress.max = Math.floor(p.max);
+        progress.cur = clamp(Math.floor(p.cur) || 1, 1, progress.max);
+        progress.stars = p.stars && typeof p.stars === 'object' ? p.stars : {};
+      }
+    } catch(e){}
+  }
+  function saveProgress(){ save('sweet.progress', JSON.stringify(progress)); }
+
+  function startLevel(n){
+    level = n;
+    info = levelInfo(n);
+    K = info.colours;
+    score = 0;
+    movesLeft = info.moves;
+    collected = [0, 0, 0, 0, 0, 0];
+    combo = 0;
+    finale = false;
+    sel = -1;
+    hint = null;
+    idleT = 0;
+    popping = []; fxList = []; texts = []; parts = [];
+    fillBoard();
+    // candies rain down onto the board
+    board.forEach(function(k, i){ k.x = colOf(i); k.y = rowOf(i) - N - 1 - rnd() * 0.6; k.vy = 0; });
+    phase = 'fall';
+    progress.cur = n;
+    saveProgress();
+    ['win', 'lose', 'levels'].forEach(function(id){ $(id).hidden = true; });
+    layout();
+    buildGoal();
+    updateHud();
+    showIntro();
+  }
+
+  function goalMet(){
+    if(info.kind === 'score') return score >= info.target;
+    return info.collect.every(function(g){ return collected[g.t] >= g.n; });
+  }
+
+  function starsEarned(){
+    if(info.kind === 'score') return score >= info.stars[2] ? 3 : score >= info.stars[1] ? 2 : score >= info.stars[0] ? 1 : 0;
+    if(!goalMet()) return 0;
+    return score >= info.stars[2] ? 3 : score >= info.stars[1] ? 2 : 1;
+  }
+
+  // ---------- a move, step by step ----------
+  function trySwap(a, b){
+    if(phase !== 'idle' || a < 0 || b < 0 || !adjacentCells(a, b)) return;
+    sel = -1;
+    hint = null;
+    idleT = 0;
+    var valid = isValidSwap(a, b);
+    swapCells(a, b);
+    swapAnim = { a: a, b: b, t: 0, valid: valid };
+    phase = 'swap';
+    sfx.swap();
+  }
+
+  function startStep(plan){
+    combo++;
+    var res = removeCells(plan);
+    res.removed.forEach(function(rm){
+      popping.push({ k: rm.k, i: rm.i, t: 0 });
+      if(rm.k.sp !== 'c') burstAt(rm.i, CANDY[rm.k.t].base, 5);
+      else burstAt(rm.i, '#ffffff', 10);
+    });
+    var big = false;
+    plan.fx.forEach(function(f){
+      fxList.push({ kind: f.kind, i: f.i, t: 0, cells: f.cells || [] });
+      if(f.kind === 'h' || f.kind === 'v') sfx.striped();
+      else if(f.kind === 'w' || f.kind === 'w2' || f.kind === 'big' || f.kind === 'nuke'){ sfx.wrapped(); big = true; }
+      else if(f.kind === 'bomb' || f.kind === 'c'){ sfx.bomb(); big = true; }
+    });
+    if(plan.groups){
+      plan.groups.forEach(function(g){
+        var sx = 0, sy = 0;
+        g.cells.forEach(function(i){ sx += colOf(i); sy += rowOf(i); });
+        addText(sx / g.cells.length, sy / g.cells.length, '+' + fmt(g.cells.length * 60 * combo), CANDY[g.t].dark, 0.5);
+      });
+    } else if(plan.fx.length){
+      var f0 = plan.fx[0];
+      addText(colOf(f0.i), rowOf(f0.i), '+' + fmt(res.pts), '#e8457f', 0.7);
+    }
+    if(plan.create.length) sfx.make();
+    sfx.pop(combo);
+    if(combo >= 2 && !finale) comboWord(combo);
+    popLen = big ? 0.42 : 0.22;
+    popT = 0;
+    phase = 'pop';
+    updateHud();
+  }
+
+  var WORDS = ['', '', 'Sweet!', 'Tasty!', 'Delicious!', 'Divine!', 'Sugar Rush!'];
+  function comboWord(n){ addText(3.5, 3.2, WORDS[Math.min(n, WORDS.length - 1)], '#ff5fa2', 1.4, true); }
+
+  function endMove(){
+    combo = 0;
+    if(finale){ finaleTick(); return; }
+    if(goalMet()){ startFinale(); return; }
+    if(movesLeft <= 0){ lose(); return; }
+    if(!findMove()){
+      shuffleBoard();
+      addText(3.5, 3.5, 'No moves! Shuffle!', '#8a5cf0', 1.3, true);
+      sfx.shuffle();
+      phase = 'fall';
+      return;
+    }
+    phase = 'idle';
+    idleT = 0;
+  }
+
+  // leftover moves turn into striped candies that go off, one after another
+  function startFinale(){
+    finale = true;
+    addText(3.5, 3.2, movesLeft > 0 ? 'Sugar Rush!' : 'Sweet!', '#ff5fa2', 1.6, true);
+    sfx.win();
+    finaleTick();
+  }
+
+  function finaleTick(){
+    if(movesLeft > 0){
+      var plain = [];
+      board.forEach(function(k, i){ if(k && !k.sp) plain.push(i); });
+      if(plain.length){
+        movesLeft--;
+        var i = plain[Math.floor(rnd() * plain.length)];
+        board[i].sp = rnd() < 0.5 ? 'h' : 'v';
+        var plan = { clear: {}, create: [], fx: [], bonus: 300 };
+        plan.clear[i] = true;
+        expandBlasts(plan.clear, plan.fx);
+        updateHud();
+        startStep(plan);
+        return;
+      }
+    }
+    // then any specials still on the board go off too
+    var left = { clear: {}, create: [], fx: [], bonus: 0 }, any = false;
+    board.forEach(function(k, i){ if(k && k.sp){ left.clear[i] = true; any = true; } });
+    if(any){ expandBlasts(left.clear, left.fx); startStep(left); return; }
+    win();
+  }
+
+  function win(){
+    phase = 'over';
+    finale = false;
+    var st = Math.max(1, starsEarned());
+    progress.stars[level] = Math.max(progress.stars[level] || 0, st);
+    progress.max = Math.max(progress.max, level + 1);
+    saveProgress();
+    updateHud();
+    setTimeout(function(){
+      if(phase !== 'over') return;
+      var el = $('win-stars').children;
+      for(var i = 0; i < 3; i++) el[i].className = i < st ? 'on' : '';
+      $('win-title').textContent = st === 3 ? 'Divine!' : st === 2 ? 'Delicious!' : 'Sweet!';
+      $('win-score').textContent = fmt(score);
+      $('win').hidden = false;
+      $('win-next').focus();
+    }, 700);
+  }
+
+  function lose(){
+    phase = 'over';
+    var msg;
+    if(info.kind === 'score') msg = 'Just ' + fmt(info.target - score) + ' more points needed. You can do it!';
+    else {
+      var need = info.collect.filter(function(g){ return collected[g.t] < g.n; }).map(function(g){ return (g.n - collected[g.t]) + ' ' + CANDY[g.t].name; });
+      msg = 'Just ' + need.join(' and ') + ' to go. You can do it!';
+    }
+    sfx.lose();
+    setTimeout(function(){
+      if(phase !== 'over') return;
+      $('lose-text').textContent = msg;
+      $('lose').hidden = false;
+      $('lose-retry').focus();
+    }, 500);
+  }
+
+  // ---------- moving candies ----------
+  function ease(t){ return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+
+  function update(dt){
+    var i, k;
+    if(phase === 'swap' || phase === 'back'){
+      swapAnim.t = Math.min(1, swapAnim.t + dt / 0.16);
+      var e = ease(swapAnim.t), a = swapAnim.a, b = swapAnim.b, ka = board[a], kb = board[b];
+      // the candy now in a came from b, and the other way round
+      ka.x = colOf(b) + (colOf(a) - colOf(b)) * e; ka.y = rowOf(b) + (rowOf(a) - rowOf(b)) * e;
+      kb.x = colOf(a) + (colOf(b) - colOf(a)) * e; kb.y = rowOf(a) + (rowOf(b) - rowOf(a)) * e;
+      if(swapAnim.t >= 1){
+        if(phase === 'back'){ phase = 'idle'; idleT = 0; }
+        else if(swapAnim.valid){
+          movesLeft--;
+          combo = 0;
+          var first = specialSwap(a, b) || matchPlan([a, b]);
+          if(first) startStep(first); else phase = 'fall';
+        } else {
+          swapCells(a, b);
+          swapAnim = { a: a, b: b, t: 0, valid: false };
+          phase = 'back';
+          sfx.nope();
+        }
+      }
+    } else if(phase === 'pop'){
+      popT += dt;
+      if(popT >= popLen){ applyGravity(); phase = 'fall'; }
+    } else if(phase === 'fall'){
+      var settled = true;
+      for(i = 0; i < N * N; i++){
+        k = board[i];
+        if(!k) continue;
+        var tx = colOf(i), ty = rowOf(i);
+        if(Math.abs(k.x - tx) > 0.001){ k.x += (tx - k.x) * Math.min(1, dt * 12); if(Math.abs(k.x - tx) < 0.02) k.x = tx; else settled = false; }
+        if(k.y < ty){
+          k.vy += 42 * dt;
+          k.y += k.vy * dt;
+          if(k.y >= ty){ k.y = ty; k.vy = 0; k.s = 0.9; } else settled = false;
+        } else if(k.y > ty){
+          k.y += (ty - k.y) * Math.min(1, dt * 12);
+          if(Math.abs(k.y - ty) < 0.02) k.y = ty; else settled = false;
+        }
+      }
+      if(settled){
+        var plan = matchPlan(null);
+        if(plan) startStep(plan); else endMove();
+      }
+    } else if(phase === 'idle'){
+      idleT += dt;
+      if(idleT > 6 && !hint) hint = findMove();
+    }
+    // specials pop into life, landed candies un-squash
+    for(i = 0; i < N * N; i++){ k = board[i]; if(k && k.s !== 1){ k.s += (1 - k.s) * Math.min(1, dt * 10); if(Math.abs(k.s - 1) < 0.01) k.s = 1; } }
+    popping.forEach(function(p){ p.t += dt; });
+    popping = popping.filter(function(p){ return p.t < 0.3; });
+    fxList.forEach(function(f){ f.t += dt; });
+    fxList = fxList.filter(function(f){ return f.t < 0.5; });
+    texts.forEach(function(t){ t.t += dt; });
+    texts = texts.filter(function(t){ return t.t < t.life; });
+    parts.forEach(function(p){ p.t -= dt; p.vy += 900 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt; });
+    parts = parts.filter(function(p){ return p.t > 0; });
+  }
+
+  function addText(c, r, text, color, life, big){ texts.push({ c: c, r: r, text: text, color: color, t: 0, life: life, big: !!big }); }
+
+  function burstAt(i, color, n){
+    var x = BX + (colOf(i) + 0.5) * CS, y = BY + (rowOf(i) + 0.5) * CS;
+    for(var k = 0; k < n; k++){
+      var a = rnd() * Math.PI * 2, sp = 60 + rnd() * 220;
+      parts.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 120, t: 0.4 + rnd() * 0.4, color: color, s: 3 + rnd() * 4, rot: rnd() * 6, vr: rnd() * 10 - 5 });
+    }
+  }
+
+  // ---------- touch and mouse ----------
+  function cellAt(px, py){
+    var c = Math.floor((px - BX) / CS), r = Math.floor((py - BY) / CS);
+    if(c < 0 || r < 0 || c >= N || r >= N) return -1;
+    return idx(c, r);
+  }
+
+  cv.addEventListener('pointerdown', function(e){
+    audio();
+    if(phase !== 'idle' || overlayOpen() || drag) return;
+    var i = cellAt(e.clientX, e.clientY);
+    if(i < 0){ sel = -1; return; }
+    drag = { i: i, x: e.clientX, y: e.clientY, id: e.pointerId, moved: false };
+    try { cv.setPointerCapture(e.pointerId); } catch(err){}
+    e.preventDefault();
+  });
+  cv.addEventListener('pointermove', function(e){
+    if(!drag || drag.moved || e.pointerId !== drag.id) return;
+    var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if(Math.max(Math.abs(dx), Math.abs(dy)) < CS * 0.35) return;
+    drag.moved = true;
+    var c = colOf(drag.i), r = rowOf(drag.i), j = -1;
+    if(Math.abs(dx) > Math.abs(dy)){ if(dx > 0 && c < N - 1) j = drag.i + 1; else if(dx < 0 && c > 0) j = drag.i - 1; }
+    else { if(dy > 0 && r < N - 1) j = drag.i + N; else if(dy < 0 && r > 0) j = drag.i - N; }
+    if(j >= 0) trySwap(drag.i, j);
+  });
+  function endDrag(e){
+    if(!drag || e.pointerId !== drag.id) return;
+    var d = drag;
+    drag = null;
+    if(d.moved || phase !== 'idle') return;
+    // tap one candy, then a neighbour, to swap them
+    if(sel >= 0 && sel !== d.i && adjacentCells(sel, d.i)) trySwap(sel, d.i);
+    else if(sel === d.i) sel = -1;
+    else { sel = d.i; sfx.select(); }
+  }
+  cv.addEventListener('pointerup', endDrag);
+  cv.addEventListener('pointercancel', function(){ drag = null; });
+
+  $('hint-btn').addEventListener('click', function(){
+    audio();
+    if(phase === 'idle'){ hint = findMove(); idleT = 6; sfx.select(); }
+    this.blur();
+  });
+
+  // ---------- layout ----------
+  function layout(){
+    W = window.innerWidth;
+    H = window.innerHeight;
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.max(1, Math.round(W * DPR));
+    cv.height = Math.max(1, Math.round(H * DPR));
+    var st = $('status'), topBar = W < 520 ? 58 : 64;
+    st.style.top = topBar + 'px';
+    var below = topBar + (st.offsetHeight || 70) + 14;
+    var avail = Math.min(W - 24, H - below - 16);
+    CS = Math.floor(clamp(avail, 200, 600) / N);
+    BX = Math.round((W - CS * N) / 2);
+    BY = Math.round(below + Math.max(0, (H - below - 16 - CS * N) / 2));
+  }
+  window.addEventListener('resize', function(){ if(info) layout(); });
+
+  // ---------- drawing ----------
+  var clock = 0, bubbles = [];
+  for(var bI = 0; bI < 16; bI++) bubbles.push({ x: rnd(), y: rnd(), r: 20 + rnd() * 60, v: 0.01 + rnd() * 0.02, a: 0.08 + rnd() * 0.12 });
+
+  function roundRect(x, y, w, h, r){
+    cx.beginPath();
+    cx.moveTo(x + r, y);
+    cx.arcTo(x + w, y, x + w, y + h, r);
+    cx.arcTo(x + w, y + h, x, y + h, r);
+    cx.arcTo(x, y + h, x, y, r);
+    cx.arcTo(x, y, x + w, y, r);
+    cx.closePath();
+  }
+
+  function cellX(c){ return BX + (c + 0.5) * CS; }
+  function cellY(r){ return BY + (r + 0.5) * CS; }
+
+  function drawCandy(k, x, y, scale, rot, alpha){
+    var spr = sprite(k.t, k.sp, Math.max(8, Math.round(CS * DPR))), s = CS * scale;
+    cx.save();
+    cx.globalAlpha = alpha;
+    cx.translate(x, y);
+    if(rot) cx.rotate(rot);
+    cx.drawImage(spr, -s / 2, -s / 2, s, s);
+    cx.restore();
+  }
+
+  function render(dt){
+    clock += dt;
+    cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    cx.clearRect(0, 0, W, H);
+
+    // soft floating bubbles behind everything
+    bubbles.forEach(function(b){
+      b.y -= b.v * dt;
+      if(b.y < -0.2) b.y = 1.2;
+      cx.fillStyle = 'rgba(255,255,255,' + b.a + ')';
+      cx.beginPath(); cx.arc(b.x * W, b.y * H, b.r, 0, Math.PI * 2); cx.fill();
+    });
+
+    var BW = CS * N, i, k, c, r;
+    roundRect(BX - 8, BY - 8, BW + 16, BW + 16, 22);
+    cx.fillStyle = 'rgba(255,255,255,0.4)';
+    cx.fill();
+    cx.strokeStyle = 'rgba(255,255,255,0.8)';
+    cx.lineWidth = 2;
+    cx.stroke();
+    for(r = 0; r < N; r++){
+      for(c = 0; c < N; c++){
+        cx.fillStyle = (r + c) % 2 ? 'rgba(255,255,255,0.5)' : 'rgba(255,230,245,0.75)';
+        roundRect(BX + c * CS + 1, BY + r * CS + 1, CS - 2, CS - 2, CS * 0.18);
+        cx.fill();
+      }
+    }
+
+    if(sel >= 0){
+      var pulse = 0.5 + 0.5 * Math.sin(clock * 8);
+      cx.fillStyle = 'rgba(255,255,255,' + (0.55 + pulse * 0.35).toFixed(2) + ')';
+      roundRect(BX + colOf(sel) * CS + 2, BY + rowOf(sel) * CS + 2, CS - 4, CS - 4, CS * 0.2);
+      cx.fill();
+      cx.strokeStyle = '#ff5fa2';
+      cx.lineWidth = 3;
+      cx.stroke();
+    }
+
+    // candies (new ones fall in from above the board, so clip to it)
+    cx.save();
+    cx.beginPath();
+    cx.rect(BX - 4, BY - 4, BW + 8, BW + 8);
+    cx.clip();
+    for(i = 0; i < N * N; i++){
+      k = board[i];
+      if(!k) continue;
+      var rot = 0, sc = k.s;
+      if(hint && (hint[0] === i || hint[1] === i)){ rot = Math.sin(clock * 12) * 0.18; sc *= 1 + Math.sin(clock * 6) * 0.05; }
+      if(i === sel) sc *= 1.08;
+      if(k.sp === 'c') rot += clock * 1.5;
+      drawCandy(k, cellX(k.x), cellY(k.y), sc, rot, 1);
+    }
+    popping.forEach(function(p){
+      var q = p.t / 0.3;
+      drawCandy(p.k, cellX(colOf(p.i)), cellY(rowOf(p.i)), (1 - q) * 1.15 + 0.05, q * 0.6, 1 - q);
+    });
+    cx.restore();
+
+    // blasts
+    fxList.forEach(function(f){
+      var q = f.t / 0.5, fcx = cellX(colOf(f.i)), fcy = cellY(rowOf(f.i)), a = 1 - q;
+      cx.save();
+      if(f.kind === 'h' || f.kind === 'v'){
+        var thick = CS * 0.55 * (1 - q * 0.7);
+        cx.fillStyle = 'rgba(255,255,255,' + (a * 0.9).toFixed(2) + ')';
+        if(f.kind === 'h') cx.fillRect(BX, fcy - thick / 2, BW, thick);
+        else cx.fillRect(fcx - thick / 2, BY, thick, BW);
+        cx.fillStyle = 'rgba(255,220,120,' + (a * 0.5).toFixed(2) + ')';
+        if(f.kind === 'h') cx.fillRect(BX, fcy - thick, BW, thick * 2);
+        else cx.fillRect(fcx - thick, BY, thick * 2, BW);
+      } else if(f.kind === 'bomb' || f.kind === 'c'){
+        cx.strokeStyle = 'rgba(255,255,255,' + a.toFixed(2) + ')';
+        cx.lineWidth = 3;
+        f.cells.forEach(function(j){
+          var tx = cellX(colOf(j)), ty = cellY(rowOf(j));
+          cx.beginPath();
+          cx.moveTo(fcx, fcy);
+          cx.lineTo((fcx + tx) / 2 + (rnd() - 0.5) * CS * 0.5, (fcy + ty) / 2 + (rnd() - 0.5) * CS * 0.5);
+          cx.lineTo(tx, ty);
+          cx.stroke();
+        });
+      } else {
+        var reach = f.kind === 'w' ? 1.8 : f.kind === 'w2' ? 3 : f.kind === 'big' ? 4 : 8;
+        cx.strokeStyle = 'rgba(255,255,255,' + a.toFixed(2) + ')';
+        cx.lineWidth = CS * 0.25 * a + 2;
+        cx.beginPath(); cx.arc(fcx, fcy, CS * (0.5 + reach * q), 0, Math.PI * 2); cx.stroke();
+        cx.fillStyle = 'rgba(255,240,200,' + (a * 0.35).toFixed(2) + ')';
+        cx.fill();
+      }
+      cx.restore();
+    });
+
+    parts.forEach(function(p){
+      cx.save();
+      cx.globalAlpha = clamp(p.t / 0.3, 0, 1);
+      cx.translate(p.x, p.y);
+      cx.rotate(p.rot);
+      cx.fillStyle = p.color;
+      cx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2);
+      cx.restore();
+    });
+
+    // score pop-ups and the big "Sweet!" words
+    cx.textAlign = 'center';
+    cx.textBaseline = 'middle';
+    texts.forEach(function(t){
+      var q = t.t / t.life, x = cellX(t.c), y = cellY(t.r) - q * CS * (t.big ? 0.4 : 1);
+      var grow = t.big ? Math.min(1, t.t / 0.15) * (1 + Math.sin(Math.min(1, t.t / 0.3) * Math.PI) * 0.15) : 1;
+      var size = t.big ? Math.max(26, CS * 0.95) : Math.max(15, CS * 0.42);
+      cx.save();
+      cx.globalAlpha = clamp((1 - q) * 3, 0, 1);
+      cx.translate(x, y);
+      cx.scale(grow, grow);
+      cx.font = '400 ' + Math.round(size) + "px 'Lilita One', 'Fredoka', sans-serif";
+      cx.lineJoin = 'round';
+      cx.lineWidth = size * (t.big ? 0.22 : 0.18);
+      cx.strokeStyle = t.big ? '#ffffff' : 'rgba(255,255,255,0.95)';
+      cx.strokeText(t.text, 0, 0);
+      cx.fillStyle = t.color;
+      cx.fillText(t.text, 0, 0);
+      cx.restore();
+    });
+  }
+
+  // ---------- goal, moves and score ----------
+  function goalIcon(t, box, label){
+    var d = document.createElement('div'), cvs = document.createElement('canvas'), n = document.createElement('span');
+    d.className = 'goal-item';
+    cvs.width = cvs.height = 64;
+    cvs.getContext('2d').drawImage(sprite(t, '', 64), 0, 0);
+    n.textContent = label;
+    d.appendChild(cvs);
+    d.appendChild(n);
+    box.appendChild(d);
+    return d;
+  }
+
+  var goalEls = [];
+  function buildGoal(){
+    var box = $('goal'), inBox = $('in-goal');
+    box.innerHTML = '';
+    inBox.innerHTML = '';
+    goalEls = [];
+    if(info.kind === 'score'){
+      $('goal-label').textContent = 'Target';
+      var s = document.createElement('div');
+      s.className = 'goal-score';
+      s.textContent = fmt(info.target);
+      box.appendChild(s);
+      var s2 = s.cloneNode(true);
+      s2.textContent = '🎯 ' + fmt(info.target);
+      inBox.appendChild(s2);
+    } else {
+      $('goal-label').textContent = 'Collect';
+      info.collect.forEach(function(g){
+        goalEls.push(goalIcon(g.t, box, g.n));
+        goalIcon(g.t, inBox, '× ' + g.n);
+      });
+    }
+  }
+
+  function updateHud(){
+    $('lv').textContent = 'Level ' + level;
+    var mv = $('moves');
+    mv.textContent = movesLeft;
+    mv.className = movesLeft <= 5 && phase !== 'over' && !finale ? 'low' : '';
+    $('score').textContent = fmt(score);
+    var max = info.stars[2], marks = [info.kind === 'score' ? info.stars[0] / max : 0.34, info.stars[1] / max, 1];
+    $('bar').style.width = (clamp(score / max, 0, 1) * 100).toFixed(1) + '%';
+    var lit = [info.kind === 'score' ? score >= info.stars[0] : goalMet(), score >= info.stars[1] && (info.kind === 'score' || goalMet()), score >= info.stars[2] && (info.kind === 'score' || goalMet())];
+    ['st1', 'st2', 'st3'].forEach(function(id, n){
+      var el = $(id);
+      el.style.left = (clamp(marks[n], 0.06, 0.96) * 100).toFixed(1) + '%';
+      el.className = lit[n] ? 'on' : '';
+    });
+    if(info.kind === 'collect'){
+      info.collect.forEach(function(g, n){
+        var left = Math.max(0, g.n - collected[g.t]), el = goalEls[n];
+        if(!el) return;
+        el.lastChild.textContent = left ? left : '✓';
+        el.className = 'goal-item' + (left ? '' : ' done');
+      });
+    }
+  }
+
+  function showIntro(){
+    $('in-title').textContent = 'Level ' + level;
+    $('in-text').textContent = info.kind === 'score' ? 'Reach the target score' : 'Collect these candies';
+    $('in-moves').textContent = 'in ' + info.moves + ' moves';
+    $('intro').hidden = false;
+    $('in-play').focus();
+  }
+
+  function overlayOpen(){ return !$('intro').hidden || !$('win').hidden || !$('lose').hidden || !$('levels').hidden; }
+
+  // ---------- level map ----------
+  var PAGE = 60, page = 0;
+  function showLevels(){
+    page = Math.floor((level - 1) / PAGE);
+    renderLevels();
+    $('levels').hidden = false;
+  }
+  function renderLevels(){
+    var from = page * PAGE + 1, to = from + PAGE - 1, grid = $('lvgrid');
+    grid.innerHTML = '';
+    $('pg-label').textContent = from + ' – ' + to;
+    $('pg-prev').disabled = page === 0;
+    $('pg-next').disabled = to >= progress.max;
+    $('lv-note').textContent = 'Unlocked up to level ' + progress.max + '. New levels forever!';
+    for(var n = from; n <= to; n++){
+      var b = document.createElement('button'), s = document.createElement('small'), st = progress.stars[n] || 0;
+      b.type = 'button';
+      b.className = 'lvbtn' + (n === level ? ' cur' : '') + (st ? ' done' : '');
+      b.textContent = n;
+      s.textContent = st ? '★★★'.slice(0, st) : n > progress.max ? '🔒' : '';
+      b.appendChild(s);
+      b.disabled = n > progress.max;
+      b.setAttribute('aria-label', 'Level ' + n + (st ? ', ' + st + ' stars' : ''));
+      (function(lvl){ b.addEventListener('click', function(){ sfx.click(); startLevel(lvl); }); })(n);
+      grid.appendChild(b);
+    }
+  }
+
+  $('in-play').addEventListener('click', function(){ audio(); sfx.click(); $('intro').hidden = true; });
+  $('win-next').addEventListener('click', function(){ sfx.click(); startLevel(level + 1); });
+  $('win-replay').addEventListener('click', function(){ sfx.click(); startLevel(level); });
+  $('lose-retry').addEventListener('click', function(){ sfx.click(); startLevel(level); });
+  $('lose-levels').addEventListener('click', function(){ sfx.click(); $('lose').hidden = true; showLevels(); });
+  $('lv').addEventListener('click', function(){ audio(); sfx.click(); showLevels(); this.blur(); });
+  $('lv-close').addEventListener('click', function(){
+    $('levels').hidden = true;
+    // closing the map after losing takes you back to try again
+    if(phase === 'over' && !goalMet()) $('lose').hidden = false;
+  });
+  $('pg-prev').addEventListener('click', function(){ if(page > 0){ page--; renderLevels(); } });
+  $('pg-next').addEventListener('click', function(){ page++; renderLevels(); });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && !$('levels').hidden) $('lv-close').click();
+  });
+
+  // ---------- the loop ----------
+  var last = 0;
+  function frame(now){
+    requestAnimationFrame(frame);
+    var dt = last ? Math.min(0.05, (now - last) / 1000) : 0.016;
+    last = now;
+    if(W > 0 && H > 0 && info){ update(dt); render(dt); }
+  }
+
+  // ---------- go! ----------
+  renderMute();
+  loadProgress();
+  layout();
+  startLevel(progress.cur);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
