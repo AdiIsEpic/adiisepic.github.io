@@ -186,6 +186,10 @@
   .icon-sol{ background:#008000; }
   .icon-sol svg{ width:100%; height:100%; display:block; }
 
+  /* doodle pals: a crayon blob creature with googly eyes */
+  .icon-doodle{ background:linear-gradient(180deg, #8fd3ff, #dff4ff); }
+  .icon-doodle svg{ width:100%; height:100%; display:block; }
+
   .icon-snake svg,
   .icon-flappy svg,
   .icon-powder svg,
@@ -623,6 +627,38 @@
       <div class="tile-text">
         <div class="app-label">Solitaire</div>
         <div class="app-note">Klondike, Windows 98 style</div>
+      </div>
+    </a>
+
+    <a class="app-tile" href="DoodlePals/" aria-label="Play Doodle Pals">
+      <div class="game-icon icon-doodle">
+        <svg viewBox="0 0 60 60" aria-hidden="true">
+          <path d="M0 47 Q15 43 30 46 T60 45 V60 H0 Z" fill="#6fd35f"/>
+          <!-- the doodle pal -->
+          <path d="M23 46 L22 53 M36 46 L37 53" stroke="#2b2140" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M15 43 C11 33 16 21 28 20 C40 19 47 29 45 39 C44 46 38 48 30 48 C22 48 17 47 15 43 Z"
+                fill="#ff8c42" stroke="#2b2140" stroke-width="2.4" stroke-linejoin="round"/>
+          <circle cx="23" cy="38" r="2.2" fill="#8d5a3b"/>
+          <circle cx="25" cy="30" r="4.6" fill="#fff" stroke="#2b2140" stroke-width="1.5"/>
+          <circle cx="35" cy="30" r="4.6" fill="#fff" stroke="#2b2140" stroke-width="1.5"/>
+          <circle cx="26.3" cy="31" r="2.3" fill="#2b2140"/>
+          <circle cx="36.3" cy="31" r="2.3" fill="#2b2140"/>
+          <circle cx="19.5" cy="36" r="2" fill="#ff6e8c" opacity="0.5"/>
+          <circle cx="40.5" cy="36" r="2" fill="#ff6e8c" opacity="0.5"/>
+          <path d="M26.5 37.5 Q30.5 41.5 34.5 37.5" stroke="#2b2140" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <!-- the crayon that drew it -->
+          <g transform="rotate(38 49 14)">
+            <rect x="46" y="3" width="6" height="15" rx="1" fill="#f15bb5" stroke="#2b2140" stroke-width="1.2"/>
+            <path d="M46 18 L49 23.5 L52 18 Z" fill="#f7d9b0" stroke="#2b2140" stroke-width="1.2" stroke-linejoin="round"/>
+            <path d="M48.1 21.8 L49 23.5 L49.9 21.8 Z" fill="#f15bb5"/>
+          </g>
+          <path d="M11 12 L12 15 L15 16 L12 17 L11 20 L10 17 L7 16 L10 15 Z" fill="#ffd23f"/>
+          <path d="M53 33 L53.7 35 L55.7 35.7 L53.7 36.4 L53 38.4 L52.3 36.4 L50.3 35.7 L52.3 35 Z" fill="#fff"/>
+        </svg>
+      </div>
+      <div class="tile-text">
+        <div class="app-label">Doodle Pals</div>
+        <div class="app-note">Draw a pal, watch it come alive</div>
       </div>
     </a>
 
