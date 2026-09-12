@@ -194,6 +194,10 @@
   .icon-neon{ background:radial-gradient(circle at 50% 50%, #221a52, #0b0820 70%); }
   .icon-neon svg{ width:100%; height:100%; display:block; }
 
+  /* mini golf: a ball rolling towards the flag */
+  .icon-golf{ background:#5cb159; }
+  .icon-golf svg{ width:100%; height:100%; display:block; }
+
   .icon-snake svg,
   .icon-flappy svg,
   .icon-powder svg,
@@ -696,6 +700,37 @@
       <div class="tile-text">
         <div class="app-label">Neon Swarm</div>
         <div class="app-note">Survive the swarm, level up</div>
+      </div>
+    </a>
+
+    <a class="app-tile" href="MiniGolf/" aria-label="Play Mini Golf">
+      <div class="game-icon icon-golf">
+        <svg viewBox="0 0 60 60" aria-hidden="true">
+          <!-- a little bush and some flowers around the course -->
+          <circle cx="8" cy="10" r="7" fill="#3b8a33"/>
+          <circle cx="6.5" cy="8.5" r="4.5" fill="#5aad3e"/>
+          <circle cx="54" cy="52" r="2" fill="#ffd23f"/>
+          <circle cx="50" cy="56" r="1.8" fill="#ff7eb3"/>
+          <!-- the green with its wooden rail -->
+          <rect x="11" y="13" width="40" height="40" rx="6" fill="#c98a4b" stroke="#7a4d22" stroke-width="1.5"/>
+          <rect x="15" y="17" width="32" height="32" rx="3" fill="#7fd36e"/>
+          <rect x="15" y="23" width="32" height="5" fill="#74c863"/>
+          <rect x="15" y="33" width="32" height="5" fill="#74c863"/>
+          <rect x="15" y="43" width="32" height="5" fill="#74c863"/>
+          <!-- the cup and flag -->
+          <ellipse cx="38" cy="27" rx="3.6" ry="3.2" fill="#1b2f1b" stroke="#f2f2ea" stroke-width="0.9"/>
+          <path d="M38 27 L38 9" stroke="#f5f5ee" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M38 9 Q43 10 47 12 Q43 14 38 15 Z" fill="#ff4d4d"/>
+          <!-- the ball and its dotted path -->
+          <circle cx="29" cy="34" r="1.1" fill="#fff" opacity="0.7"/>
+          <circle cx="26" cy="37.5" r="1.1" fill="#fff" opacity="0.55"/>
+          <circle cx="23" cy="41" r="1.1" fill="#fff" opacity="0.4"/>
+          <circle cx="32.5" cy="31" r="3.4" fill="#fff" stroke="#b8c2cc" stroke-width="0.8"/>
+        </svg>
+      </div>
+      <div class="tile-text">
+        <div class="app-label">Mini Golf</div>
+        <div class="app-note">Classic holes or a random course</div>
       </div>
     </a>
 
