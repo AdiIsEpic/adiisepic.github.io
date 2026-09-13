@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#17122b">
+<title>Colour Jump</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Lilita+One&display=swap" rel="stylesheet">
+<style>
+  :root{ --font:'Fredoka', ui-rounded, 'Segoe UI', system-ui, sans-serif; --display:'Lilita One', 'Fredoka', system-ui, sans-serif; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; height:100%; overflow:hidden; overscroll-behavior:none; background:#17122b; color:#fff; font-family:var(--font); -webkit-user-select:none; user-select:none; }
+  #c{ position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:pointer; }
+  .hud{ position:fixed; top:0; left:0; right:0; z-index:5; display:flex; align-items:center; gap:8px; padding:10px; padding-top:max(10px, env(safe-area-inset-top)); pointer-events:none; }
+  .hud > *{ pointer-events:auto; }
+  .back{ padding:8px 12px; border-radius:12px; background:rgba(255,255,255,0.12); color:#fff; font-weight:600; font-size:15px; text-decoration:none; white-space:nowrap; }
+  .spacer{ flex:1; }
+  .round{ width:40px; height:40px; border:none; border-radius:50%; background:rgba(255,255,255,0.12); color:#fff; font-size:17px; cursor:pointer; flex:none; }
+  #score{ font:400 34px/1 var(--display); min-width:60px; text-align:center; }
+  .overlay{ position:fixed; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; padding:16px; background:rgba(10,6,25,0.55); }
+  .overlay[hidden]{ display:none; }
+  .card{ width:min(100%, 350px); padding:24px 20px; border-radius:26px; text-align:center; background:#241c44; box-shadow:0 20px 50px rgba(0,0,0,0.45); border:2px solid rgba(255,255,255,0.08); animation:pop .35s cubic-bezier(.2,.9,.3,1.3); }
+  @keyframes pop{ from{ transform:scale(0.85); opacity:0; } }
+  .card h1{ margin:0 0 8px; font:400 42px var(--display); background:linear-gradient(90deg,#ff3d7f,#ffd23f,#34e0c8,#8b5cff); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .card p{ margin:0 0 14px; font-size:16px; line-height:1.4; opacity:0.85; }
+  .card .big{ font:400 60px/1 var(--display); color:#ffd23f; margin:0 0 8px; }
+  .card .best{ color:#34e0c8; font-weight:700; opacity:1; }
+  .btn{ font:400 22px var(--display); border:none; border-radius:18px; padding:13px 32px; color:#fff; cursor:pointer; background:linear-gradient(180deg, #ff5d95, #e02465); box-shadow:0 6px 0 #9c1043; }
+  .btn:active{ transform:translateY(4px); box-shadow:0 2px 0 #9c1043; }
+  .btn:focus-visible, .round:focus-visible, .back:focus-visible{ outline:3px solid #fff; outline-offset:2px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hud">
+  <a class="back" href="../" aria-label="Back to games">&lsaquo; Games</a>
+  <div class="spacer"></div>
+  <div id="score">0</div>
+  <div class="spacer"></div>
+  <button type="button" class="round" id="mute" aria-label="Sound on">🔊</button>
+</div>
+<div class="overlay" id="ov">
+  <div class="card">
+    <h1 id="ov-title">Colour Jump</h1>
+    <div class="big" id="ov-score" hidden>0</div>
+    <p id="ov-text">Tap to bounce up. You can only pass through your own colour! Grab ★ stars, and the colour wheels switch your colour.</p>
+    <p class="best" id="ov-best"></p>
+    <button type="button" class="btn" id="ov-btn">Play</button>
+  </div>
+</div>
+<script>
+(function(){
+  'use strict';
+  function $(id){ return document.getElementById(id); }
+  function load(k, d){ try { var v = localStorage.getItem(k); return v === null ? d : v; } catch(e){ return d; } }
+  function save(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
+
+  var actx = null, muted = load('cjump.muted', '0') === '1';
+  function tone(f0, f1, dur, type, vol, delay){
+    if(muted) return;
+    try {
+      if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if(actx.state === 'suspended') actx.resume();
+      var t0 = actx.currentTime + (delay || 0), o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+    } catch(e){}
+  }
+  var muteBtn = $('mute');
+  function renderMute(){ muteBtn.textContent = muted ? '🔈' : '🔊'; muteBtn.setAttribute('aria-label', muted ? 'Sound off' : 'Sound on'); }
+  muteBtn.addEventListener('click', function(){ muted = !muted; save('cjump.muted', muted ? '1' : '0'); renderMute(); muteBtn.blur(); });
+  renderMute();
+
+  var COLS = ['#ff3d7f', '#ffd23f', '#34e0c8', '#8b5cff'], TAU = Math.PI * 2, Q = Math.PI / 2;
+  var cv = $('c'), cx = cv.getContext('2d'), W = 0, H = 0, DPR = 1, LW = 360, sc = 1, offX = 0, VH = 640, BX = 180, BR = 11;
+  var ball, obs = [], items = [], parts = [], stars = [], camY = 0, nextY = 0, count = 0, clock = 0;
+  var state = 'menu', score = 0, best = +load('cjump.best', '0') || 0, started = false, deadT = 0, floorOn = true;
+  var ov = $('ov'), scoreEl = $('score');
+
+  function layout(){
+    W = window.innerWidth; H = window.innerHeight; DPR = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.max(1, Math.round(W * DPR)); cv.height = Math.max(1, Math.round(H * DPR));
+    sc = Math.max(0.2, Math.min(W / LW, H / 560)); offX = (W - LW * sc) / 2; VH = H / sc;
+    stars = [];
+    for(var i = 0; i < 60; i++) stars.push({ x: Math.random(), y: Math.random(), r: Math.random() * 1.4 + 0.4 });
+  }
+  window.addEventListener('resize', layout);
+  layout();
+
+  function reset(){
+    ball = { y: 0, vy: 0, c: Math.floor(Math.random() * 4) };
+    obs = []; items = []; parts = []; count = 0; score = 0; started = false; floorOn = true;
+    camY = -VH * 0.72; nextY = -300;
+    scoreEl.textContent = '0';
+    while(nextY > camY - VH * 0.6) addObstacle();
+  }
+  function addObstacle(){
+    var k = count++, dir = Math.random() < 0.5 ? -1 : 1, types = ['ring'];
+    if(k >= 3) types.push('bars');
+    if(k >= 6) types.push('double');
+    var type = k === 0 ? 'ring' : types[Math.floor(Math.random() * types.length)];
+    var o = { type: type, y: nextY, rot: Math.random() * TAU, spd: dir * Math.min(3.2, 1.4 + k * 0.07), off: Math.random() * 360 };
+    if(type === 'ring'){ o.R = 96; o.th = 16; }
+    else if(type === 'double'){ o.R = 70; o.R2 = 104; o.th = 14; o.spd *= 0.85; }
+    else { o.gap = 76; o.th = 14; o.spd = dir * Math.min(170, 70 + k * 4); }
+    obs.push(o);
+    items.push({ kind: 'star', y: nextY, got: false, t: 0 });
+    items.push({ kind: 'switch', y: nextY - 190, got: false, t: 0 });
+    nextY -= 380;
+  }
+
+  function startGame(){ reset(); state = 'play'; ov.hidden = true; }
+  function jump(){
+    if(state !== 'play') return;
+    started = true; ball.vy = -440;
+    tone(500, 700, 0.07, 'sine', 0.05);
+  }
+  function die(){
+    if(state !== 'play') return;
+    state = 'dead'; deadT = 0;
+    for(var i = 0; i < 40; i++){
+      var a = Math.random() * TAU, s = 80 + Math.random() * 300;
+      parts.push({ x: BX, y: ball.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, c: COLS[i % 4], life: 1 });
+    }
+    tone(300, 50, 0.5, 'sawtooth', 0.09);
+    if(score > best){ best = score; save('cjump.best', String(best)); }
+  }
+  function showOver(){
+    $('ov-title').textContent = score >= 25 ? 'Amazing!' : score >= 10 ? 'Great run!' : 'Oops!';
+    $('ov-score').hidden = false; $('ov-score').textContent = String(score);
+    $('ov-text').textContent = score === best && score > 0 ? 'New best score!' : 'Stars collected';
+    $('ov-best').textContent = 'Best: ' + best;
+    $('ov-btn').textContent = 'Play again';
+    ov.hidden = false;
+  }
+
+  function segAt(angle, rot){ var a = ((angle - rot) % TAU + TAU) % TAU; return Math.floor(a / Q) % 4; }
+  function barSeg(off){ var l = ((BX - off) % 360 + 360) % 360; return Math.floor(l / 90) % 4; }
+  function hitRing(o, R, rot){
+    var d = ball.y - o.y;
+    if(Math.abs(Math.abs(d) - R) < o.th / 2 + BR - 2) return segAt(d < 0 ? -Q : Q, rot) !== ball.c;
+    return false;
+  }
+  function hits(o){
+    if(o.type === 'ring') return hitRing(o, o.R, o.rot);
+    if(o.type === 'double') return hitRing(o, o.R, o.rot) || hitRing(o, o.R2, -o.rot + 0.4);
+    var yA = o.y - o.gap / 2, yB = o.y + o.gap / 2, lim = o.th / 2 + BR - 2;
+    if(Math.abs(ball.y - yA) < lim && barSeg(o.off) !== ball.c) return true;
+    if(Math.abs(ball.y - yB) < lim && barSeg(-o.off + 45) !== ball.c) return true;
+    return false;
+  }
+
+  function step(dt){
+    clock += dt;
+    var i;
+    for(i = 0; i < obs.length; i++){ var o = obs[i]; if(o.type === 'bars') o.off += o.spd * dt; else o.rot += o.spd * dt; }
+    for(i = parts.length - 1; i >= 0; i--){
+      var p = parts[i]; p.life -= dt * 1.2; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 400 * dt;
+      if(p.life <= 0) parts.splice(i, 1);
+    }
+    if(state === 'dead'){ deadT += dt; if(deadT > 0.9 && ov.hidden) showOver(); return; }
+    if(state !== 'play') return;
+    if(started){
+      ball.vy = Math.min(ball.vy + 1300 * dt, 760); ball.y += ball.vy * dt;
+      if(floorOn && ball.y > 0){ ball.y = 0; ball.vy = 0; }
+      if(ball.y < -220) floorOn = false;
+    }
+    var target = ball.y - VH * 0.45;
+    if(target < camY) camY = target;
+    while(nextY > camY - VH * 0.6) addObstacle();
+    for(i = obs.length - 1; i >= 0; i--) if(obs[i].y > camY + VH + 260) obs.splice(i, 1);
+    for(i = items.length - 1; i >= 0; i--){
+      var it = items[i];
+      if(it.y > camY + VH + 100){ items.splice(i, 1); continue; }
+      if(it.got){ it.t += dt; continue; }
+      if(Math.abs(ball.y - it.y) < 14 + BR){
+        it.got = true;
+        if(it.kind === 'star'){
+          score++; scoreEl.textContent = String(score);
+          tone(880, 1320, 0.12, 'triangle', 0.06); tone(1320, 1760, 0.1, 'triangle', 0.04, 0.06);
+          for(var j = 0; j < 10; j++){ var a = Math.random() * TAU; parts.push({ x: BX, y: it.y, vx: Math.cos(a) * 140, vy: Math.sin(a) * 140, c: '#fff', life: 0.6 }); }
+        } else {
+          var nc = ball.c;
+          while(nc === ball.c) nc = Math.floor(Math.random() * 4);
+          ball.c = nc;
+          tone(600, 900, 0.12, 'square', 0.04);
+        }
+      }
+    }
+    for(i = 0; i < obs.length; i++) if(hits(obs[i])){ die(); return; }
+    if(ball.y - camY > VH + BR) die();
+  }
+
+  function wy(y){ return y - camY; }
+  function drawStar(x, y, r, rot){
+    cx.beginPath();
+    for(var i = 0; i < 10; i++){
+      var a = rot + i * Math.PI / 5 - Q, rr = i % 2 ? r * 0.45 : r;
+      cx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    }
+    cx.closePath(); cx.fill();
+  }
+  function render(){
+    if(!W || !H) return;
+    cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    cx.fillStyle = '#17122b'; cx.fillRect(0, 0, W, H);
+    cx.fillStyle = 'rgba(255,255,255,0.5)';
+    for(var i = 0; i < stars.length; i++){
+      var s = stars[i], yy = ((s.y * H - camY * sc * 0.15) % H + H) % H;
+      cx.fillRect(s.x * W, yy, s.r, s.r);
+    }
+    cx.setTransform(DPR * sc, 0, 0, DPR * sc, DPR * offX, 0);
+    var left = -offX / sc - 90, right = LW + offX / sc + 90;
+    for(i = 0; i < obs.length; i++){
+      var o = obs[i], y = wy(o.y);
+      if(y < -200 || y > VH + 200) continue;
+      if(o.type === 'bars'){
+        drawBar(y - o.gap / 2, o.off, o.th, left, right);
+        drawBar(y + o.gap / 2, -o.off + 45, o.th, left, right);
+      } else {
+        drawRing(BX, y, o.R, o.th, o.rot);
+        if(o.type === 'double') drawRing(BX, y, o.R2, o.th, -o.rot + 0.4);
+      }
+    }
+    for(i = 0; i < items.length; i++){
+      var it = items[i], iy = wy(it.y);
+      if(it.got && it.kind === 'star') continue;
+      if(it.got) continue;
+      if(it.kind === 'star'){
+        cx.fillStyle = '#fff'; drawStar(BX, iy, 11 + Math.sin(clock * 5) * 1.5, 0);
+      } else {
+        for(var q = 0; q < 4; q++){
+          cx.fillStyle = COLS[q]; cx.beginPath(); cx.moveTo(BX, iy);
+          cx.arc(BX, iy, 13, clock * 2 + q * Q, clock * 2 + (q + 1) * Q); cx.closePath(); cx.fill();
+        }
+      }
+    }
+    if(floorOn && state !== 'menu' || state === 'menu'){
+      var fy = wy(BR + 4);
+      cx.fillStyle = 'rgba(255,255,255,0.15)'; cx.beginPath(); cx.roundRect ? cx.roundRect(BX - 40, fy, 80, 8, 4) : cx.rect(BX - 40, fy, 80, 8); cx.fill();
+      if(!started){
+        cx.fillStyle = 'rgba(255,255,255,0.75)'; cx.font = '600 16px Fredoka, sans-serif'; cx.textAlign = 'center';
+        cx.fillText('Tap to jump', BX, fy + 34);
+      }
+    }
+    if(state !== 'dead' && ball){
+      var by = wy(ball.y);
+      cx.fillStyle = COLS[ball.c]; cx.beginPath(); cx.arc(BX, by, BR, 0, TAU); cx.fill();
+      cx.fillStyle = 'rgba(255,255,255,0.55)'; cx.beginPath(); cx.arc(BX - 3.5, by - 3.5, 3.5, 0, TAU); cx.fill();
+    }
+    for(i = 0; i < parts.length; i++){
+      var p = parts[i]; cx.globalAlpha = Math.max(0, p.life); cx.fillStyle = p.c;
+      cx.beginPath(); cx.arc(p.x, wy(p.y), 3.5, 0, TAU); cx.fill();
+    }
+    cx.globalAlpha = 1;
+  }
+  function drawRing(x, y, R, th, rot){
+    cx.lineWidth = th; cx.lineCap = 'butt';
+    for(var q = 0; q < 4; q++){
+      cx.strokeStyle = COLS[q]; cx.beginPath(); cx.arc(x, y, R, rot + q * Q, rot + (q + 1) * Q); cx.stroke();
+    }
+  }
+  function drawBar(y, off, th, left, right){
+    var x = off - Math.ceil((off - left) / 90) * 90;
+    for(; x < right; x += 90){
+      var idx = ((Math.round((x - off) / 90) % 4) + 4) % 4;
+      cx.fillStyle = COLS[idx]; cx.fillRect(x, y - th / 2, 90.5, th);
+    }
+  }
+
+  var last = 0;
+  function frame(ts){
+    var dt = Math.min(0.033, Math.max(0, (ts - last) / 1000)); last = ts;
+    step(dt); render();
+    requestAnimationFrame(frame);
+  }
+  cv.addEventListener('pointerdown', function(e){ e.preventDefault(); jump(); });
+  $('ov-btn').addEventListener('click', startGame);
+  window.addEventListener('keydown', function(e){
+    if(e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'Enter'){
+      e.preventDefault();
+      if(state === 'play') jump(); else if(!ov.hidden) startGame();
+    }
+  });
+
+  reset();
+  $('ov-best').textContent = best ? 'Best: ' + best : '';
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
