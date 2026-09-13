@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#8fd3ff">
+<title>Dino Dash</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Lilita+One&display=swap" rel="stylesheet">
+<style>
+  :root{ --font:'Fredoka', ui-rounded, 'Segoe UI', system-ui, sans-serif; --display:'Lilita One', 'Fredoka', system-ui, sans-serif; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; height:100%; overflow:hidden; overscroll-behavior:none; background:#8fd3ff; color:#fff; font-family:var(--font); -webkit-user-select:none; user-select:none; }
+  #c{ position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:pointer; }
+  .hud{ position:fixed; top:0; left:0; right:0; z-index:5; display:flex; align-items:center; gap:8px; padding:10px; padding-top:max(10px, env(safe-area-inset-top)); pointer-events:none; }
+  .hud > *{ pointer-events:auto; }
+  .back{ padding:8px 12px; border-radius:12px; background:rgba(0,40,80,0.3); color:#fff; font-weight:600; font-size:15px; text-decoration:none; white-space:nowrap; }
+  .stat{ padding:4px 12px; border-radius:14px; background:rgba(0,40,80,0.3); text-align:center; line-height:1.05; min-width:64px; }
+  .stat small{ display:block; font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; opacity:0.8; }
+  .stat b{ font:400 22px var(--display); }
+  .spacer{ flex:1; }
+  .round{ width:40px; height:40px; border:none; border-radius:50%; background:rgba(0,40,80,0.3); color:#fff; font-size:17px; cursor:pointer; flex:none; }
+  .overlay{ position:fixed; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; padding:16px; background:rgba(0,30,60,0.3); }
+  .overlay[hidden]{ display:none; }
+  .card{ width:min(100%, 350px); padding:24px 20px; border-radius:26px; text-align:center; background:#fffdf4; color:#2d4a1e; box-shadow:0 20px 50px rgba(0,0,0,0.3); animation:pop .35s cubic-bezier(.2,.9,.3,1.3); }
+  @keyframes pop{ from{ transform:scale(0.85); opacity:0; } }
+  .card h1{ margin:0 0 8px; font:400 42px var(--display); color:#3fa34d; }
+  .card p{ margin:0 0 14px; font-size:16px; line-height:1.4; opacity:0.85; }
+  .card .big{ font:400 56px/1 var(--display); color:#ff8a1f; margin:0 0 8px; }
+  .card .best{ color:#c98f00; font-weight:700; opacity:1; }
+  .btn{ font:400 22px var(--display); border:none; border-radius:18px; padding:13px 32px; color:#fff; cursor:pointer; background:linear-gradient(180deg, #6ad46f, #3fa34d); box-shadow:0 6px 0 #2a7434; }
+  .btn:active{ transform:translateY(4px); box-shadow:0 2px 0 #2a7434; }
+  .btn:focus-visible, .round:focus-visible, .back:focus-visible{ outline:3px solid #fff; outline-offset:2px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hud">
+  <a class="back" href="../" aria-label="Back to games">&lsaquo; Games</a>
+  <div class="spacer"></div>
+  <div class="stat"><small>Score</small><b id="score">0</b></div>
+  <div class="stat"><small>Coins</small><b id="coins">0</b></div>
+  <div class="spacer"></div>
+  <button type="button" class="round" id="mute" aria-label="Sound on">🔊</button>
+</div>
+<div class="overlay" id="ov">
+  <div class="card">
+    <h1 id="ov-title">Dino Dash</h1>
+    <div class="big" id="ov-score" hidden>0</div>
+    <p id="ov-text">Tap or press Space to jump over cactuses. Hold for a bigger jump! Watch out for birds, and grab the coins.</p>
+    <p class="best" id="ov-best"></p>
+    <button type="button" class="btn" id="ov-btn">Run!</button>
+  </div>
+</div>
+<script>
+(function(){
+  'use strict';
+  function $(id){ return document.getElementById(id); }
+  function load(k, d){ try { var v = localStorage.getItem(k); return v === null ? d : v; } catch(e){ return d; } }
+  function save(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
+
+  var actx = null, muted = load('dino.muted', '0') === '1';
+  function tone(f0, f1, dur, type, vol, delay){
+    if(muted) return;
+    try {
+      if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if(actx.state === 'suspended') actx.resume();
+      var t0 = actx.currentTime + (delay || 0), o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+    } catch(e){}
+  }
+  var muteBtn = $('mute');
+  function renderMute(){ muteBtn.textContent = muted ? '🔈' : '🔊'; muteBtn.setAttribute('aria-label', muted ? 'Sound off' : 'Sound on'); }
+  muteBtn.addEventListener('click', function(){ muted = !muted; save('dino.muted', muted ? '1' : '0'); renderMute(); muteBtn.blur(); });
+  renderMute();
+
+  // World units: the ground line is at y = 0, up is negative. The view is scaled so 300 units fit vertically.
+  var cv = $('c'), cx = cv.getContext('2d'), W = 0, H = 0, DPR = 1, sc = 1, VW = 600, groundY = 0;
+  var DX = 90, GRAV = 2200, JUMP = 760;
+  var dino, obs = [], coins = [], clouds = [], hills = [], dust = [], texts = [];
+  var state = 'menu', dist = 0, speed = 360, coinCount = 0, best = +load('dino.best', '0') || 0, clock = 0, nextGap = 400, deadT = 0, holding = false, dayT = 0;
+  var ov = $('ov'), scoreEl = $('score'), coinsEl = $('coins');
+
+  function layout(){
+    W = window.innerWidth; H = window.innerHeight; DPR = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.max(1, Math.round(W * DPR)); cv.height = Math.max(1, Math.round(H * DPR));
+    sc = Math.max(0.3, Math.min(H / 330, W / 380));
+    VW = W / sc; groundY = (H * 0.72) / sc;
+    DX = Math.min(120, VW * 0.2);
+  }
+  window.addEventListener('resize', layout);
+  layout();
+
+  function rand(a, b){ return a + Math.random() * (b - a); }
+  function reset(){
+    dino = { y: 0, vy: 0, onGround: true, leg: 0 };
+    obs = []; coins = []; dust = []; texts = [];
+    dist = 0; speed = 360; coinCount = 0; nextGap = 500; clock = 0;
+    clouds = []; hills = [];
+    for(var i = 0; i < 6; i++) clouds.push({ x: rand(0, 1400), y: rand(-260, -150), s: rand(0.6, 1.2) });
+    for(i = 0; i < 6; i++) hills.push({ x: i * 260 + rand(-40, 40), h: rand(50, 110), w: rand(180, 260) });
+    scoreEl.textContent = '0'; coinsEl.textContent = '0';
+  }
+
+  function spawn(){
+    var x = VW + 60, lvl = Math.min(1, dist / 12000), r = Math.random();
+    if(dist > 1500 && r < 0.2 + lvl * 0.15){
+      var high = Math.random() < 0.45;
+      obs.push({ kind: 'bird', x: x, w: 46, h: 30, y: high ? -92 : -38, flap: 0 });
+    } else {
+      var n = 1 + (Math.random() < 0.35 + lvl * 0.3 ? 1 : 0) + (Math.random() < lvl * 0.35 ? 1 : 0);
+      var h = rand(40, 60 + lvl * 12), w = 22 * n + (n - 1) * 4;
+      obs.push({ kind: 'cactus', x: x, w: w, h: h, n: n, y: -h });
+    }
+    if(Math.random() < 0.55){
+      var arc = Math.random() < 0.5, cxs = x + rand(160, 240);
+      for(var i = 0; i < 4; i++) coins.push({ x: cxs + i * 34, y: arc ? -50 - Math.sin((i + 0.5) / 4 * Math.PI) * 70 : -26, got: false });
+    }
+    nextGap = speed * rand(0.75, 1.35) + 140;
+  }
+
+  function startGame(){ reset(); state = 'play'; ov.hidden = true; tone(440, 660, 0.1, 'triangle', 0.05); }
+  function jump(){
+    if(state !== 'play') return;
+    if(dino.onGround){
+      dino.vy = -JUMP; dino.onGround = false;
+      tone(420, 820, 0.12, 'square', 0.04);
+      for(var i = 0; i < 6; i++) dust.push({ x: DX, y: 0, vx: rand(-120, -20), vy: rand(-60, -10), life: 0.4 });
+    }
+  }
+  function release(){ holding = false; if(dino && dino.vy < -420) dino.vy = -420; }
+
+  function die(){
+    state = 'dead'; deadT = 0;
+    tone(260, 60, 0.45, 'sawtooth', 0.09);
+    var sc2 = Math.floor(dist / 10) + coinCount * 25;
+    if(sc2 > best){ best = sc2; save('dino.best', String(best)); }
+  }
+  function showOver(){
+    var s = Math.floor(dist / 10) + coinCount * 25;
+    $('ov-title').textContent = s >= 1500 ? 'Dino legend!' : s >= 600 ? 'Great dash!' : 'Ouch!';
+    $('ov-score').hidden = false; $('ov-score').textContent = String(s);
+    $('ov-text').textContent = Math.floor(dist / 10) + ' m run + ' + coinCount + ' coins × 25';
+    $('ov-best').textContent = (s === best && s > 0 ? 'New best! ' : 'Best: ') + best;
+    $('ov-btn').textContent = 'Run again';
+    ov.hidden = false;
+  }
+
+  function step(dt){
+    clock += dt; dayT += dt;
+    var i;
+    for(i = dust.length - 1; i >= 0; i--){ var d = dust[i]; d.life -= dt; d.x += d.vx * dt; d.y += d.vy * dt; if(d.life <= 0) dust.splice(i, 1); }
+    for(i = texts.length - 1; i >= 0; i--){ texts[i].t += dt; texts[i].y -= 40 * dt; if(texts[i].t > 0.7) texts.splice(i, 1); }
+    if(state === 'dead'){ deadT += dt; if(deadT > 0.8 && ov.hidden) showOver(); return; }
+    var move = state === 'play' ? speed * dt : 120 * dt;
+    for(i = 0; i < clouds.length; i++){ var c = clouds[i]; c.x -= move * 0.15; if(c.x < -150){ c.x = VW + rand(50, 300); c.y = rand(-260, -150); } }
+    for(i = 0; i < hills.length; i++){ var h = hills[i]; h.x -= move * 0.35; if(h.x + h.w < -50){ h.x += 6 * 260; h.h = rand(50, 110); } }
+    if(state !== 'play'){ if(dino) dino.leg += dt * 8; return; }
+    speed = Math.min(820, 360 + dist * 0.018);
+    dist += move;
+    if(Math.floor(dist / 10) % 500 < Math.floor((dist - move) / 10) % 500) tone(880, 1320, 0.15, 'triangle', 0.05);
+    scoreEl.textContent = String(Math.floor(dist / 10) + coinCount * 25);
+    // dino physics
+    if(!dino.onGround){
+      dino.vy += GRAV * dt * (holding && dino.vy < 0 ? 0.62 : 1);
+      dino.y += dino.vy * dt;
+      if(dino.y >= 0){ dino.y = 0; dino.vy = 0; dino.onGround = true; }
+    }
+    dino.leg += dt * speed / 22;
+    // obstacles
+    nextGap -= move;
+    if(nextGap <= 0) spawn();
+    for(i = obs.length - 1; i >= 0; i--){
+      var o = obs[i]; o.x -= move; if(o.kind === 'bird') { o.x -= 60 * dt; o.flap += dt * 10; }
+      if(o.x + o.w < -60){ obs.splice(i, 1); continue; }
+    }
+    for(i = coins.length - 1; i >= 0; i--){
+      var cn = coins[i]; cn.x -= move;
+      if(cn.x < -40){ coins.splice(i, 1); continue; }
+      if(!cn.got && Math.abs(cn.x - DX) < 28 && Math.abs(cn.y - (dino.y - 26)) < 34){
+        cn.got = true; coinCount++; coinsEl.textContent = String(coinCount);
+        texts.push({ x: cn.x, y: cn.y, t: 0, s: '+25' });
+        tone(1320, 1760, 0.08, 'square', 0.035);
+      }
+    }
+    // collision (forgiving boxes)
+    var dl = DX - 16, dr = DX + 18, dtp = dino.y - 48, db = dino.y - 4;
+    for(i = 0; i < obs.length; i++){
+      o = obs[i];
+      var ol = o.x + 5, orr = o.x + o.w - 5, ot = o.y + 6, ob = o.y + o.h - 2;
+      if(o.kind === 'bird'){ ol = o.x + 6; orr = o.x + o.w - 6; ot = o.y + 8; ob = o.y + o.h - 8; }
+      if(dr > ol && dl < orr && db > ot && dtp < ob){ die(); return; }
+    }
+  }
+
+  function sy(y){ return groundY + y; }
+  function roundRect(x, y, w, h, r){ cx.beginPath(); cx.moveTo(x + r, y); cx.arcTo(x + w, y, x + w, y + h, r); cx.arcTo(x + w, y + h, x, y + h, r); cx.arcTo(x, y + h, x, y, r); cx.arcTo(x, y, x + w, y, r); cx.closePath(); }
+  function drawDino(x, y, legT, dead){
+    var gy = sy(y);
+    cx.save(); cx.translate(x, gy);
+    // tail
+    cx.fillStyle = '#4cbf56';
+    cx.beginPath(); cx.moveTo(-14, -30); cx.quadraticCurveTo(-34, -30, -40, -18); cx.quadraticCurveTo(-26, -20, -12, -18); cx.fill();
+    // legs
+    var a = Math.sin(legT) * (dino.onGround && state === 'play' ? 7 : 2);
+    cx.fillStyle = '#3aa344';
+    roundRect(-8 + a, -18, 9, 18, 3); cx.fill();
+    roundRect(4 - a, -18, 9, 18, 3); cx.fill();
+    // body
+    cx.fillStyle = '#4cbf56'; roundRect(-16, -44, 34, 30, 12); cx.fill();
+    cx.fillStyle = '#b8f0a0'; roundRect(-4, -32, 16, 16, 7); cx.fill();
+    // spikes
+    cx.fillStyle = '#ffb13b';
+    for(var i = 0; i < 3; i++){ cx.beginPath(); cx.moveTo(-14 + i * 9, -42); cx.lineTo(-10 + i * 9, -50); cx.lineTo(-6 + i * 9, -42); cx.fill(); }
+    // head
+    cx.fillStyle = '#4cbf56'; roundRect(4, -62, 30, 24, 10); cx.fill();
+    cx.fillStyle = '#fff'; cx.beginPath(); cx.arc(22, -53, 5.5, 0, Math.PI * 2); cx.fill();
+    cx.fillStyle = '#1c2b12';
+    if(dead){ cx.lineWidth = 2; cx.strokeStyle = '#1c2b12'; cx.beginPath(); cx.moveTo(19, -56); cx.lineTo(25, -50); cx.moveTo(25, -56); cx.lineTo(19, -50); cx.stroke(); }
+    else { cx.beginPath(); cx.arc(23.5, -53, 2.8, 0, Math.PI * 2); cx.fill(); }
+    cx.fillStyle = '#ff8fa8'; cx.beginPath(); cx.arc(15, -45, 3, 0, Math.PI * 2); cx.fill();
+    cx.strokeStyle = '#1c2b12'; cx.lineWidth = 1.8; cx.beginPath(); cx.moveTo(24, -44); cx.quadraticCurveTo(29, -42, 32, -45); cx.stroke();
+    // arm
+    cx.fillStyle = '#3aa344'; roundRect(12, -30, 10, 5, 2.5); cx.fill();
+    cx.restore();
+  }
+  function drawCactus(o){
+    var gy = sy(0);
+    for(var k = 0; k < o.n; k++){
+      var x = o.x + k * 26, h = o.h - (k % 2) * 8;
+      cx.fillStyle = '#2f9e5b'; roundRect(x + 5, gy - h, 12, h, 6); cx.fill();
+      cx.fillStyle = '#2f9e5b'; roundRect(x - 1, gy - h * 0.7, 7, h * 0.3, 3.5); cx.fill(); roundRect(x + 16, gy - h * 0.8, 7, h * 0.28, 3.5); cx.fill();
+      cx.fillStyle = '#5ccf85'; cx.fillRect(x + 8, gy - h + 6, 2.5, h - 12);
+    }
+  }
+  function drawBird(o){
+    var x = o.x, y = sy(o.y), f = Math.sin(o.flap) * 12;
+    cx.fillStyle = '#ff6b6b';
+    cx.beginPath(); cx.ellipse(x + 23, y + 16, 18, 10, 0, 0, Math.PI * 2); cx.fill();
+    cx.fillStyle = '#e04848'; cx.beginPath(); cx.moveTo(x + 16, y + 12); cx.lineTo(x + 30, y + 12); cx.lineTo(x + 24, y + 12 - f - 6); cx.closePath(); cx.fill();
+    cx.fillStyle = '#ffd23f'; cx.beginPath(); cx.moveTo(x + 4, y + 14); cx.lineTo(x - 6, y + 17); cx.lineTo(x + 5, y + 20); cx.fill();
+    cx.fillStyle = '#fff'; cx.beginPath(); cx.arc(x + 11, y + 13, 3.5, 0, Math.PI * 2); cx.fill();
+    cx.fillStyle = '#222'; cx.beginPath(); cx.arc(x + 10, y + 13, 1.8, 0, Math.PI * 2); cx.fill();
+  }
+
+  function render(){
+    if(!W || !H) return;
+    cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    var night = (Math.sin(dist / 6000) + 1) / 2 > 0.85 ? 1 : 0;
+    var g = cx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, night ? '#243a6b' : '#8fd3ff'); g.addColorStop(1, night ? '#5a4f8a' : '#dff5ff');
+    cx.fillStyle = g; cx.fillRect(0, 0, W, H);
+    cx.setTransform(DPR * sc, 0, 0, DPR * sc, 0, 0);
+    cx.fillStyle = night ? '#f3f0d0' : '#ffe066'; cx.beginPath(); cx.arc(VW - 80, sy(-230), 26, 0, Math.PI * 2); cx.fill();
+    var i;
+    cx.fillStyle = 'rgba(255,255,255,0.9)';
+    for(i = 0; i < clouds.length; i++){
+      var c = clouds[i], y = sy(c.y);
+      cx.beginPath(); cx.arc(c.x, y, 18 * c.s, 0, Math.PI * 2); cx.arc(c.x + 20 * c.s, y - 8 * c.s, 22 * c.s, 0, Math.PI * 2); cx.arc(c.x + 42 * c.s, y, 16 * c.s, 0, Math.PI * 2); cx.fill();
+    }
+    cx.fillStyle = night ? '#3f6b52' : '#9fdc8a';
+    for(i = 0; i < hills.length; i++){
+      var h = hills[i]; cx.beginPath(); cx.ellipse(h.x + h.w / 2, sy(0), h.w / 2, h.h, 0, Math.PI, 0); cx.fill();
+    }
+    cx.fillStyle = night ? '#6a5a3a' : '#e8c27a'; cx.fillRect(0, sy(0), VW, H / sc - sy(0));
+    cx.fillStyle = night ? '#4d8a4a' : '#6bcf5f'; cx.fillRect(0, sy(0), VW, 8);
+    cx.fillStyle = 'rgba(120,80,30,0.35)';
+    var off = (dist * 1) % 60;
+    for(var x = -off; x < VW; x += 60){ cx.fillRect(x, sy(18), 14, 3); cx.fillRect(x + 30, sy(34), 8, 3); }
+    for(i = 0; i < coins.length; i++){
+      var cn = coins[i]; if(cn.got) continue;
+      var wob = Math.abs(Math.cos(clock * 5 + i));
+      cx.fillStyle = '#ffc53d'; cx.beginPath(); cx.ellipse(cn.x, sy(cn.y), 9 * wob + 1.5, 10, 0, 0, Math.PI * 2); cx.fill();
+      cx.fillStyle = '#fff1a8'; cx.beginPath(); cx.ellipse(cn.x, sy(cn.y), 4 * wob + 0.5, 5, 0, 0, Math.PI * 2); cx.fill();
+    }
+    for(i = 0; i < obs.length; i++){ var o = obs[i]; if(o.kind === 'cactus') drawCactus(o); else drawBird(o); }
+    if(dino){
+      cx.fillStyle = 'rgba(0,0,0,0.12)'; cx.beginPath(); cx.ellipse(DX + 2, sy(2), 22 * (1 + dino.y / 400), 5, 0, 0, Math.PI * 2); cx.fill();
+      drawDino(DX, dino.y, dino.leg, state === 'dead');
+    }
+    cx.fillStyle = 'rgba(200,160,90,0.8)';
+    for(i = 0; i < dust.length; i++){ var d = dust[i]; cx.globalAlpha = Math.max(0, d.life / 0.4); cx.beginPath(); cx.arc(d.x, sy(d.y), 4, 0, Math.PI * 2); cx.fill(); }
+    cx.globalAlpha = 1;
+    cx.font = '700 16px Fredoka, sans-serif'; cx.textAlign = 'center';
+    for(i = 0; i < texts.length; i++){ var t = texts[i]; cx.globalAlpha = 1 - t.t / 0.7; cx.fillStyle = '#ffb000'; cx.fillText(t.s, t.x, sy(t.y)); }
+    cx.globalAlpha = 1;
+  }
+
+  var last = 0;
+  function frame(ts){
+    var dt = Math.min(0.033, Math.max(0, (ts - last) / 1000)); last = ts;
+    step(dt); render();
+    requestAnimationFrame(frame);
+  }
+  cv.addEventListener('pointerdown', function(e){ e.preventDefault(); holding = true; jump(); });
+  window.addEventListener('pointerup', release);
+  window.addEventListener('pointercancel', release);
+  $('ov-btn').addEventListener('click', startGame);
+  window.addEventListener('keydown', function(e){
+    if(e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'Enter'){
+      e.preventDefault();
+      if(e.repeat) return;
+      if(state === 'play'){ holding = true; jump(); } else if(!ov.hidden) startGame();
+    }
+  });
+  window.addEventListener('keyup', function(e){ if(e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'Enter') release(); });
+
+  reset();
+  $('ov-best').textContent = best ? 'Best: ' + best : '';
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
