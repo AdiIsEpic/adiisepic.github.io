@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1b1d2e">
+<title>Simon Says</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Lilita+One&display=swap" rel="stylesheet">
+<style>
+  :root{ --font:'Fredoka', ui-rounded, 'Segoe UI', system-ui, sans-serif; --display:'Lilita One', 'Fredoka', system-ui, sans-serif; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; height:100%; overflow:hidden; background:radial-gradient(circle at 50% 40%, #2d3050, #1b1d2e 70%); color:#fff; font-family:var(--font); -webkit-user-select:none; user-select:none; }
+  body{ display:flex; flex-direction:column; align-items:center; }
+  .hud{ width:100%; display:flex; align-items:center; gap:8px; padding:10px; padding-top:max(10px, env(safe-area-inset-top)); }
+  .back{ padding:8px 12px; border-radius:12px; background:rgba(255,255,255,0.1); color:#fff; font-weight:600; font-size:15px; text-decoration:none; white-space:nowrap; }
+  .stat{ padding:4px 12px; border-radius:14px; background:rgba(255,255,255,0.1); text-align:center; line-height:1.05; min-width:64px; }
+  .stat small{ display:block; font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; opacity:0.75; }
+  .stat b{ font:400 22px var(--display); }
+  .spacer{ flex:1; }
+  .round{ width:40px; height:40px; border:none; border-radius:50%; background:rgba(255,255,255,0.1); color:#fff; font-size:17px; cursor:pointer; flex:none; }
+  main{ flex:1; display:flex; align-items:center; justify-content:center; width:100%; padding:10px; }
+  #simon{ --s:min(88vw, calc(100vh - 150px), 480px); width:var(--s); height:var(--s); position:relative; border-radius:50%; background:#11121d; padding:calc(var(--s) * 0.035); display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:calc(var(--s) * 0.035); box-shadow:0 20px 60px rgba(0,0,0,0.5); touch-action:none; }
+  .pad{ border:none; cursor:pointer; filter:brightness(0.55) saturate(0.9); transition:filter .08s, box-shadow .08s, transform .08s; padding:0; }
+  .pad:nth-child(1){ border-radius:100% 0 0 0; background:#2ed573; }
+  .pad:nth-child(2){ border-radius:0 100% 0 0; background:#ff4757; }
+  .pad:nth-child(3){ border-radius:0 0 0 100%; background:#ffd32a; }
+  .pad:nth-child(4){ border-radius:0 0 100% 0; background:#3d8bff; }
+  .pad.lit{ filter:brightness(1.15) saturate(1.1); box-shadow:0 0 40px 6px currentColor; }
+  .pad:nth-child(1).lit{ color:#2ed573; } .pad:nth-child(2).lit{ color:#ff4757; } .pad:nth-child(3).lit{ color:#ffd32a; } .pad:nth-child(4).lit{ color:#3d8bff; }
+  .pad:focus-visible{ outline:4px solid #fff; outline-offset:-8px; }
+  #hub{ position:absolute; left:50%; top:50%; width:40%; height:40%; transform:translate(-50%,-50%); border-radius:50%; background:radial-gradient(circle at 50% 35%, #34375a, #1b1d2e); border:calc(var(--s) * 0.03) solid #11121d; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:4px; }
+  #lvl{ font:400 calc(var(--s) * 0.1)/1 var(--display); }
+  #msg{ font-size:calc(var(--s) * 0.035); font-weight:600; opacity:0.85; min-height:1.3em; }
+  #go{ font:400 calc(var(--s) * 0.05) var(--display); border:none; border-radius:14px; padding:6px 16px; color:#fff; cursor:pointer; background:linear-gradient(180deg, #ff6b9d, #ff3d7f); box-shadow:0 4px 0 #b8104d; }
+  #go:active{ transform:translateY(3px); box-shadow:0 1px 0 #b8104d; }
+  #go[hidden]{ display:none; }
+  #simon.fail .pad{ filter:brightness(0.9) saturate(0.2); }
+  .back:focus-visible, .round:focus-visible, #go:focus-visible{ outline:3px solid #fff; outline-offset:2px; }
+</style>
+</head>
+<body>
+<div class="hud">
+  <a class="back" href="../" aria-label="Back to games">&lsaquo; Games</a>
+  <div class="spacer"></div>
+  <div class="stat"><small>Score</small><b id="score">0</b></div>
+  <div class="stat"><small>Best</small><b id="best">0</b></div>
+  <div class="spacer"></div>
+  <button type="button" class="round" id="mute" aria-label="Sound on">🔊</button>
+</div>
+<main>
+  <div id="simon">
+    <button type="button" class="pad" aria-label="Green"></button>
+    <button type="button" class="pad" aria-label="Red"></button>
+    <button type="button" class="pad" aria-label="Yellow"></button>
+    <button type="button" class="pad" aria-label="Blue"></button>
+    <div id="hub">
+      <div id="lvl">Simon</div>
+      <div id="msg" aria-live="polite">Watch, then copy!</div>
+      <button type="button" id="go">Start</button>
+    </div>
+  </div>
+</main>
+<script>
+(function(){
+  'use strict';
+  function $(id){ return document.getElementById(id); }
+  function load(k, d){ try { var v = localStorage.getItem(k); return v === null ? d : v; } catch(e){ return d; } }
+  function save(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
+
+  var actx = null, muted = load('simon.muted', '0') === '1', FREQ = [659.3, 523.3, 440, 329.6];
+  function ac(){ if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if(actx.state === 'suspended') actx.resume(); return actx; }
+  function note(f, dur, type, vol){
+    if(muted) return;
+    try {
+      var a = ac(), t0 = a.currentTime, o = a.createOscillator(), g = a.createGain();
+      o.type = type || 'triangle'; o.frequency.setValueAtTime(f, t0);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol || 0.16, t0 + 0.02);
+      g.gain.setValueAtTime(vol || 0.16, t0 + Math.max(0.03, dur - 0.08)); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+    } catch(e){}
+  }
+  var muteBtn = $('mute');
+  function renderMute(){ muteBtn.textContent = muted ? '🔈' : '🔊'; muteBtn.setAttribute('aria-label', muted ? 'Sound off' : 'Sound on'); }
+  muteBtn.addEventListener('click', function(){ muted = !muted; save('simon.muted', muted ? '1' : '0'); renderMute(); muteBtn.blur(); });
+  renderMute();
+
+  var pads = Array.prototype.slice.call(document.querySelectorAll('.pad')), simon = $('simon');
+  var seq = [], pos = 0, state = 'idle', token = 0, best = +load('simon.best', '0') || 0;
+  $('best').textContent = best;
+
+  function light(i, ms){
+    pads[i].classList.add('lit');
+    note(FREQ[i], ms / 1000);
+    setTimeout(function(){ pads[i].classList.remove('lit'); }, ms);
+  }
+  function setMsg(t){ $('msg').textContent = t; }
+  function start(){
+    token++; seq = []; simon.classList.remove('fail');
+    $('go').hidden = true; $('score').textContent = '0';
+    nextRound();
+  }
+  function nextRound(){
+    seq.push(Math.floor(Math.random() * 4));
+    $('lvl').textContent = String(seq.length);
+    playSeq();
+  }
+  function playSeq(){
+    state = 'watch'; pos = 0; setMsg('Watch…');
+    var id = ++token, on = Math.max(220, 520 - seq.length * 18), gap = Math.max(90, 180 - seq.length * 5), i = 0;
+    function nxt(){
+      if(id !== token) return;
+      if(i >= seq.length){ state = 'input'; setMsg('Your turn!'); return; }
+      light(seq[i], on); i++;
+      setTimeout(nxt, on + gap);
+    }
+    setTimeout(nxt, 650);
+  }
+  function press(i){
+    if(state !== 'input') return;
+    light(i, 240);
+    if(i !== seq[pos]){ fail(); return; }
+    pos++;
+    if(pos === seq.length){
+      state = 'wait';
+      var score = seq.length;
+      $('score').textContent = String(score);
+      if(score > best){ best = score; save('simon.best', String(best)); $('best').textContent = best; }
+      setMsg(score % 5 === 0 ? 'Awesome! 🎉' : 'Nice!');
+      setTimeout(function(){ if(state === 'wait') nextRound(); }, 800);
+    }
+  }
+  function fail(){
+    state = 'over'; token++;
+    simon.classList.add('fail');
+    setTimeout(function(){ note(110, 0.6, 'sawtooth', 0.12); }, 60);
+    var score = seq.length - 1;
+    $('lvl').textContent = String(score);
+    setMsg(score > 0 && score >= best ? 'Best score!' : 'Oops! Score ' + score);
+    var el = pads[seq[pos]];
+    var k = 0, blink = setInterval(function(){ el.classList.toggle('lit'); if(++k >= 6){ clearInterval(blink); el.classList.remove('lit'); } }, 160);
+    $('go').textContent = 'Again'; $('go').hidden = false;
+  }
+  pads.forEach(function(p, i){
+    p.addEventListener('pointerdown', function(e){ e.preventDefault(); press(i); });
+    p.addEventListener('keydown', function(e){ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); press(i); } });
+  });
+  $('go').addEventListener('click', start);
+  window.addEventListener('keydown', function(e){
+    var m = { KeyQ: 0, KeyW: 1, KeyA: 2, KeyS: 3, Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3 }[e.code];
+    if(m !== undefined && !e.repeat){ press(m); return; }
+    if((e.code === 'Enter' || e.code === 'Space') && !$('go').hidden && document.activeElement && !document.activeElement.classList.contains('pad')){ e.preventDefault(); start(); }
+  });
+})();
+</script>
+</body>
+</html>
