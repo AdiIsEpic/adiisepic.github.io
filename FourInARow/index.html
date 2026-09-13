@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1f4fb8">
+<title>Four in a Row</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Lilita+One&display=swap" rel="stylesheet">
+<style>
+  :root{ --font:'Fredoka', ui-rounded, 'Segoe UI', system-ui, sans-serif; --display:'Lilita One', 'Fredoka', system-ui, sans-serif; --red:#ff4d5e; --yel:#ffd23f; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; min-height:100%; background:radial-gradient(circle at 50% 0%, #6fb6ff, #2b6fe0 60%, #1f4fb8); color:#fff; font-family:var(--font); -webkit-user-select:none; user-select:none; }
+  body{ display:flex; flex-direction:column; align-items:center; padding:10px 10px 20px; padding-top:max(10px, env(safe-area-inset-top)); min-height:100vh; }
+  .hud{ width:min(100%, 520px); display:flex; align-items:center; gap:8px; }
+  .back{ padding:8px 12px; border-radius:12px; background:rgba(0,0,0,0.2); color:#fff; font-weight:600; font-size:15px; text-decoration:none; white-space:nowrap; }
+  .spacer{ flex:1; }
+  h1{ margin:0; font:400 26px var(--display); text-shadow:0 3px 0 rgba(0,0,0,0.15); white-space:nowrap; }
+  .round{ width:40px; height:40px; border:none; border-radius:50%; background:rgba(0,0,0,0.2); color:#fff; font-size:17px; cursor:pointer; flex:none; }
+  .modes{ display:flex; flex-wrap:wrap; gap:4px; justify-content:center; background:rgba(0,0,0,0.18); padding:4px; border-radius:14px; margin:12px 0 10px; }
+  .modes button{ font:600 14px var(--font); border:none; background:none; color:#fff; padding:7px 10px; border-radius:10px; cursor:pointer; }
+  .modes button.on{ background:#fff; color:#1f4fb8; }
+  .scores{ width:min(100%, 520px); display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+  .pl{ display:flex; align-items:center; gap:8px; padding:6px 12px; border-radius:14px; background:rgba(0,0,0,0.18); font-weight:600; border:3px solid transparent; transition:border-color .2s; }
+  .pl.turn{ border-color:#fff; }
+  .pl .dot{ width:20px; height:20px; border-radius:50%; }
+  .pl b{ font:400 22px var(--display); margin-left:4px; }
+  #status{ font-weight:700; font-size:17px; text-align:center; flex:1; min-height:24px; }
+  #wrap{ position:relative; width:min(96vw, calc((100vh - 230px) * 7 / 6), 520px); }
+  #ghosts{ display:grid; grid-template-columns:repeat(7,1fr); height:calc(min(96vw, calc((100vh - 230px) * 7 / 6), 520px) / 7 * 0.7); }
+  .ghost{ display:flex; align-items:center; justify-content:center; }
+  .ghost i{ width:70%; aspect-ratio:1; border-radius:50%; opacity:0; transition:opacity .15s; }
+  .ghost.show i{ opacity:0.55; }
+  #board{ position:relative; display:grid; grid-template-columns:repeat(7,1fr); gap:0; padding:2%; background:linear-gradient(180deg,#2f63d6,#1d46a8); border-radius:18px; box-shadow:0 12px 0 #14327a, 0 20px 40px rgba(0,0,0,0.3); cursor:pointer; touch-action:manipulation; }
+  .cell{ position:relative; aspect-ratio:1; display:flex; align-items:center; justify-content:center; }
+  .hole{ width:82%; height:82%; border-radius:50%; background:#0f2a6b; box-shadow:inset 0 4px 6px rgba(0,0,0,0.45); overflow:visible; position:relative; }
+  .disc{ position:absolute; inset:0; border-radius:50%; box-shadow:inset 0 -4px 0 rgba(0,0,0,0.18), inset 0 3px 0 rgba(255,255,255,0.35); animation:drop .45s cubic-bezier(.3,.1,.5,1.25) both; }
+  .disc.p1{ background:var(--red); }
+  .disc.p2{ background:var(--yel); }
+  .disc.win{ animation:drop .45s cubic-bezier(.3,.1,.5,1.25) both, glow .7s ease-in-out .45s infinite alternate; }
+  @keyframes drop{ from{ transform:translateY(calc(var(--d) * -122%)); } }
+  @keyframes glow{ to{ box-shadow:0 0 0 5px #fff, 0 0 18px 6px rgba(255,255,255,0.8); } }
+  .btn{ font:400 20px var(--display); border:none; border-radius:16px; padding:11px 26px; color:#1f4fb8; cursor:pointer; background:#fff; box-shadow:0 5px 0 #b9c9f0; margin-top:22px; }
+  .btn:active{ transform:translateY(3px); box-shadow:0 2px 0 #b9c9f0; }
+  button:focus-visible, .back:focus-visible{ outline:3px solid #fff; outline-offset:2px; }
+</style>
+</head>
+<body>
+<div class="hud">
+  <a class="back" href="../" aria-label="Back to games">&lsaquo; Games</a>
+  <div class="spacer"></div>
+  <h1>Four in a Row</h1>
+  <div class="spacer"></div>
+  <button type="button" class="round" id="mute" aria-label="Sound on">🔊</button>
+</div>
+<div class="modes" id="modes" role="group" aria-label="Opponent"></div>
+<div class="scores">
+  <div class="pl" id="pl1"><span class="dot" style="background:var(--red)"></span><span id="n1">You</span><b id="s1">0</b></div>
+  <div id="status" aria-live="polite">Your turn</div>
+  <div class="pl" id="pl2"><b id="s2">0</b><span id="n2">CPU</span><span class="dot" style="background:var(--yel)"></span></div>
+</div>
+<div id="wrap">
+  <div id="ghosts"></div>
+  <div id="board" role="grid" aria-label="Board: tap a column to drop a disc"></div>
+</div>
+<button type="button" class="btn" id="again">New round</button>
+<script>
+(function(){
+  'use strict';
+  function $(id){ return document.getElementById(id); }
+  function load(k, d){ try { var v = localStorage.getItem(k); return v === null ? d : v; } catch(e){ return d; } }
+  function save(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
+
+  var actx = null, muted = load('four.muted', '0') === '1';
+  function tone(f0, f1, dur, type, vol, delay){
+    if(muted) return;
+    try {
+      if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if(actx.state === 'suspended') actx.resume();
+      var t0 = actx.currentTime + (delay || 0), o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+    } catch(e){}
+  }
+  var muteBtn = $('mute');
+  function renderMute(){ muteBtn.textContent = muted ? '🔈' : '🔊'; muteBtn.setAttribute('aria-label', muted ? 'Sound off' : 'Sound on'); }
+  muteBtn.addEventListener('click', function(){ muted = !muted; save('four.muted', muted ? '1' : '0'); renderMute(); muteBtn.blur(); });
+  renderMute();
+
+  var COLS = 7, ROWS = 6, ORDER = [3, 2, 4, 1, 5, 0, 6];
+  var MODES = [{ name: 'Easy CPU', depth: 1 }, { name: 'Medium CPU', depth: 4 }, { name: 'Hard CPU', depth: 7 }, { name: '2 Players', depth: 0 }];
+  // All 4-in-a-row windows as index lists.
+  var LINES = [];
+  (function(){
+    var dirs = [[0, 1], [1, 0], [1, 1], [1, -1]];
+    for(var r = 0; r < ROWS; r++) for(var c = 0; c < COLS; c++) dirs.forEach(function(d){
+      var er = r + d[0] * 3, ec = c + d[1] * 3;
+      if(er < 0 || er >= ROWS || ec < 0 || ec >= COLS) return;
+      LINES.push([0, 1, 2, 3].map(function(k){ return (r + d[0] * k) * COLS + c + d[1] * k; }));
+    });
+  })();
+  var CELL_LINES = [];
+  for(var i = 0; i < ROWS * COLS; i++) CELL_LINES.push(LINES.filter(function(L){ return L.indexOf(i) >= 0; }));
+
+  var board, heights, turn, over, starter = 1, busy = false, mode = Math.min(3, Math.max(0, +load('four.mode', '1') || 0));
+  var scores = [0, 0, 0];
+  var boardEl = $('board'), ghostsEl = $('ghosts'), cellEls = [], ghostEls = [];
+  for(i = 0; i < ROWS * COLS; i++){
+    var c = document.createElement('div'); c.className = 'cell';
+    var h = document.createElement('div'); h.className = 'hole'; c.appendChild(h);
+    (function(col){ c.addEventListener('click', function(){ human(col); }); c.addEventListener('pointerenter', function(){ hover(col); }); })(i % COLS);
+    boardEl.appendChild(c); cellEls.push(h);
+  }
+  for(i = 0; i < COLS; i++){
+    var gh = document.createElement('div'); gh.className = 'ghost'; gh.innerHTML = '<i></i>';
+    (function(col){ gh.addEventListener('click', function(){ human(col); }); })(i);
+    ghostsEl.appendChild(gh); ghostEls.push(gh);
+  }
+  boardEl.addEventListener('pointerleave', function(){ hover(-1); });
+  var modesEl = $('modes');
+  MODES.forEach(function(M, k){
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = M.name;
+    b.addEventListener('click', function(){ if(k === mode) return; mode = k; save('four.mode', String(k)); scores = [0, 0, 0]; starter = 1; newRound(); });
+    modesEl.appendChild(b);
+  });
+
+  function winnerAt(b, idx){
+    var p = b[idx], ls = CELL_LINES[idx];
+    for(var k = 0; k < ls.length; k++){ var L = ls[k]; if(b[L[0]] === p && b[L[1]] === p && b[L[2]] === p && b[L[3]] === p) return L; }
+    return null;
+  }
+  function evaluate(b, me){
+    var opp = 3 - me, s = 0;
+    for(var r = 0; r < ROWS; r++){ if(b[r * COLS + 3] === me) s += 3; else if(b[r * COLS + 3] === opp) s -= 3; }
+    for(var k = 0; k < LINES.length; k++){
+      var L = LINES[k], m = 0, o = 0;
+      for(var j = 0; j < 4; j++){ var v = b[L[j]]; if(v === me) m++; else if(v === opp) o++; }
+      if(m && o) continue;
+      if(m === 3) s += 6; else if(m === 2) s += 2;
+      if(o === 3) s -= 8; else if(o === 2) s -= 2;
+    }
+    return s;
+  }
+  function negamax(b, hts, depth, alpha, beta, me, moves){
+    if(moves === ROWS * COLS) return 0;
+    if(depth === 0) return evaluate(b, me);
+    var bestV = -Infinity;
+    for(var k = 0; k < ORDER.length; k++){
+      var col = ORDER[k];
+      if(hts[col] >= ROWS) continue;
+      var idx = (ROWS - 1 - hts[col]) * COLS + col;
+      b[idx] = me; hts[col]++;
+      var v = winnerAt(b, idx) ? 100000 + depth : -negamax(b, hts, depth - 1, -beta, -alpha, 3 - me, moves + 1);
+      b[idx] = 0; hts[col]--;
+      if(v > bestV) bestV = v;
+      if(v > alpha) alpha = v;
+      if(alpha >= beta) break;
+    }
+    return bestV;
+  }
+  function aiMove(){
+    var depth = MODES[mode].depth, me = turn, moves = heights.reduce(function(a, x){ return a + x; }, 0);
+    var legal = ORDER.filter(function(col){ return heights[col] < ROWS; });
+    if(mode === 0 && Math.random() < 0.35) return legal[Math.floor(Math.random() * legal.length)];
+    var b = board.slice(), hts = heights.slice(), best = legal[0], bestV = -Infinity;
+    for(var k = 0; k < legal.length; k++){
+      var col = legal[k], idx = (ROWS - 1 - hts[col]) * COLS + col;
+      b[idx] = me; hts[col]++;
+      var v = winnerAt(b, idx) ? 1000000 : -negamax(b, hts, depth - 1, -Infinity, Infinity, 3 - me, moves + 1);
+      b[idx] = 0; hts[col]--;
+      if(mode === 0) v += Math.random() * 6;
+      if(v > bestV){ bestV = v; best = col; }
+    }
+    return best;
+  }
+
+  var roundId = 0;
+  function newRound(){
+    roundId++;
+    board = new Array(ROWS * COLS).fill(0); heights = new Array(COLS).fill(0); over = false; busy = false;
+    turn = starter; starter = 3 - starter;
+    cellEls.forEach(function(h){ h.innerHTML = ''; });
+    Array.prototype.forEach.call(modesEl.children, function(b, k){ b.classList.toggle('on', k === mode); });
+    $('n1').textContent = mode === 3 ? 'Red' : 'You'; $('n2').textContent = mode === 3 ? 'Yellow' : 'CPU';
+    renderScores(); status(); hover(-1);
+    if(isCpuTurn()) cpuTurn();
+  }
+  function isCpuTurn(){ return mode !== 3 && turn === 2 && !over; }
+  function status(msg){
+    var s = msg;
+    if(!s){
+      if(mode === 3) s = (turn === 1 ? 'Red' : 'Yellow') + "'s turn";
+      else s = turn === 1 ? 'Your turn' : 'CPU is thinking…';
+    }
+    $('status').textContent = s;
+    $('pl1').classList.toggle('turn', !over && turn === 1); $('pl2').classList.toggle('turn', !over && turn === 2);
+  }
+  function renderScores(){ $('s1').textContent = scores[1]; $('s2').textContent = scores[2]; }
+  var hoverCol = -1;
+  function hover(col){
+    hoverCol = col;
+    ghostEls.forEach(function(g, k){
+      g.classList.toggle('show', k === col && !over && !busy && !isCpuTurn() && heights && heights[k] < ROWS);
+      g.firstChild.style.background = turn === 1 ? 'var(--red)' : 'var(--yel)';
+    });
+  }
+  function drop(col){
+    var row = ROWS - 1 - heights[col], idx = row * COLS + col;
+    board[idx] = turn; heights[col]++;
+    var d = document.createElement('div'); d.className = 'disc p' + turn; d.style.setProperty('--d', String(row + 1));
+    cellEls[idx].appendChild(d);
+    tone(turn === 1 ? 500 : 620, 260, 0.12, 'triangle', 0.06, 0.3);
+    var line = winnerAt(board, idx);
+    if(line){
+      over = true; scores[turn]++; renderScores();
+      line.forEach(function(k){ var el = cellEls[k].firstChild; if(el) el.classList.add('win'); });
+      var winMsg = mode === 3 ? (turn === 1 ? 'Red' : 'Yellow') + ' wins! 🎉' : turn === 1 ? 'You win! 🎉' : 'CPU wins!';
+      status(winMsg);
+      if(mode === 3 || turn === 1) [523, 659, 784, 1047].forEach(function(f, k){ tone(f, f, 0.2, 'triangle', 0.07, 0.4 + k * 0.1); });
+      else tone(400, 150, 0.5, 'sawtooth', 0.06, 0.4);
+    } else if(heights.every(function(x){ return x >= ROWS; })){
+      over = true; status("It's a draw!");
+    } else {
+      turn = 3 - turn; status();
+    }
+    hover(hoverCol);
+  }
+  function human(col){
+    if(over || busy || isCpuTurn() || heights[col] >= ROWS) return;
+    drop(col);
+    if(isCpuTurn()) cpuTurn();
+  }
+  function cpuTurn(){
+    busy = true; status(); hover(-1);
+    var id = roundId;
+    setTimeout(function(){
+      if(id !== roundId) return;
+      if(over || !isCpuTurn()){ busy = false; return; }
+      var col = aiMove();
+      busy = false;
+      drop(col);
+    }, 520);
+  }
+  $('again').addEventListener('click', newRound);
+  window.addEventListener('keydown', function(e){
+    var n = +e.key;
+    if(n >= 1 && n <= 7) human(n - 1);
+  });
+  newRound();
+})();
+</script>
+</body>
+</html>
