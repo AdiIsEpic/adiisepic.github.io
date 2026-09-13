@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1d1b3a">
+<title>Piano Tap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Lilita+One&display=swap" rel="stylesheet">
+<style>
+  :root{ --font:'Fredoka', ui-rounded, 'Segoe UI', system-ui, sans-serif; --display:'Lilita One', 'Fredoka', system-ui, sans-serif; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; height:100%; overflow:hidden; overscroll-behavior:none; background:#1d1b3a; color:#fff; font-family:var(--font); -webkit-user-select:none; user-select:none; }
+  #c{ position:fixed; top:0; bottom:0; left:50%; transform:translateX(-50%); height:100%; display:block; touch-action:none; cursor:pointer; }
+  .hud{ position:fixed; top:0; left:0; right:0; z-index:5; display:flex; align-items:center; gap:8px; padding:10px; padding-top:max(10px, env(safe-area-inset-top)); pointer-events:none; }
+  .hud > *{ pointer-events:auto; }
+  .back{ padding:8px 12px; border-radius:12px; background:rgba(29,27,58,0.75); color:#fff; font-weight:600; font-size:15px; text-decoration:none; white-space:nowrap; }
+  .spacer{ flex:1; }
+  .round{ width:40px; height:40px; border:none; border-radius:50%; background:rgba(29,27,58,0.75); color:#fff; font-size:17px; cursor:pointer; flex:none; }
+  #score{ position:fixed; top:60px; left:0; right:0; z-index:4; text-align:center; font:400 56px/1 var(--display); color:#ff4d6d; text-shadow:0 3px 0 #fff, 0 0 12px rgba(255,255,255,0.8); pointer-events:none; }
+  .overlay{ position:fixed; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; padding:16px; background:rgba(20,16,50,0.5); }
+  .overlay[hidden]{ display:none; }
+  .card{ width:min(100%, 350px); padding:24px 20px; border-radius:26px; text-align:center; background:#fff; color:#1d1b3a; box-shadow:0 20px 50px rgba(0,0,0,0.4); animation:pop .35s cubic-bezier(.2,.9,.3,1.3); }
+  @keyframes pop{ from{ transform:scale(0.85); opacity:0; } }
+  .card h1{ margin:0 0 8px; font:400 42px var(--display); color:#1d1b3a; }
+  .card p{ margin:0 0 14px; font-size:16px; line-height:1.4; opacity:0.85; }
+  .card .big{ font:400 60px/1 var(--display); color:#ff4d6d; margin:0 0 8px; }
+  .card .best{ color:#7a5cff; font-weight:700; opacity:1; }
+  .songs{ display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin:0 0 16px; }
+  .songs button{ font:600 14px var(--font); border:2px solid #e4e0ff; background:#f6f4ff; color:#1d1b3a; border-radius:12px; padding:6px 10px; cursor:pointer; }
+  .songs button.on{ background:#7a5cff; border-color:#7a5cff; color:#fff; }
+  .btn{ font:400 22px var(--display); border:none; border-radius:18px; padding:13px 32px; color:#fff; cursor:pointer; background:linear-gradient(180deg, #3b3770, #1d1b3a); box-shadow:0 6px 0 #0b0a1c; }
+  .btn:active{ transform:translateY(4px); box-shadow:0 2px 0 #0b0a1c; }
+  .btn:focus-visible, .round:focus-visible, .back:focus-visible, .songs button:focus-visible{ outline:3px solid #7a5cff; outline-offset:2px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hud">
+  <a class="back" href="../" aria-label="Back to games">&lsaquo; Games</a>
+  <div class="spacer"></div>
+  <button type="button" class="round" id="mute" aria-label="Sound on">🔊</button>
+</div>
+<div id="score">0</div>
+<div class="overlay" id="ov">
+  <div class="card">
+    <h1 id="ov-title">Piano Tap</h1>
+    <div class="big" id="ov-score" hidden>0</div>
+    <p id="ov-text">Tap the black tiles from the bottom up to play a song. Don't tap the white ones, and don't let a black tile slip past!</p>
+    <div class="songs" id="songs"></div>
+    <p class="best" id="ov-best"></p>
+    <button type="button" class="btn" id="ov-btn">Play</button>
+  </div>
+</div>
+<script>
+(function(){
+  'use strict';
+  function $(id){ return document.getElementById(id); }
+  function load(k, d){ try { var v = localStorage.getItem(k); return v === null ? d : v; } catch(e){ return d; } }
+  function save(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
+
+  var actx = null, muted = load('piano.muted', '0') === '1';
+  function ctx(){ if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if(actx.state === 'suspended') actx.resume(); return actx; }
+  function osc(f, type, vol, dur, delay){
+    var a = ctx(), t0 = a.currentTime + (delay || 0), o = a.createOscillator(), g = a.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+  }
+  function piano(f){ if(muted) return; try { osc(f, 'triangle', 0.16, 0.9); osc(f * 2, 'sine', 0.05, 0.5); osc(f / 2, 'sine', 0.05, 0.7); } catch(e){} }
+  function buzz(){ if(muted) return; try { osc(110, 'sawtooth', 0.12, 0.5); osc(116, 'sawtooth', 0.1, 0.5); } catch(e){} }
+  var muteBtn = $('mute');
+  function renderMute(){ muteBtn.textContent = muted ? '🔈' : '🔊'; muteBtn.setAttribute('aria-label', muted ? 'Sound off' : 'Sound on'); }
+  muteBtn.addEventListener('click', function(){ muted = !muted; save('piano.muted', muted ? '1' : '0'); renderMute(); muteBtn.blur(); });
+  renderMute();
+
+  var NOTE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  function freq(n){ var m = /^([A-G])(#?)(\d)$/.exec(n); var semi = NOTE[m[1]] + (m[2] ? 1 : 0) + (+m[3] - 4) * 12 - 9; return 440 * Math.pow(2, semi / 12) * 2; }
+  var SONGS = [
+    { name: 'Ode to Joy', notes: 'E4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 E4 D4 D4 E4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 D4 C4 C4 D4 D4 E4 C4 D4 E4 F4 E4 C4 D4 E4 F4 E4 D4 C4 D4 G3 E4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 D4 C4 C4' },
+    { name: 'Twinkle', notes: 'C4 C4 G4 G4 A4 A4 G4 F4 F4 E4 E4 D4 D4 C4 G4 G4 F4 F4 E4 E4 D4 G4 G4 F4 F4 E4 E4 D4 C4 C4 G4 G4 A4 A4 G4 F4 F4 E4 E4 D4 D4 C4' },
+    { name: 'Frère Jacques', notes: 'C4 D4 E4 C4 C4 D4 E4 C4 E4 F4 G4 E4 F4 G4 G4 A4 G4 F4 E4 C4 G4 A4 G4 F4 E4 C4 C4 G3 C4 C4 G3 C4' },
+    { name: 'Jingle Bells', notes: 'E4 E4 E4 E4 E4 E4 E4 G4 C4 D4 E4 F4 F4 F4 F4 F4 E4 E4 E4 E4 D4 D4 E4 D4 G4 E4 E4 E4 E4 E4 E4 E4 G4 C4 D4 E4 F4 F4 F4 F4 F4 E4 E4 E4 G4 G4 F4 D4 C4' }
+  ];
+  var song = Math.min(SONGS.length - 1, Math.max(0, +load('piano.song', '0') || 0)), notes = [], noteI = 0;
+  var songsEl = $('songs');
+  SONGS.forEach(function(s, i){
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = s.name;
+    b.addEventListener('click', function(){ song = i; save('piano.song', String(i)); renderSongs(); piano(freq(SONGS[i].notes.split(' ')[0])); });
+    songsEl.appendChild(b);
+  });
+  function renderSongs(){ Array.prototype.forEach.call(songsEl.children, function(b, i){ b.classList.toggle('on', i === song); }); }
+  renderSongs();
+
+  var cv = $('c'), cx = cv.getContext('2d'), W = 0, H = 0, DPR = 1, rh = 100, cw = 50;
+  var rows = [], pos = 0, next = 0, speed = 2, state = 'menu', score = 0, best = +load('piano.best', '0') || 0;
+  var fail = null, failT = 0, ripples = [], posTarget = null;
+  var ov = $('ov'), scoreEl = $('score');
+
+  function layout(){
+    H = window.innerHeight; W = Math.min(window.innerWidth, Math.round(H * 0.62)); DPR = Math.min(window.devicePixelRatio || 1, 2);
+    cv.style.width = W + 'px';
+    cv.width = Math.max(1, Math.round(W * DPR)); cv.height = Math.max(1, Math.round(H * DPR));
+    rh = H / 4; cw = W / 4;
+  }
+  window.addEventListener('resize', layout);
+  layout();
+
+  function addRow(){
+    var prev = rows.length ? rows[rows.length - 1].col : -1, c;
+    do { c = Math.floor(Math.random() * 4); } while(c === prev && Math.random() < 0.7);
+    rows.push({ col: c, hit: false, t: 0 });
+  }
+  function reset(){
+    rows = []; pos = 0; next = 0; speed = 2.2; score = 0; fail = null; ripples = []; posTarget = null;
+    for(var i = 0; i < 8; i++) addRow();
+    notes = SONGS[song].notes.split(' '); noteI = 0;
+    scoreEl.textContent = '0';
+  }
+  function startGame(){ reset(); state = 'ready'; ov.hidden = true; }
+
+  function rowAt(y){ return Math.floor(pos + (H - y) / rh); }
+  function tap(x, y){
+    if(state !== 'ready' && state !== 'play') return;
+    var col = Math.max(0, Math.min(3, Math.floor(x / cw))), r = rowAt(y);
+    if(r !== next) return;
+    var row = rows[r];
+    if(!row) return;
+    if(col === row.col){
+      row.hit = true; next++; score++;
+      scoreEl.textContent = String(score);
+      piano(freq(notes[noteI % notes.length])); noteI++;
+      ripples.push({ x: (col + 0.5) * cw, y: y, t: 0 });
+      if(state === 'ready') state = 'play';
+      speed = Math.min(6.5, 2.2 + score * 0.03);
+    } else {
+      lose({ row: r, col: col }, false);
+    }
+  }
+  function lose(f, missed){
+    state = 'fail'; fail = f; failT = 0; buzz();
+    if(missed) posTarget = Math.max(0, f.row - 0.6);
+    if(score > best){ best = score; save('piano.best', String(best)); }
+  }
+  function showOver(){
+    state = 'over';
+    $('ov-title').textContent = score >= 150 ? 'Virtuoso!' : score >= 60 ? 'Bravo!' : 'Oops!';
+    $('ov-score').hidden = false; $('ov-score').textContent = String(score);
+    $('ov-text').textContent = score === best && score > 0 ? 'New best! Pick a song and go again.' : 'Tiles played. Pick a song and go again.';
+    $('ov-best').textContent = 'Best: ' + best;
+    $('ov-btn').textContent = 'Play again';
+    ov.hidden = false;
+  }
+
+  function step(dt){
+    for(var i = ripples.length - 1; i >= 0; i--){ ripples[i].t += dt; if(ripples[i].t > 0.4) ripples.splice(i, 1); }
+    if(state === 'play'){
+      pos += speed * dt;
+      while(rows.length < pos + 8) addRow();
+      if(pos >= next + 1 && rows[next]) lose({ row: next, col: rows[next].col }, true);
+    } else if(state === 'fail'){
+      failT += dt;
+      if(posTarget !== null) pos += (posTarget - pos) * Math.min(1, dt * 10);
+      if(failT > 1.1) showOver();
+    }
+  }
+
+  function rr(x, y, w, h, r){ cx.beginPath(); cx.moveTo(x + r, y); cx.arcTo(x + w, y, x + w, y + h, r); cx.arcTo(x + w, y + h, x, y + h, r); cx.arcTo(x, y + h, x, y, r); cx.arcTo(x, y, x + w, y, r); cx.closePath(); }
+  function render(){
+    if(!W || !H) return;
+    cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    var g = cx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#eef3ff'); g.addColorStop(1, '#ffffff');
+    cx.fillStyle = g; cx.fillRect(0, 0, W, H);
+    cx.fillStyle = '#d8def0';
+    for(var c = 1; c < 4; c++) cx.fillRect(c * cw - 0.5, 0, 1, H);
+    var first = Math.max(0, Math.floor(pos) - 1);
+    for(var i = first; i < first + 7 && i < rows.length; i++){
+      var row = rows[i], y = H - (i + 1 - pos) * rh;
+      if(y > H || y + rh < 0) continue;
+      cx.fillStyle = '#e3e8f5'; cx.fillRect(0, y + rh - 0.5, W, 1);
+      var x = row.col * cw;
+      if(row.hit){
+        cx.fillStyle = 'rgba(120,130,170,0.25)'; rr(x + 3, y + 3, cw - 6, rh - 6, 10); cx.fill();
+      } else {
+        var blink = fail && fail.row === i && fail.col === row.col && Math.floor(failT * 8) % 2 === 0;
+        var tg = cx.createLinearGradient(0, y, 0, y + rh);
+        tg.addColorStop(0, blink ? '#ff4d6d' : '#2e2a5c'); tg.addColorStop(1, blink ? '#d61f45' : '#141230');
+        cx.fillStyle = tg; rr(x + 3, y + 3, cw - 6, rh - 6, 10); cx.fill();
+        cx.fillStyle = 'rgba(255,255,255,0.12)'; rr(x + 8, y + 8, cw - 16, 10, 5); cx.fill();
+        if(i === 0 && state !== 'play' && state !== 'fail'){
+          cx.fillStyle = '#fff'; cx.font = '400 ' + Math.round(Math.min(cw * 0.26, 26)) + 'px "Lilita One", sans-serif';
+          cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText('START', x + cw / 2, y + rh / 2);
+        }
+      }
+      if(fail && fail.row === i && fail.col !== row.col && Math.floor(failT * 8) % 2 === 0){
+        cx.fillStyle = '#ff4d6d'; rr(fail.col * cw + 3, y + 3, cw - 6, rh - 6, 10); cx.fill();
+      }
+    }
+    for(i = 0; i < ripples.length; i++){
+      var r = ripples[i]; cx.globalAlpha = 1 - r.t / 0.4; cx.strokeStyle = '#7a5cff'; cx.lineWidth = 4;
+      cx.beginPath(); cx.arc(r.x, r.y, 10 + r.t * 140, 0, Math.PI * 2); cx.stroke();
+    }
+    cx.globalAlpha = 1;
+  }
+
+  var last = 0;
+  function frame(ts){
+    var dt = Math.min(0.033, Math.max(0, (ts - last) / 1000)); last = ts;
+    step(dt); render();
+    requestAnimationFrame(frame);
+  }
+  cv.addEventListener('pointerdown', function(e){
+    e.preventDefault();
+    var b = cv.getBoundingClientRect();
+    tap(e.clientX - b.left, e.clientY - b.top);
+  });
+  $('ov-btn').addEventListener('click', startGame);
+  window.addEventListener('keydown', function(e){
+    var k = { KeyD: 0, KeyF: 1, KeyJ: 2, KeyK: 3, Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3 }[e.code];
+    if(k !== undefined && !e.repeat && (state === 'ready' || state === 'play')){
+      e.preventDefault();
+      var y = H - (next + 0.5 - pos) * rh;
+      tap((k + 0.5) * cw, y);
+    } else if((e.code === 'Space' || e.code === 'Enter') && !ov.hidden){ e.preventDefault(); startGame(); }
+  });
+
+  reset();
+  $('ov-best').textContent = best ? 'Best: ' + best : '';
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
