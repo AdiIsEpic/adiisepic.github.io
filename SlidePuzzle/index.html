@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#ffe9d6">
+<title>Slide Puzzle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Lilita+One&display=swap" rel="stylesheet">
+<style>
+  :root{ --font:'Fredoka', ui-rounded, 'Segoe UI', system-ui, sans-serif; --display:'Lilita One', 'Fredoka', system-ui, sans-serif; --ink:#4a2c5e; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; min-height:100%; background:linear-gradient(160deg,#ffe9d6,#ffd6e8 50%,#dcd6ff); color:var(--ink); font-family:var(--font); -webkit-user-select:none; user-select:none; }
+  body{ display:flex; flex-direction:column; align-items:center; padding:10px 10px 20px; padding-top:max(10px, env(safe-area-inset-top)); min-height:100vh; }
+  .hud{ width:min(100%, 480px); display:flex; align-items:center; gap:8px; }
+  .back{ padding:8px 12px; border-radius:12px; background:rgba(255,255,255,0.7); color:var(--ink); font-weight:600; font-size:15px; text-decoration:none; white-space:nowrap; }
+  .spacer{ flex:1; }
+  h1{ margin:0; font:400 26px var(--display); color:#e0487a; white-space:nowrap; }
+  .round{ width:40px; height:40px; border:none; border-radius:50%; background:rgba(255,255,255,0.7); color:var(--ink); font-size:17px; cursor:pointer; flex:none; }
+  .sizes{ display:flex; gap:4px; background:rgba(255,255,255,0.6); padding:4px; border-radius:14px; margin:14px 0 10px; }
+  .sizes button{ font:600 15px var(--font); border:none; background:none; color:var(--ink); padding:7px 14px; border-radius:10px; cursor:pointer; }
+  .sizes button.on{ background:#e0487a; color:#fff; }
+  .stats{ width:min(100%, 480px); display:flex; justify-content:space-around; margin-bottom:12px; }
+  .stat{ text-align:center; line-height:1.1; }
+  .stat small{ display:block; font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; opacity:0.7; }
+  .stat b{ font:400 24px var(--display); }
+  #board{ --n:4; --size:min(92vw, calc(100vh - 270px), 460px); position:relative; width:var(--size); height:var(--size); min-width:250px; min-height:250px; background:rgba(74,44,94,0.15); border-radius:20px; box-shadow:inset 0 3px 10px rgba(74,44,94,0.2); touch-action:none; }
+  .tile{ position:absolute; left:0; top:0; width:calc(100% / var(--n)); height:calc(100% / var(--n)); padding:3px; transition:transform .12s ease; cursor:pointer; border:none; background:none; font:inherit; color:inherit; }
+  .tile span{ display:flex; align-items:center; justify-content:center; width:100%; height:100%; border-radius:16%; font:400 calc(var(--size) / var(--n) * 0.42) var(--display); color:#fff; text-shadow:0 2px 0 rgba(0,0,0,0.18); box-shadow:inset 0 -5px 0 rgba(0,0,0,0.15), 0 3px 6px rgba(74,44,94,0.25); transition:filter .2s; }
+  .tile.home span{ filter:saturate(1.15) brightness(1.05); }
+  .tile:focus-visible{ outline:none; }
+  .tile:focus-visible span{ outline:3px solid #fff; }
+  .tools{ display:flex; gap:10px; margin-top:16px; }
+  .tool{ font:600 16px var(--font); border:none; border-radius:14px; padding:10px 18px; background:rgba(255,255,255,0.75); color:var(--ink); cursor:pointer; box-shadow:0 3px 0 rgba(74,44,94,0.15); }
+  .tool:active{ transform:translateY(2px); }
+  .overlay{ position:fixed; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; padding:16px; background:rgba(74,44,94,0.35); }
+  .overlay[hidden]{ display:none; }
+  .card{ width:min(100%, 330px); padding:24px 20px; border-radius:26px; text-align:center; background:#fff; box-shadow:0 20px 50px rgba(0,0,0,0.25); animation:pop .35s cubic-bezier(.2,.9,.3,1.3); }
+  @keyframes pop{ from{ transform:scale(0.85); opacity:0; } }
+  .card h2{ margin:0 0 8px; font:400 38px var(--display); color:#e0487a; }
+  .card p{ margin:0 0 14px; font-size:16px; line-height:1.45; }
+  .btn{ font:400 21px var(--display); border:none; border-radius:18px; padding:12px 30px; color:#fff; cursor:pointer; background:linear-gradient(180deg, #ff6b9d, #e0487a); box-shadow:0 6px 0 #a82655; }
+  .btn:active{ transform:translateY(4px); box-shadow:0 2px 0 #a82655; }
+  button:focus-visible, .back:focus-visible{ outline:3px solid #e0487a; outline-offset:2px; }
+  .confetti{ position:fixed; top:-20px; font-size:22px; pointer-events:none; z-index:11; animation:fall linear forwards; }
+  @keyframes fall{ to{ transform:translateY(110vh) rotate(540deg); } }
+</style>
+</head>
+<body>
+<div class="hud">
+  <a class="back" href="../" aria-label="Back to games">&lsaquo; Games</a>
+  <div class="spacer"></div>
+  <h1>Slide Puzzle</h1>
+  <div class="spacer"></div>
+  <button type="button" class="round" id="mute" aria-label="Sound on">🔊</button>
+</div>
+<div class="sizes" id="sizes" role="group" aria-label="Board size"></div>
+<div class="stats">
+  <div class="stat"><small>Moves</small><b id="moves">0</b></div>
+  <div class="stat"><small>Time</small><b id="time">0:00</b></div>
+  <div class="stat"><small>Best</small><b id="best">–</b></div>
+</div>
+<div id="board" aria-label="Puzzle: tap a tile next to the gap to slide it"></div>
+<div class="tools">
+  <button type="button" class="tool" id="shuffle">🔀 Shuffle</button>
+</div>
+<div class="overlay" id="ov" hidden>
+  <div class="card">
+    <h2>Solved!</h2>
+    <p id="ov-text"></p>
+    <button type="button" class="btn" id="ov-btn">Play again</button>
+  </div>
+</div>
+<script>
+(function(){
+  'use strict';
+  function $(id){ return document.getElementById(id); }
+  function load(k, d){ try { var v = localStorage.getItem(k); return v === null ? d : v; } catch(e){ return d; } }
+  function save(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
+
+  var actx = null, muted = load('slide.muted', '0') === '1';
+  function tone(f0, f1, dur, type, vol, delay){
+    if(muted) return;
+    try {
+      if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if(actx.state === 'suspended') actx.resume();
+      var t0 = actx.currentTime + (delay || 0), o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+    } catch(e){}
+  }
+  var muteBtn = $('mute');
+  function renderMute(){ muteBtn.textContent = muted ? '🔈' : '🔊'; muteBtn.setAttribute('aria-label', muted ? 'Sound off' : 'Sound on'); }
+  muteBtn.addEventListener('click', function(){ muted = !muted; save('slide.muted', muted ? '1' : '0'); renderMute(); muteBtn.blur(); });
+  renderMute();
+
+  var SIZES = [3, 4, 5], n = +load('slide.size', '3') || 3;
+  if(SIZES.indexOf(n) < 0) n = 3;
+  var grid = [], tiles = [], moves = 0, time = 0, started = false, won = false, boardEl = $('board');
+  var sizesEl = $('sizes');
+  SIZES.forEach(function(s){
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = s + '×' + s;
+    b.addEventListener('click', function(){ n = s; save('slide.size', String(s)); newGame(); });
+    sizesEl.appendChild(b);
+  });
+
+  function fmt(t){ var m = Math.floor(t / 60), s = t % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
+  function bestKey(){ return 'slide.best' + n; }
+  function renderBest(){
+    try { var b = JSON.parse(load(bestKey(), 'null')); $('best').textContent = b ? b.moves + ' · ' + fmt(b.time) : '–'; } catch(e){ $('best').textContent = '–'; }
+  }
+  function blankPos(){ return grid.indexOf(0); }
+  function neighbours(p){
+    var r = (p / n) | 0, c = p % n, out = [];
+    if(r > 0) out.push(p - n); if(r < n - 1) out.push(p + n); if(c > 0) out.push(p - 1); if(c < n - 1) out.push(p + 1);
+    return out;
+  }
+  function solved(){ for(var i = 0; i < n * n - 1; i++) if(grid[i] !== i + 1) return false; return true; }
+  function newGame(){
+    grid = []; for(var i = 1; i < n * n; i++) grid.push(i); grid.push(0);
+    var prev = -1, steps = n * n * 40;
+    for(var k = 0; k < steps || solved(); k++){
+      var b = blankPos(), opts = neighbours(b).filter(function(p){ return p !== prev; });
+      var pick = opts[Math.floor(Math.random() * opts.length)];
+      grid[b] = grid[pick]; grid[pick] = 0; prev = b;
+    }
+    moves = 0; time = 0; started = false; won = false;
+    boardEl.style.setProperty('--n', n);
+    boardEl.innerHTML = ''; tiles = [];
+    for(var v = 1; v < n * n; v++){
+      var t = document.createElement('button'); t.type = 'button'; t.className = 'tile';
+      var r = ((v - 1) / n) | 0, c = (v - 1) % n, hue = Math.round(330 - ((r + c) / (2 * n - 2)) * 250);
+      t.innerHTML = '<span style="background:linear-gradient(145deg, hsl(' + hue + ',85%,66%), hsl(' + (hue - 20) + ',80%,54%))">' + v + '</span>';
+      t.setAttribute('aria-label', 'Tile ' + v);
+      (function(val){ t.addEventListener('click', function(){ tapTile(val); }); })(v);
+      boardEl.appendChild(t); tiles[v] = t;
+    }
+    Array.prototype.forEach.call(sizesEl.children, function(b2, i){ b2.classList.toggle('on', SIZES[i] === n); });
+    $('ov').hidden = true;
+    render(); renderBest();
+  }
+  function render(){
+    for(var p = 0; p < grid.length; p++){
+      var v = grid[p]; if(!v) continue;
+      var r = (p / n) | 0, c = p % n;
+      tiles[v].style.transform = 'translate(' + (c * 100) + '%,' + (r * 100) + '%)';
+      tiles[v].classList.toggle('home', v === p + 1);
+    }
+    $('moves').textContent = moves; $('time').textContent = fmt(time);
+  }
+  function tapTile(v){
+    if(won) return;
+    var p = grid.indexOf(v), b = blankPos(), pr = (p / n) | 0, pc = p % n, br = (b / n) | 0, bc = b % n;
+    if(pr !== br && pc !== bc) { tone(200, 180, 0.05, 'sine', 0.03); return; }
+    var stepI = pr === br ? (pc < bc ? -1 : 1) : (pr < br ? -n : n), cur = b, count = 0;
+    while(cur !== p){ var nx = cur + stepI; grid[cur] = grid[nx]; grid[nx] = 0; cur = nx; count++; }
+    moves += count; started = true;
+    tone(520 + Math.random() * 80, 380, 0.06, 'triangle', 0.05);
+    render();
+    if(solved()) win();
+  }
+  function moveDir(dr, dc){
+    var b = blankPos(), br = (b / n) | 0, bc = b % n, sr = br - dr, sc = bc - dc;
+    if(sr < 0 || sr >= n || sc < 0 || sc >= n) return;
+    tapTile(grid[sr * n + sc]);
+  }
+  function win(){
+    won = true;
+    var prevBest = null;
+    try { prevBest = JSON.parse(load(bestKey(), 'null')); } catch(e){}
+    var isBest = !prevBest || moves < prevBest.moves || (moves === prevBest.moves && time < prevBest.time);
+    if(isBest) save(bestKey(), JSON.stringify({ moves: moves, time: time }));
+    renderBest();
+    [523, 659, 784, 1047].forEach(function(f, k){ tone(f, f, 0.18, 'triangle', 0.06, k * 0.09); });
+    $('ov-text').innerHTML = n + '×' + n + ' solved in <b>' + moves + '</b> moves and <b>' + fmt(time) + '</b>.' + (isBest ? '<br>🏆 New best!' : '');
+    setTimeout(function(){ $('ov').hidden = false; confetti(); }, 400);
+  }
+  function confetti(){
+    var em = ['🎉', '⭐', '✨', '🎊', '💖'];
+    for(var k = 0; k < 24; k++){
+      var s = document.createElement('div'); s.className = 'confetti'; s.textContent = em[k % em.length];
+      s.style.left = Math.random() * 100 + 'vw'; s.style.animationDuration = (1.8 + Math.random() * 1.6) + 's'; s.style.animationDelay = Math.random() * 0.5 + 's';
+      document.body.appendChild(s);
+      setTimeout(function(el){ return function(){ el.remove(); }; }(s), 4200);
+    }
+  }
+  // Swipe support: swipe on the board moves the tile next to the gap in that direction.
+  var sw = null;
+  boardEl.addEventListener('pointerdown', function(e){ sw = { x: e.clientX, y: e.clientY }; });
+  boardEl.addEventListener('pointerup', function(e){
+    if(!sw) return;
+    var dx = e.clientX - sw.x, dy = e.clientY - sw.y; sw = null;
+    if(Math.max(Math.abs(dx), Math.abs(dy)) < 30) return;
+    swiped = true; setTimeout(function(){ swiped = false; }, 0);
+    if(Math.abs(dx) > Math.abs(dy)) moveDir(0, dx > 0 ? 1 : -1); else moveDir(dy > 0 ? 1 : -1, 0);
+  });
+  var swiped = false;
+  boardEl.addEventListener('click', function(e){ if(swiped){ e.stopPropagation(); e.preventDefault(); } }, true);
+  window.addEventListener('keydown', function(e){
+    var m = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key];
+    if(m){ e.preventDefault(); moveDir(m[0], m[1]); }
+  });
+  $('shuffle').addEventListener('click', newGame);
+  $('ov-btn').addEventListener('click', newGame);
+  setInterval(function(){ if(started && !won && !document.hidden){ time++; $('time').textContent = fmt(time); } }, 1000);
+  newGame();
+})();
+</script>
+</body>
+</html>
