@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#eef0ff">
+<title>Sudoku</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Lilita+One&display=swap" rel="stylesheet">
+<style>
+  :root{ --font:'Fredoka', ui-rounded, 'Segoe UI', system-ui, sans-serif; --display:'Lilita One', 'Fredoka', system-ui, sans-serif;
+    --ink:#2a2d5c; --line:#c9cdf0; --thick:#5b5fc7; --sel:#c9d3ff; --peer:#e9ecff; --same:#b5f0dc; --given:#2a2d5c; --user:#4f5bd5; --bad:#e5484d; --hint:#12a37f; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; min-height:100%; background:linear-gradient(180deg,#eef0ff,#f9f6ff); color:var(--ink); font-family:var(--font); -webkit-user-select:none; user-select:none; }
+  body{ display:flex; flex-direction:column; align-items:center; padding:10px 10px 18px; padding-top:max(10px, env(safe-area-inset-top)); min-height:100vh; }
+  .hud{ width:min(100%, 480px); display:flex; align-items:center; gap:8px; }
+  .back{ padding:8px 12px; border-radius:12px; background:#fff; color:var(--ink); font-weight:600; font-size:15px; text-decoration:none; white-space:nowrap; box-shadow:0 2px 0 #dcdff7; }
+  .spacer{ flex:1; }
+  h1{ margin:0; font:400 26px var(--display); color:#5b5fc7; }
+  .round{ width:40px; height:40px; border:none; border-radius:50%; background:#fff; color:var(--ink); font-size:17px; cursor:pointer; flex:none; box-shadow:0 2px 0 #dcdff7; }
+  .info{ width:min(100%, 480px); display:flex; align-items:center; justify-content:space-between; margin:10px 0 8px; font-weight:600; font-size:15px; gap:8px; }
+  .diffs{ display:flex; gap:4px; background:#fff; padding:3px; border-radius:12px; box-shadow:0 2px 0 #dcdff7; }
+  .diffs button{ font:600 13px var(--font); border:none; background:none; color:var(--ink); padding:6px 8px; border-radius:9px; cursor:pointer; }
+  .diffs button.on{ background:#5b5fc7; color:#fff; }
+  .meta{ display:flex; gap:12px; white-space:nowrap; }
+  .meta span{ opacity:0.85; }
+  #board{ --size:min(94vw, calc(100vh - 290px), 480px); width:var(--size); height:var(--size); min-width:270px; min-height:270px; display:grid; grid-template-columns:repeat(9,1fr); grid-template-rows:repeat(9,1fr); background:#fff; border:3px solid var(--thick); border-radius:12px; overflow:hidden; box-shadow:0 10px 30px rgba(91,95,199,0.18); position:relative; }
+  .cell{ position:relative; display:flex; align-items:center; justify-content:center; border-right:1px solid var(--line); border-bottom:1px solid var(--line); font-size:calc(var(--size) / 15); font-weight:500; color:var(--user); cursor:pointer; transition:background .12s; }
+  .cell:nth-child(9n){ border-right:none; }
+  .cell.c3{ border-right:2px solid var(--thick); }
+  .cell.r3{ border-bottom:2px solid var(--thick); }
+  .cell.r9{ border-bottom:none; }
+  .cell.given{ color:var(--given); font-weight:700; }
+  .cell.peer{ background:var(--peer); }
+  .cell.same{ background:var(--same); }
+  .cell.sel{ background:var(--sel); }
+  .cell.bad{ color:var(--bad); }
+  .cell.bad.sel, .cell.bad{ text-decoration:none; }
+  .cell.hinted{ color:var(--hint); }
+  .cell.pop{ animation:cpop .3s ease; }
+  @keyframes cpop{ 50%{ transform:scale(1.18); } }
+  .notes{ position:absolute; inset:2px; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr); font-size:calc(var(--size) / 38); color:#7d82b8; font-weight:600; }
+  .notes span{ display:flex; align-items:center; justify-content:center; }
+  .tools{ width:min(100%, 480px); display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:12px 0 8px; }
+  .tool{ font:600 13px var(--font); border:none; border-radius:14px; background:#fff; color:var(--ink); padding:8px 4px 6px; cursor:pointer; box-shadow:0 3px 0 #dcdff7; display:flex; flex-direction:column; align-items:center; gap:2px; }
+  .tool b{ font-size:20px; line-height:1; }
+  .tool.on{ background:#5b5fc7; color:#fff; box-shadow:0 3px 0 #3c40a0; }
+  .pad{ width:min(100%, 480px); display:grid; grid-template-columns:repeat(9,1fr); gap:5px; }
+  .num{ font:600 26px var(--font); border:none; border-radius:12px; background:#fff; color:#5b5fc7; padding:8px 0 4px; cursor:pointer; box-shadow:0 3px 0 #dcdff7; display:flex; flex-direction:column; align-items:center; line-height:1; }
+  .num small{ font-size:10px; color:#9a9dc9; margin-top:3px; }
+  .num.done{ opacity:0.3; }
+  .num:active, .tool:active{ transform:translateY(2px); box-shadow:0 1px 0 #dcdff7; }
+  button:focus-visible, .back:focus-visible{ outline:3px solid #5b5fc7; outline-offset:2px; }
+  .overlay{ position:fixed; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; padding:16px; background:rgba(42,45,92,0.35); }
+  .overlay[hidden]{ display:none; }
+  .card{ width:min(100%, 340px); padding:24px 20px; border-radius:26px; text-align:center; background:#fff; box-shadow:0 20px 50px rgba(0,0,0,0.25); animation:pop .35s cubic-bezier(.2,.9,.3,1.3); }
+  @keyframes pop{ from{ transform:scale(0.85); opacity:0; } }
+  .card h2{ margin:0 0 8px; font:400 38px var(--display); color:#5b5fc7; }
+  .card p{ margin:0 0 14px; font-size:16px; line-height:1.4; }
+  .btn{ font:400 21px var(--display); border:none; border-radius:18px; padding:12px 28px; color:#fff; cursor:pointer; background:linear-gradient(180deg, #7b7fe8, #5b5fc7); box-shadow:0 6px 0 #3c40a0; }
+  .btn:active{ transform:translateY(4px); box-shadow:0 2px 0 #3c40a0; }
+  #busy{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.85); font:600 18px var(--font); color:#5b5fc7; }
+  #busy[hidden]{ display:none; }
+  .confetti{ position:fixed; top:-20px; font-size:22px; pointer-events:none; z-index:11; animation:fall linear forwards; }
+  @keyframes fall{ to{ transform:translateY(110vh) rotate(540deg); } }
+</style>
+</head>
+<body>
+<div class="hud">
+  <a class="back" href="../" aria-label="Back to games">&lsaquo; Games</a>
+  <div class="spacer"></div>
+  <h1>Sudoku</h1>
+  <div class="spacer"></div>
+  <button type="button" class="round" id="new" aria-label="New puzzle" title="New puzzle">🔄</button>
+</div>
+<div class="info">
+  <div class="diffs" id="diffs" role="group" aria-label="Difficulty"></div>
+  <div class="meta"><span id="mist">❌ 0</span><span id="time">⏱ 0:00</span></div>
+</div>
+<div id="board" role="grid" aria-label="Sudoku board"><div id="busy" hidden>Making a puzzle…</div></div>
+<div class="tools">
+  <button type="button" class="tool" id="undo"><b>↶</b>Undo</button>
+  <button type="button" class="tool" id="erase"><b>⌫</b>Erase</button>
+  <button type="button" class="tool" id="notes"><b>✏️</b>Notes</button>
+  <button type="button" class="tool" id="hint"><b>💡</b>Hint</button>
+</div>
+<div class="pad" id="pad"></div>
+<div class="overlay" id="ov" hidden>
+  <div class="card">
+    <h2 id="ov-title">Solved!</h2>
+    <p id="ov-text"></p>
+    <button type="button" class="btn" id="ov-btn">Next puzzle</button>
+  </div>
+</div>
+<script>
+(function(){
+  'use strict';
+  function $(id){ return document.getElementById(id); }
+  function load(k, d){ try { var v = localStorage.getItem(k); return v === null ? d : v; } catch(e){ return d; } }
+  function save(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
+
+  var actx = null;
+  function tone(f0, f1, dur, type, vol, delay){
+    try {
+      if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if(actx.state === 'suspended') actx.resume();
+      var t0 = actx.currentTime + (delay || 0), o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+    } catch(e){}
+  }
+
+  var DIFFS = [{ name: 'Easy', clues: 40 }, { name: 'Medium', clues: 33 }, { name: 'Hard', clues: 28 }, { name: 'Expert', clues: 24 }];
+  function rowOf(i){ return (i / 9) | 0; }
+  function colOf(i){ return i % 9; }
+  function boxOf(i){ return ((rowOf(i) / 3) | 0) * 3 + ((colOf(i) / 3) | 0); }
+  var PEERS = [];
+  for(var p = 0; p < 81; p++){
+    var list = [];
+    for(var q = 0; q < 81; q++) if(q !== p && (rowOf(q) === rowOf(p) || colOf(q) === colOf(p) || boxOf(q) === boxOf(p))) list.push(q);
+    PEERS.push(list);
+  }
+  function bits(m){ var n = 0; while(m){ m &= m - 1; n++; } return n; }
+  function shuffle(a){ for(var i = a.length - 1; i > 0; i--){ var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+
+  // Counts solutions (stops at `limit`). If `fill` is true, fills g with the first solution found using random digit order.
+  function solve(g, limit, fill){
+    var R = [0,0,0,0,0,0,0,0,0], C = R.slice(), B = R.slice(), count = 0, i;
+    for(i = 0; i < 81; i++) if(g[i]){ var bt = 1 << g[i]; R[rowOf(i)] |= bt; C[colOf(i)] |= bt; B[boxOf(i)] |= bt; }
+    function rec(){
+      var best = -1, bestM = 0, bestN = 10;
+      for(var k = 0; k < 81; k++){
+        if(g[k]) continue;
+        var m = ~(R[rowOf(k)] | C[colOf(k)] | B[boxOf(k)]) & 0x3FE, n = bits(m);
+        if(n < bestN){ bestN = n; best = k; bestM = m; if(n <= 1) break; }
+      }
+      if(best < 0){ count++; return count >= limit; }
+      if(bestN === 0) return false;
+      var ds = [];
+      for(var d = 1; d <= 9; d++) if(bestM & (1 << d)) ds.push(d);
+      if(fill) shuffle(ds);
+      var r = rowOf(best), c = colOf(best), b = boxOf(best);
+      for(var j = 0; j < ds.length; j++){
+        var bit = 1 << ds[j];
+        g[best] = ds[j]; R[r] |= bit; C[c] |= bit; B[b] |= bit;
+        var done = rec();
+        if(done && fill) return true;
+        g[best] = 0; R[r] &= ~bit; C[c] &= ~bit; B[b] &= ~bit;
+        if(done) return true;
+      }
+      return false;
+    }
+    rec();
+    return count;
+  }
+  function generate(clues){
+    var sol = new Array(81).fill(0);
+    solve(sol, 1, true);
+    var puz = sol.slice(), order = shuffle(Array.from({ length: 81 }, function(_, i){ return i; })), left = 81;
+    for(var k = 0; k < order.length && left > clues; k++){
+      var i = order[k], keep = puz[i];
+      puz[i] = 0;
+      if(solve(puz.slice(), 2, false) !== 1) puz[i] = keep; else left--;
+    }
+    return { puzzle: puz, solution: sol };
+  }
+
+  var boardEl = $('board'), padEl = $('pad'), cells = [], padBtns = [];
+  var S = null, sel = -1, notesMode = false, timer = null;
+  for(var i = 0; i < 81; i++){
+    var c = document.createElement('div');
+    c.className = 'cell' + (colOf(i) % 3 === 2 && colOf(i) < 8 ? ' c3' : '') + (rowOf(i) % 3 === 2 && rowOf(i) < 8 ? ' r3' : '') + (rowOf(i) === 8 ? ' r9' : '');
+    c.setAttribute('role', 'gridcell');
+    (function(idx){ c.addEventListener('pointerdown', function(e){ e.preventDefault(); select(idx); }); })(i);
+    boardEl.appendChild(c); cells.push(c);
+  }
+  for(var d = 1; d <= 9; d++){
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'num'; b.innerHTML = d + '<small></small>';
+    (function(n){ b.addEventListener('click', function(){ input(n); }); })(d);
+    padEl.appendChild(b); padBtns.push(b);
+  }
+  var diffsEl = $('diffs'), diff = Math.min(3, Math.max(0, +load('sudoku.diff', '0') || 0));
+  DIFFS.forEach(function(D, k){
+    var b2 = document.createElement('button'); b2.type = 'button'; b2.textContent = D.name;
+    b2.addEventListener('click', function(){ if(k === diff && S && !S.won && S.values.some(function(v, j){ return v && !S.puzzle[j]; }) && !confirm('Start a new ' + D.name + ' puzzle?')) return; diff = k; save('sudoku.diff', String(k)); newGame(); });
+    diffsEl.appendChild(b2);
+  });
+  function renderDiffs(){ Array.prototype.forEach.call(diffsEl.children, function(b3, k){ b3.classList.toggle('on', k === (S ? S.diff : diff)); }); }
+
+  function persist(){ if(S) save('sudoku.state', JSON.stringify(S)); }
+  function newGame(){
+    $('busy').hidden = false; $('ov').hidden = true;
+    setTimeout(function(){
+      var g = generate(DIFFS[diff].clues);
+      S = { diff: diff, puzzle: g.puzzle, solution: g.solution, values: g.puzzle.slice(), notes: new Array(81).fill(0), hinted: [], mistakes: 0, time: 0, won: false, hist: [] };
+      sel = -1; $('busy').hidden = true;
+      persist(); renderDiffs(); render();
+    }, 30);
+  }
+  function select(i){ sel = i; render(); }
+  function pushHist(i){ S.hist.push([i, S.values[i], S.notes[i]]); if(S.hist.length > 200) S.hist.shift(); }
+  function input(n){
+    if(!S || S.won || sel < 0 || S.puzzle[sel] || S.hinted.indexOf(sel) >= 0) return;
+    if(S.values[sel] === S.solution[sel]) return;
+    if(notesMode){
+      if(S.values[sel]) return;
+      pushHist(sel); S.notes[sel] ^= (1 << n);
+      tone(700, 700, 0.05, 'sine', 0.03);
+    } else {
+      pushHist(sel);
+      S.values[sel] = n; S.notes[sel] = 0;
+      if(n === S.solution[sel]){
+        PEERS[sel].forEach(function(j){ S.notes[j] &= ~(1 << n); });
+        tone(520 + n * 40, 800 + n * 40, 0.1, 'triangle', 0.05);
+        cells[sel].classList.remove('pop'); void cells[sel].offsetWidth; cells[sel].classList.add('pop');
+      } else {
+        S.mistakes++;
+        tone(200, 140, 0.18, 'square', 0.05);
+      }
+    }
+    checkWin(); persist(); render();
+  }
+  function erase(){
+    if(!S || S.won || sel < 0 || S.puzzle[sel] || S.hinted.indexOf(sel) >= 0) return;
+    if(S.values[sel] === S.solution[sel]) return;
+    if(!S.values[sel] && !S.notes[sel]) return;
+    pushHist(sel); S.values[sel] = 0; S.notes[sel] = 0; persist(); render();
+  }
+  function undo(){
+    if(!S || S.won || !S.hist.length) return;
+    var h = S.hist.pop(); S.values[h[0]] = h[1]; S.notes[h[0]] = h[2]; sel = h[0]; persist(); render();
+  }
+  function hint(){
+    if(!S || S.won) return;
+    var target = sel >= 0 && S.values[sel] !== S.solution[sel] ? sel : -1;
+    if(target < 0){
+      var opts = [];
+      for(var k = 0; k < 81; k++) if(S.values[k] !== S.solution[k]) opts.push(k);
+      if(!opts.length) return;
+      target = opts[Math.floor(Math.random() * opts.length)];
+    }
+    S.values[target] = S.solution[target]; S.notes[target] = 0; S.hinted.push(target);
+    PEERS[target].forEach(function(j){ S.notes[j] &= ~(1 << S.solution[target]); });
+    sel = target;
+    tone(900, 1300, 0.15, 'triangle', 0.05);
+    checkWin(); persist(); render();
+  }
+  function checkWin(){
+    for(var k = 0; k < 81; k++) if(S.values[k] !== S.solution[k]) return;
+    S.won = true; S.hist = [];
+    var key = 'sudoku.best' + S.diff, bestT = +load(key, '0') || 0, isBest = !bestT || S.time < bestT;
+    if(isBest) save(key, String(S.time));
+    [523, 659, 784, 1047].forEach(function(f, j){ tone(f, f, 0.2, 'triangle', 0.07, j * 0.1); });
+    $('ov-title').textContent = 'Solved!';
+    $('ov-text').innerHTML = DIFFS[S.diff].name + ' puzzle in <b>' + fmt(S.time) + '</b> with ' + S.mistakes + ' mistake' + (S.mistakes === 1 ? '' : 's') + '.<br>' + (isBest ? '🏆 New best time!' : 'Best time: ' + fmt(bestT));
+    setTimeout(function(){ $('ov').hidden = false; confetti(); }, 500);
+  }
+  function confetti(){
+    var em = ['🎉', '⭐', '✨', '🎊', '💜'];
+    for(var k = 0; k < 24; k++){
+      var s = document.createElement('div'); s.className = 'confetti'; s.textContent = em[k % em.length];
+      s.style.left = Math.random() * 100 + 'vw'; s.style.animationDuration = (1.8 + Math.random() * 1.6) + 's'; s.style.animationDelay = Math.random() * 0.5 + 's';
+      document.body.appendChild(s);
+      setTimeout(function(el){ return function(){ el.remove(); }; }(s), 4200);
+    }
+  }
+  function fmt(t){ var m = Math.floor(t / 60), s = t % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
+
+  function render(){
+    if(!S) return;
+    var selVal = sel >= 0 ? S.values[sel] : 0, counts = new Array(10).fill(0);
+    for(var k = 0; k < 81; k++){
+      var el = cells[k], v = S.values[k], cls = el.className.replace(/ (given|peer|same|sel|bad|hinted)/g, '');
+      if(S.puzzle[k]) cls += ' given';
+      if(S.hinted.indexOf(k) >= 0) cls += ' hinted';
+      if(v && v !== S.solution[k]) cls += ' bad';
+      if(v && v === S.solution[k]) counts[v]++;
+      if(k === sel) cls += ' sel';
+      else if(selVal && v === selVal) cls += ' same';
+      else if(sel >= 0 && (rowOf(k) === rowOf(sel) || colOf(k) === colOf(sel) || boxOf(k) === boxOf(sel))) cls += ' peer';
+      el.className = cls;
+      if(v){ if(el.textContent !== String(v) || el.firstChild && el.firstChild.nodeType !== 3) el.textContent = String(v); }
+      else if(S.notes[k]){
+        var h = '<div class="notes">';
+        for(var n = 1; n <= 9; n++) h += '<span>' + (S.notes[k] & (1 << n) ? n : '') + '</span>';
+        el.innerHTML = h + '</div>';
+      } else if(el.textContent || el.firstChild) el.textContent = '';
+      el.setAttribute('aria-label', 'Row ' + (rowOf(k) + 1) + ' column ' + (colOf(k) + 1) + (v ? ', ' + v : ', empty'));
+    }
+    for(n = 1; n <= 9; n++){ var left = 9 - counts[n]; padBtns[n - 1].classList.toggle('done', left <= 0); padBtns[n - 1].querySelector('small').textContent = left > 0 ? left : ''; }
+    $('notes').classList.toggle('on', notesMode);
+    $('mist').textContent = '❌ ' + S.mistakes;
+    $('time').textContent = '⏱ ' + fmt(S.time);
+  }
+
+  $('undo').addEventListener('click', undo);
+  $('erase').addEventListener('click', erase);
+  $('hint').addEventListener('click', hint);
+  $('notes').addEventListener('click', function(){ notesMode = !notesMode; render(); });
+  $('new').addEventListener('click', function(){ if(S && !S.won && S.values.some(function(v, j){ return v && !S.puzzle[j]; }) && !confirm('Start a new puzzle?')) return; newGame(); });
+  $('ov-btn').addEventListener('click', newGame);
+  window.addEventListener('keydown', function(e){
+    if(!S) return;
+    if(e.key >= '1' && e.key <= '9'){ input(+e.key); return; }
+    if(e.key === 'Backspace' || e.key === 'Delete' || e.key === '0'){ e.preventDefault(); erase(); return; }
+    if(e.key === 'n' || e.key === 'N'){ notesMode = !notesMode; render(); return; }
+    if(e.key === 'h' || e.key === 'H'){ hint(); return; }
+    if((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')){ e.preventDefault(); undo(); return; }
+    var mv = { ArrowUp: -9, ArrowDown: 9, ArrowLeft: -1, ArrowRight: 1 }[e.key];
+    if(mv){
+      e.preventDefault();
+      if(sel < 0){ select(40); return; }
+      var r = rowOf(sel), cc = colOf(sel);
+      if(mv === -9) r = (r + 8) % 9; else if(mv === 9) r = (r + 1) % 9; else if(mv === -1) cc = (cc + 8) % 9; else cc = (cc + 1) % 9;
+      select(r * 9 + cc);
+    }
+  });
+  timer = setInterval(function(){
+    if(S && !S.won && !document.hidden && $('busy').hidden){ S.time++; $('time').textContent = '⏱ ' + fmt(S.time); if(S.time % 5 === 0) persist(); }
+  }, 1000);
+
+  try {
+    var saved = JSON.parse(load('sudoku.state', 'null'));
+    if(saved && saved.puzzle && saved.puzzle.length === 81 && saved.solution && saved.values && !saved.won){
+      saved.notes = saved.notes || new Array(81).fill(0); saved.hinted = saved.hinted || []; saved.hist = saved.hist || [];
+      S = saved; renderDiffs(); render();
+    }
+  } catch(e){ S = null; }
+  if(!S) newGame();
+  renderDiffs();
+})();
+</script>
+</body>
+</html>
