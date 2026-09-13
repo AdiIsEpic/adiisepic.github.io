@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#15173a">
+<title>Air Hockey</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Lilita+One&display=swap" rel="stylesheet">
+<style>
+  :root{ --font:'Fredoka', ui-rounded, 'Segoe UI', system-ui, sans-serif; --display:'Lilita One', 'Fredoka', system-ui, sans-serif; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; height:100%; overflow:hidden; overscroll-behavior:none; background:#15173a; color:#fff; font-family:var(--font); -webkit-user-select:none; user-select:none; }
+  #c{ position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:none; }
+  .hud{ position:fixed; top:0; left:0; right:0; z-index:5; display:flex; align-items:center; gap:8px; padding:10px; padding-top:max(10px, env(safe-area-inset-top)); pointer-events:none; }
+  .hud > *{ pointer-events:auto; }
+  .back{ padding:8px 12px; border-radius:12px; background:rgba(255,255,255,0.12); color:#fff; font-weight:600; font-size:15px; text-decoration:none; white-space:nowrap; }
+  .spacer{ flex:1; }
+  .round{ width:40px; height:40px; border:none; border-radius:50%; background:rgba(255,255,255,0.12); color:#fff; font-size:17px; cursor:pointer; flex:none; }
+  .overlay{ position:fixed; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; padding:16px; background:rgba(10,10,30,0.55); }
+  .overlay[hidden]{ display:none; }
+  .card{ width:min(100%, 350px); padding:24px 20px; border-radius:26px; text-align:center; background:#fff; color:#15173a; box-shadow:0 20px 50px rgba(0,0,0,0.45); animation:pop .35s cubic-bezier(.2,.9,.3,1.3); }
+  @keyframes pop{ from{ transform:scale(0.85); opacity:0; } }
+  .card h1{ margin:0 0 8px; font:400 42px var(--display); color:#ff3d7f; }
+  .card p{ margin:0 0 14px; font-size:16px; line-height:1.4; opacity:0.85; }
+  .card .big{ font:400 52px/1 var(--display); color:#2aa7ff; margin:0 0 8px; }
+  .lv{ display:flex; gap:6px; justify-content:center; margin:0 0 16px; }
+  .lv button{ font:600 15px var(--font); border:2px solid #e3e6f5; background:#f4f6ff; color:#15173a; border-radius:12px; padding:7px 12px; cursor:pointer; }
+  .lv button.on{ background:#2aa7ff; border-color:#2aa7ff; color:#fff; }
+  .btn{ font:400 22px var(--display); border:none; border-radius:18px; padding:13px 32px; color:#fff; cursor:pointer; background:linear-gradient(180deg, #ff6b9d, #ff3d7f); box-shadow:0 6px 0 #b8104d; }
+  .btn:active{ transform:translateY(4px); box-shadow:0 2px 0 #b8104d; }
+  button:focus-visible, .back:focus-visible{ outline:3px solid #2aa7ff; outline-offset:2px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hud">
+  <a class="back" href="../" aria-label="Back to games">&lsaquo; Games</a>
+  <div class="spacer"></div>
+  <button type="button" class="round" id="mute" aria-label="Sound on">🔊</button>
+</div>
+<div class="overlay" id="ov">
+  <div class="card">
+    <h1 id="ov-title">Air Hockey</h1>
+    <div class="big" id="ov-score" hidden>0 – 0</div>
+    <p id="ov-text">Drag your pink paddle to hit the puck into the top goal. First to 7 wins!</p>
+    <div class="lv" id="lv"></div>
+    <button type="button" class="btn" id="ov-btn">🏒 Play</button>
+  </div>
+</div>
+<script>
+(function(){
+  'use strict';
+  function $(id){ return document.getElementById(id); }
+  function load(k, d){ try { var v = localStorage.getItem(k); return v === null ? d : v; } catch(e){ return d; } }
+  function save(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
+
+  var actx = null, muted = load('hockey.muted', '0') === '1';
+  function tone(f0, f1, dur, type, vol, delay){
+    if(muted) return;
+    try {
+      if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if(actx.state === 'suspended') actx.resume();
+      var t0 = actx.currentTime + (delay || 0), o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+    } catch(e){}
+  }
+  var muteBtn = $('mute');
+  function renderMute(){ muteBtn.textContent = muted ? '🔈' : '🔊'; muteBtn.setAttribute('aria-label', muted ? 'Sound off' : 'Sound on'); }
+  muteBtn.addEventListener('click', function(){ muted = !muted; save('hockey.muted', muted ? '1' : '0'); renderMute(); muteBtn.blur(); });
+  renderMute();
+
+  var TW = 400, TH = 690, MID = TH / 2, GOAL = 150, PR = 18, MR = 30, WIN = 7, MAXV = 1600;
+  var LEVELS = [{ name: 'Easy', speed: 360, react: 0.35 }, { name: 'Normal', speed: 600, react: 0.7 }, { name: 'Hard', speed: 950, react: 1 }];
+  var level = Math.min(2, Math.max(0, +load('hockey.level', '1') || 0));
+  var cv = $('c'), cx = cv.getContext('2d'), W = 0, H = 0, DPR = 1, k = 1, ox = 0, oy = 0;
+  var puck, me, cpu, target = { x: TW / 2, y: TH - 90 }, state = 'menu', sMe = 0, sCpu = 0, pauseT = 0, msg = '', msgT = 0, trail = [], sparks = [], hitCool = 0, stuckT = 0, ghostT = 0, anchor = { x: 0, y: 0 };
+  var ov = $('ov');
+
+  function layout(){
+    W = window.innerWidth; H = window.innerHeight; DPR = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.max(1, Math.round(W * DPR)); cv.height = Math.max(1, Math.round(H * DPR));
+    var avH = H - 70, avW = W - 20;
+    k = Math.max(0.2, Math.min(avH / TH, avW / TW));
+    ox = (W - TW * k) / 2; oy = 60 + (avH - TH * k) / 2;
+  }
+  window.addEventListener('resize', layout);
+  layout();
+
+  var lvEl = $('lv');
+  LEVELS.forEach(function(L, i){
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = L.name;
+    b.addEventListener('click', function(){ level = i; save('hockey.level', String(i)); renderLv(); });
+    lvEl.appendChild(b);
+  });
+  function renderLv(){ Array.prototype.forEach.call(lvEl.children, function(b, i){ b.classList.toggle('on', i === level); }); }
+  renderLv();
+
+  function placePuck(side){
+    puck = { x: TW / 2 + (Math.random() - 0.5) * 60, y: side > 0 ? MID + 110 : MID - 110, vx: 0, vy: 0 };
+    trail = [];
+  }
+  function startGame(){
+    sMe = 0; sCpu = 0;
+    me = { x: TW / 2, y: TH - 80, vx: 0, vy: 0 };
+    cpu = { x: TW / 2, y: 80, vx: 0, vy: 0 };
+    target = { x: me.x, y: me.y };
+    placePuck(1); state = 'play'; ov.hidden = true; pauseT = 0.5; msg = 'Go!'; msgT = 0.8;
+  }
+  function clamp(v, a, b){ return v < a ? a : v > b ? b : v; }
+  function moveMallet(m, tx, ty, maxSp, dt, top){
+    var dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy), step = maxSp * dt;
+    var nx = m.x, ny = m.y;
+    if(d > step){ nx += dx / d * step; ny += dy / d * step; } else { nx = tx; ny = ty; }
+    nx = clamp(nx, MR, TW - MR);
+    ny = top ? clamp(ny, MR, MID - MR) : clamp(ny, MID + MR, TH - MR);
+    m.vx = (nx - m.x) / dt; m.vy = (ny - m.y) / dt; m.x = nx; m.y = ny;
+  }
+  function collide(m){
+    var dx = puck.x - m.x, dy = puck.y - m.y, d = Math.hypot(dx, dy), min = PR + MR;
+    if(d >= min || d === 0) return;
+    var nx = dx / d, ny = dy / d;
+    puck.x = m.x + nx * min; puck.y = m.y + ny * min;
+    var rvx = puck.vx - m.vx, rvy = puck.vy - m.vy, vn = rvx * nx + rvy * ny;
+    if(vn < 0){
+      puck.vx -= 1.85 * vn * nx; puck.vy -= 1.85 * vn * ny;
+      var sp = Math.hypot(puck.vx, puck.vy);
+      if(sp > MAXV){ puck.vx *= MAXV / sp; puck.vy *= MAXV / sp; }
+      if(hitCool <= 0){ tone(300 + Math.min(600, sp * 0.3), 150, 0.07, 'square', 0.06); hitCool = 0.06; }
+      for(var i = 0; i < 5; i++) sparks.push({ x: puck.x - nx * PR, y: puck.y - ny * PR, vx: (Math.random() - 0.5) * 300, vy: (Math.random() - 0.5) * 300, life: 0.3 });
+    }
+  }
+  function walls(){
+    var gl = (TW - GOAL) / 2, gr = (TW + GOAL) / 2, inGoal = puck.x > gl && puck.x < gr, bounced = false;
+    if(puck.x < PR){ puck.x = PR; puck.vx = Math.abs(puck.vx) * 0.9; bounced = true; }
+    if(puck.x > TW - PR){ puck.x = TW - PR; puck.vx = -Math.abs(puck.vx) * 0.9; bounced = true; }
+    if(!inGoal){
+      if(puck.y < PR){ puck.y = PR; puck.vy = Math.abs(puck.vy) * 0.9; bounced = true; }
+      if(puck.y > TH - PR){ puck.y = TH - PR; puck.vy = -Math.abs(puck.vy) * 0.9; bounced = true; }
+    } else {
+      [[gl, 0], [gr, 0], [gl, TH], [gr, TH]].forEach(function(p){
+        var dx = puck.x - p[0], dy = puck.y - p[1], d = Math.hypot(dx, dy);
+        if(d < PR && d > 0){ var nx = dx / d, ny = dy / d; puck.x = p[0] + nx * PR; puck.y = p[1] + ny * PR; var vn = puck.vx * nx + puck.vy * ny; if(vn < 0){ puck.vx -= 1.8 * vn * nx; puck.vy -= 1.8 * vn * ny; } bounced = true; }
+      });
+    }
+    if(bounced && hitCool <= 0 && Math.hypot(puck.vx, puck.vy) > 120){ tone(900, 600, 0.04, 'sine', 0.03); hitCool = 0.05; }
+    if(puck.y < -PR * 0.5) goal(1);
+    else if(puck.y > TH + PR * 0.5) goal(2);
+  }
+  function goal(who){
+    if(who === 1) sMe++; else sCpu++;
+    msg = who === 1 ? 'GOAL!' : 'CPU scores'; msgT = 1.2;
+    if(who === 1) [659, 784, 1047].forEach(function(f, i){ tone(f, f, 0.15, 'triangle', 0.07, i * 0.08); });
+    else tone(330, 160, 0.4, 'sawtooth', 0.06);
+    if(sMe >= WIN || sCpu >= WIN){ state = 'over'; pauseT = 1.3; return; }
+    placePuck(who === 1 ? -1 : 1); pauseT = 1;
+  }
+  function showOver(){
+    var won = sMe > sCpu;
+    $('ov-title').textContent = won ? 'You win! 🏆' : 'CPU wins';
+    $('ov-score').hidden = false; $('ov-score').textContent = sMe + ' – ' + sCpu;
+    $('ov-text').textContent = won ? (level < 2 ? 'Try a harder level next!' : 'You beat the Hard CPU!') : 'So close! Want a rematch?';
+    $('ov-btn').textContent = 'Rematch';
+    ov.hidden = false; state = 'menu';
+  }
+  function cpuTarget(){
+    var L = LEVELS[level];
+    if(puck.y < MID + 20 && (puck.vy < 250 || puck.y < MID - 40)){
+      // Line up behind the puck on the line to the player's goal, then strike through it.
+      var gx = TW / 2 - puck.x, gy = TH - puck.y, gl = Math.hypot(gx, gy) || 1;
+      gx /= gl; gy /= gl;
+      var behind = (cpu.x - puck.x) * gx + (cpu.y - puck.y) * gy;
+      if(behind < -MR * 0.8) return { x: puck.x + gx * 30, y: puck.y + gy * 30 };
+      return { x: puck.x - gx * (MR + PR + 16) + (cpu.x < puck.x ? -8 : 8), y: puck.y - gy * (MR + PR + 16) };
+    }
+    var predX = puck.x + (puck.vy < 0 ? puck.vx * ((puck.y - 70) / Math.max(60, -puck.vy)) * L.react : 0);
+    while(predX < 0 || predX > TW) predX = predX < 0 ? -predX : 2 * TW - predX;
+    return { x: TW / 2 + (clamp(predX, 60, TW - 60) - TW / 2) * 0.75, y: 70 };
+  }
+  function step(dt){
+    if(hitCool > 0) hitCool -= dt;
+    if(msgT > 0) msgT -= dt;
+    for(var i = sparks.length - 1; i >= 0; i--){ var s = sparks[i]; s.life -= dt; s.x += s.vx * dt; s.y += s.vy * dt; if(s.life <= 0) sparks.splice(i, 1); }
+    if(state === 'over'){ pauseT -= dt; if(pauseT <= 0) showOver(); return; }
+    if(state !== 'play') return;
+    var N = 8, h = dt / N, ct = cpuTarget(), sp = LEVELS[level].speed;
+    for(var n = 0; n < N; n++){
+      moveMallet(me, target.x, target.y, 3200, h, false);
+      moveMallet(cpu, ct.x, ct.y, sp, h, true);
+      if(pauseT > 0) continue;
+      puck.x += puck.vx * h; puck.y += puck.vy * h;
+      if(ghostT <= 0){ collide(me); collide(cpu); }
+      walls();
+      if(state !== 'play' || pauseT > 0) break;
+      if(ghostT > 0) continue;
+      var dm = Math.hypot(puck.x - me.x, puck.y - me.y);
+      if(dm < PR + MR - 0.5){ var ax = (me.x - puck.x) / (dm || 1), ay = (me.y - puck.y) / (dm || 1); me.x = puck.x + ax * (PR + MR); me.y = puck.y + ay * (PR + MR); me.vx = 0; me.vy = 0; }
+      var dc = Math.hypot(puck.x - cpu.x, puck.y - cpu.y);
+      if(dc < PR + MR - 0.5){ var bx = (cpu.x - puck.x) / (dc || 1), by = (cpu.y - puck.y) / (dc || 1); cpu.x = puck.x + bx * (PR + MR); cpu.y = puck.y + by * (PR + MR); cpu.vx = 0; cpu.vy = 0; }
+    }
+    if(pauseT > 0) pauseT -= dt;
+    var f = Math.pow(0.55, dt); puck.vx *= f; puck.vy *= f;
+    // A puck that hasn't really moved for a while (slow, or pinned in a corner) gets nudged back into play.
+    if(Math.hypot(puck.x - anchor.x, puck.y - anchor.y) > 30){ anchor.x = puck.x; anchor.y = puck.y; stuckT = 0; }
+    else if(pauseT <= 0) stuckT += dt;
+    if(stuckT > 3){
+      // Let the puck slip through the paddles for a moment so it can't stay pinned.
+      puck.vx = (TW / 2 - puck.x) * 1.6; puck.vy = (MID - puck.y) * 1.2 + (puck.y < MID ? 120 : -120);
+      stuckT = 0; anchor.x = -999; ghostT = 0.6;
+    }
+    if(ghostT > 0) ghostT -= dt;
+    trail.push({ x: puck.x, y: puck.y }); if(trail.length > 10) trail.shift();
+  }
+
+  function rr(x, y, w, h, r){ cx.beginPath(); cx.moveTo(x + r, y); cx.arcTo(x + w, y, x + w, y + h, r); cx.arcTo(x + w, y + h, x, y + h, r); cx.arcTo(x, y + h, x, y, r); cx.arcTo(x, y, x + w, y, r); cx.closePath(); }
+  function mallet(m, c1, c2){
+    cx.fillStyle = 'rgba(0,0,0,0.2)'; cx.beginPath(); cx.arc(m.x + 3, m.y + 5, MR, 0, Math.PI * 2); cx.fill();
+    cx.fillStyle = c1; cx.beginPath(); cx.arc(m.x, m.y, MR, 0, Math.PI * 2); cx.fill();
+    cx.fillStyle = c2; cx.beginPath(); cx.arc(m.x, m.y, MR * 0.68, 0, Math.PI * 2); cx.fill();
+    cx.fillStyle = c1; cx.beginPath(); cx.arc(m.x, m.y, MR * 0.42, 0, Math.PI * 2); cx.fill();
+    cx.fillStyle = 'rgba(255,255,255,0.45)'; cx.beginPath(); cx.arc(m.x - MR * 0.15, m.y - MR * 0.2, MR * 0.18, 0, Math.PI * 2); cx.fill();
+  }
+  function render(){
+    if(!W || !H) return;
+    cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    cx.fillStyle = '#15173a'; cx.fillRect(0, 0, W, H);
+    cx.setTransform(DPR * k, 0, 0, DPR * k, DPR * ox, DPR * oy);
+    cx.fillStyle = '#2b2f6b'; rr(-14, -14, TW + 28, TH + 28, 34); cx.fill();
+    var g = cx.createLinearGradient(0, 0, 0, TH); g.addColorStop(0, '#e8f6ff'); g.addColorStop(0.5, '#ffffff'); g.addColorStop(1, '#e8f6ff');
+    cx.fillStyle = g; rr(0, 0, TW, TH, 24); cx.fill();
+    cx.fillStyle = 'rgba(42,167,255,0.06)';
+    for(var y = 16; y < TH; y += 22) for(var x = 16 + ((y / 22) % 2) * 11; x < TW; x += 22){ cx.beginPath(); cx.arc(x, y, 1.6, 0, Math.PI * 2); cx.fill(); }
+    cx.strokeStyle = 'rgba(255,61,127,0.55)'; cx.lineWidth = 4;
+    cx.beginPath(); cx.moveTo(0, MID); cx.lineTo(TW, MID); cx.stroke();
+    cx.beginPath(); cx.arc(TW / 2, MID, 56, 0, Math.PI * 2); cx.stroke();
+    cx.strokeStyle = 'rgba(42,167,255,0.5)';
+    cx.beginPath(); cx.arc(TW / 2, 0, GOAL / 2 + 20, 0, Math.PI); cx.stroke();
+    cx.beginPath(); cx.arc(TW / 2, TH, GOAL / 2 + 20, Math.PI, Math.PI * 2); cx.stroke();
+    cx.fillStyle = '#0c0d24';
+    rr((TW - GOAL) / 2, -14, GOAL, 12, 5); cx.fill();
+    rr((TW - GOAL) / 2, TH + 2, GOAL, 12, 5); cx.fill();
+    cx.font = '400 90px "Lilita One", sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    cx.fillStyle = 'rgba(42,167,255,0.14)'; cx.fillText(String(sCpu), TW / 2, MID - 150);
+    cx.fillStyle = 'rgba(255,61,127,0.14)'; cx.fillText(String(sMe), TW / 2, MID + 150);
+    if(puck){
+      for(var i = 0; i < trail.length; i++){ cx.fillStyle = 'rgba(40,40,80,' + (i / trail.length * 0.12) + ')'; cx.beginPath(); cx.arc(trail[i].x, trail[i].y, PR * (0.5 + i / trail.length * 0.5), 0, Math.PI * 2); cx.fill(); }
+      cx.fillStyle = 'rgba(0,0,0,0.18)'; cx.beginPath(); cx.arc(puck.x + 2, puck.y + 4, PR, 0, Math.PI * 2); cx.fill();
+      cx.fillStyle = '#23254a'; cx.beginPath(); cx.arc(puck.x, puck.y, PR, 0, Math.PI * 2); cx.fill();
+      cx.strokeStyle = '#ffd23f'; cx.lineWidth = 3; cx.beginPath(); cx.arc(puck.x, puck.y, PR * 0.6, 0, Math.PI * 2); cx.stroke();
+    }
+    if(ghostT > 0) cx.globalAlpha = 0.45;
+    if(cpu) mallet(cpu, '#2aa7ff', '#127ccc');
+    if(me) mallet(me, '#ff3d7f', '#d11a5c');
+    cx.globalAlpha = 1;
+    cx.fillStyle = '#ffd23f';
+    for(i = 0; i < sparks.length; i++){ var s = sparks[i]; cx.globalAlpha = Math.max(0, s.life / 0.3); cx.fillRect(s.x - 2, s.y - 2, 4, 4); }
+    cx.globalAlpha = 1;
+    if(msgT > 0 && msg){
+      cx.globalAlpha = Math.min(1, msgT * 2); cx.font = '400 54px "Lilita One", sans-serif';
+      cx.fillStyle = msg === 'GOAL!' ? '#ff3d7f' : msg === 'Go!' ? '#12b886' : '#2aa7ff';
+      cx.strokeStyle = '#fff'; cx.lineWidth = 8; cx.strokeText(msg, TW / 2, MID); cx.fillText(msg, TW / 2, MID);
+      cx.globalAlpha = 1;
+    }
+  }
+
+  var last = 0;
+  function frame(ts){
+    var dt = Math.min(0.033, Math.max(0.001, (ts - last) / 1000)); last = ts;
+    step(dt); render();
+    requestAnimationFrame(frame);
+  }
+  function aim(e){
+    target.x = (e.clientX - ox) / k; target.y = (e.clientY - oy) / k - (e.pointerType === 'touch' ? 26 : 0);
+  }
+  cv.addEventListener('pointerdown', function(e){ e.preventDefault(); aim(e); try { cv.setPointerCapture(e.pointerId); } catch(err){} });
+  cv.addEventListener('pointermove', function(e){ if(e.pointerType === 'mouse' || e.buttons || e.pressure > 0) aim(e); });
+  $('ov-btn').addEventListener('click', startGame);
+  window.addEventListener('keydown', function(e){ if((e.code === 'Space' || e.code === 'Enter') && !ov.hidden){ e.preventDefault(); startGame(); } });
+
+  me = { x: TW / 2, y: TH - 80, vx: 0, vy: 0 }; cpu = { x: TW / 2, y: 80, vx: 0, vy: 0 }; placePuck(1);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
