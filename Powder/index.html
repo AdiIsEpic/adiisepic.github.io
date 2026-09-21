@@ -205,7 +205,7 @@
 
 <div class="view" id="view">
   <canvas id="c"></canvas>
-  <div class="start-hint" id="hint">Pick a section, then an element, and <b>draw</b>.<br>Hover to read temperatures. Try fire under a copper bar, or corn on a heater.</div>
+  <div class="start-hint" id="hint">Pick a section, then an element, and <b>draw</b>.<br>Hover to read temperatures. Try vinegar on baking soda, flour in water, or a battery on copper.</div>
   <div class="legend" id="legend" hidden><span>&minus;273&deg;</span><span class="scale"></span><span>6000&deg;C</span></div>
 </div>
 
@@ -231,20 +231,26 @@
     'Clone','Void','Antimatter','Heater','Cooler',
     'Wet Sponge','Dried Glue','Molten Gold','Burning Thermite','Rocket','Sparkle','Stem','Burning Fuse','Burning Wood',
     'Copper','Molten Copper','Tungsten','Insulator','Butter','Melted Butter','Chocolate','Melted Chocolate','Corn','Popcorn',
-    'Paper','Dry Ice','Liquid Oxygen','Magnesium','Burning Magnesium','Sodium','Uranium','Propane','Gasoline','Soap','Bubbles','Neon'
+    'Paper','Dry Ice','Liquid Oxygen','Magnesium','Burning Magnesium','Sodium','Uranium','Propane','Gasoline','Soap','Bubbles','Neon',
+    'Flour','Sulfur','Iron Filings','Baking Soda','Fertilizer','Confetti','Coffee Grounds','Pixie Dust',
+    'Milk','Coffee','Soda','Vinegar','Blood','Paint','Ink','Quicksand','Foam','Molten Lead','Melted Cheese','Molten Plastic','Dried Paint',
+    'Ammonia','Argon','Toxic Gas','Ozone',
+    'Lead','Steel','Aluminium','Rubber','Plastic','Cloth','Cardboard','Bone','Marble','Sandstone','Amber','Cheese','Dough','Bread','Ice Cream','Battery',
+    'Leaves','Coral','Algae','Cactus','Bacteria',
+    'Blue Fire','Green Fire','Dynamite','Napalm'
   ];
   var ID = {};
   NAMES.forEach(function(n, i){ ID[n] = i; });
   var LABEL = { 'CO2': 'CO₂' };
 
   var SECTIONS = [
-    ['Powders',       ['Sand','Stone','Snow','Salt','Dust','Ash','Coal','Dirt','Gravel','Sawdust','Glass Shards','Rust','Clay','Sugar','Cement','Glitter','Corn','Popcorn','Magnesium','Sodium','Uranium']],
-    ['Liquids',       ['Water','Saltwater','Oil','Gasoline','Acid','Lava','Mud','Honey','Mercury','Liquid Nitrogen','Liquid Oxygen','Molten Glass','Molten Metal','Molten Copper','Slime','Alcohol','Tar','Glue','Liquid Wax','Melted Butter','Melted Chocolate','Soap']],
-    ['Gases',         ['Steam','Smoke','Nitrogen','Hydrogen','Methane','Propane','Oxygen','Helium','Neon','Chlorine','CO2','Cloud','Bubbles']],
-    ['Solids',        ['Wall','Wood','Paper','Ice','Dry Ice','Metal','Copper','Tungsten','Gold','Glass','Brick','Concrete','Insulator','Diamond','Obsidian','Crystal','Sponge','Wax','Butter','Chocolate']],
-    ['Fire & Energy', ['Fire','Cold Fire','Plasma','Ember','Spark','Lightning']],
-    ['Explosives',    ['Gunpowder','TNT','C-4','Nitro','Thermite','Firework','Bomb','Fuse']],
-    ['Life',          ['Plant','Seed','Flower','Grass','Vine','Moss','Mushroom','Virus']],
+    ['Powders',       ['Sand','Stone','Snow','Salt','Dust','Ash','Coal','Dirt','Gravel','Sawdust','Glass Shards','Rust','Clay','Sugar','Cement','Glitter','Corn','Popcorn','Magnesium','Sodium','Uranium','Flour','Sulfur','Iron Filings','Baking Soda','Fertilizer','Confetti','Coffee Grounds','Pixie Dust']],
+    ['Liquids',       ['Water','Saltwater','Oil','Gasoline','Acid','Lava','Mud','Honey','Mercury','Liquid Nitrogen','Liquid Oxygen','Molten Glass','Molten Metal','Molten Copper','Slime','Alcohol','Tar','Glue','Liquid Wax','Melted Butter','Melted Chocolate','Soap','Milk','Coffee','Soda','Vinegar','Blood','Paint','Ink','Quicksand','Foam','Melted Cheese','Molten Lead','Molten Plastic']],
+    ['Gases',         ['Steam','Smoke','Nitrogen','Hydrogen','Methane','Propane','Oxygen','Helium','Neon','Chlorine','CO2','Cloud','Bubbles','Ammonia','Argon','Toxic Gas','Ozone']],
+    ['Solids',        ['Wall','Wood','Paper','Ice','Dry Ice','Metal','Copper','Tungsten','Gold','Glass','Brick','Concrete','Insulator','Diamond','Obsidian','Crystal','Sponge','Wax','Butter','Chocolate','Lead','Steel','Aluminium','Rubber','Plastic','Cloth','Cardboard','Bone','Marble','Sandstone','Amber','Cheese','Dough','Bread','Ice Cream','Battery','Dried Paint']],
+    ['Fire & Energy', ['Fire','Cold Fire','Plasma','Ember','Spark','Lightning','Blue Fire','Green Fire']],
+    ['Explosives',    ['Gunpowder','TNT','C-4','Nitro','Thermite','Firework','Bomb','Fuse','Dynamite','Napalm']],
+    ['Life',          ['Plant','Seed','Flower','Grass','Vine','Moss','Mushroom','Virus','Leaves','Coral','Algae','Cactus','Bacteria']],
     ['Special',       ['Clone','Void','Antimatter','Heater','Cooler']],
     ['Tools',         ['Heat','Cool']]
   ];
@@ -461,7 +467,7 @@
   def('Molten Gold', { kind: LIQUID, dens: 17,   color: '#ffcf5a', temp: 1200, cond: 0.7, airloss: 0.002, visc: 0.7, spread: 2, lo: [1000, 'Gold', 0.05] });
   def('Molten Copper',{kind: LIQUID, dens: 8,    color: '#ff9a5a', temp: 1250, cond: 0.8, airloss: 0.002, visc: 0.7, spread: 2, lo: [1000, 'Copper', 0.05] });
   def('Slime',       { kind: LIQUID, dens: 1.2,  color: '#6fdc4a', visc: 0.9, spread: 1 });
-  def('Alcohol',     { kind: LIQUID, dens: 0.79, color: '#dbe9f5', flam: 0.7, ign: 360, burnLife: [10, 20], spread: 5 });
+  def('Alcohol',     { kind: LIQUID, dens: 0.79, color: '#dbe9f5', flam: 0.7, ign: 360, burnTo: 'Blue Fire', burnLife: [10, 20], spread: 5 });
   def('Tar',         { kind: LIQUID, dens: 1.2,  color: '#1d1a17', visc: 0.95, spread: 1, flam: 0.04, ign: 300, burnLife: [80, 160] });
   def('Glue',        { kind: LIQUID, dens: 1.3,  color: '#efeee6', visc: 0.9, spread: 1, decay: ['Dried Glue', 0.002] });
   def('Liquid Wax',  { kind: LIQUID, dens: 0.9,  color: '#f1e2b8', temp: 80, visc: 0.6, spread: 2, lo: [50, 'Wax', 0.1], flam: 0.1, ign: 250 });
@@ -473,7 +479,7 @@
   def('Steam',    { kind: GAS, dens: 0.1,  color: '#c6d2de', temp: 120, airloss: 0.003, lo: [95, 'Water', 0.3] });
   def('Smoke',    { kind: GAS, dens: 0.12, color: '#545458', life: [30, 80] });
   def('Nitrogen', { kind: GAS, dens: 0.09, color: '#8fa4c8', lo: [-196, 'Liquid Nitrogen', 0.05] });
-  def('Hydrogen', { kind: GAS, dens: 0.01, color: '#b8c8f0', flam: 0.9, ign: 500, burnLife: [6, 14] });
+  def('Hydrogen', { kind: GAS, dens: 0.01, color: '#b8c8f0', flam: 0.9, ign: 500, burnTo: 'Blue Fire', burnLife: [6, 14] });
   def('Methane',  { kind: GAS, dens: 0.05, color: '#a6b998', flam: 0.6, ign: 540, burnLife: [8, 16] });
   def('Propane',  { kind: GAS, dens: 0.55, color: '#b9a98a', heavy: true, flam: 0.7, ign: 470, burnLife: [8, 16] });
   def('Oxygen',   { kind: GAS, dens: 0.11, color: '#99c6ef', flam: 0.35, ign: 300, burnLife: [10, 20], lo: [-183, 'Liquid Oxygen', 0.05] });
@@ -549,6 +555,72 @@
   def('Heater',     { kind: SOLID, color: '#d9534f', temp: 600, fixed: true, cond: 0.8, resist: 0.9, acidproof: true, noglow: true });
   def('Cooler',     { kind: SOLID, color: '#5bc0de', temp: -80, fixed: true, cond: 0.8, resist: 0.9, acidproof: true, noglow: true });
 
+  // ---------- kitchen, workshop and garden additions ----------
+  var BLUEFIRE_PAL  = ['#04122e','#0a2a6b','#1247b8','#2a6ff0','#4f9bff','#8fc7ff','#c9e6ff','#ffffff'];
+  var GREENFIRE_PAL = ['#042a12','#0a5a22','#128f32','#2ec44a','#6ef06a','#a8ffa0','#d8ffd0','#ffffff'];
+
+  // powders
+  def('Flour',         { kind: POWDER, dens: 1.1, color: '#f5f0e2', flam: 0.5, ign: 220, burnLife: [6, 12] });
+  def('Sulfur',        { kind: POWDER, dens: 2,   color: '#e8d84a', flam: 0.35, ign: 250, burnTo: 'Blue Fire', burnLife: [20, 40] });
+  def('Iron Filings',  { kind: POWDER, dens: 4.2, color: '#5f6570', cond: 0.6, hi: [1538, 'Molten Metal', 0.05] });
+  def('Baking Soda',   { kind: POWDER, dens: 1.5, color: '#fbfbf7', hi: [200, 'CO2', 0.04] });
+  def('Fertilizer',    { kind: POWDER, dens: 1.8, color: '#7d6a3a' });
+  def('Confetti',      { kind: POWDER, dens: 0.6, colors: ['#ff5a8a', '#ffd166', '#6ee7f9', '#9b6bff'], render: R_GLITTER, noglow: true, flam: 0.6, ign: 200, burnLife: [5, 10] });
+  def('Coffee Grounds',{ kind: POWDER, dens: 1.5, color: '#4a3524', flam: 0.2, ign: 300 });
+  def('Pixie Dust',    { kind: POWDER, dens: 0.5, colors: ['#ffb3f0', '#e6b3ff', '#b3e0ff', '#fff0b3'], render: R_GLITTER, noglow: true });
+
+  // liquids
+  def('Milk',    { kind: LIQUID, dens: 1.03, color: '#f4f1e6', spread: 4, hi: [100, 'Steam', 0.4], lo: [0, 'Ice Cream', 0.2], noglow: true });
+  def('Coffee',  { kind: LIQUID, dens: 1,    color: '#4a2c17', temp: 80, spread: 4, hi: [100, 'Steam', 0.4] });
+  def('Soda',    { kind: LIQUID, dens: 1.05, color: '#7a3d1c', spread: 4, decay: ['CO2', 0.0008] });
+  def('Vinegar', { kind: LIQUID, dens: 1.01, color: '#efe6b8', spread: 4, hi: [100, 'Steam', 0.3] });
+  def('Blood',   { kind: LIQUID, dens: 1.06, color: '#8e1b1b', spread: 3, visc: 0.3, hi: [100, 'Smoke', 0.2], lo: [-2, 'Ice', 0.2] });
+  def('Paint',   { kind: LIQUID, dens: 1.2,  colors: ['#e8534a', '#4a8ee8', '#f0c419', '#5ac46a'], spread: 2, visc: 0.7, decay: ['Dried Paint', 0.004], noglow: true });
+  def('Ink',     { kind: LIQUID, dens: 1.05, color: '#15131c', spread: 4, noglow: true });
+  def('Quicksand',{kind: LIQUID, dens: 2.6,  color: '#c8a86a', visc: 0.92, spread: 1 });
+  def('Foam',    { kind: LIQUID, dens: 0.3,  color: '#f2f7fa', spread: 2, visc: 0.4, life: [120, 300], noglow: true });
+  def('Molten Lead',   { kind: LIQUID, dens: 11,  color: '#ff9f7a', temp: 500, cond: 0.7, airloss: 0.002, visc: 0.6, spread: 2, lo: [327, 'Lead', 0.06] });
+  def('Melted Cheese', { kind: LIQUID, dens: 1.1, color: '#f6c33c', temp: 45, visc: 0.85, spread: 1, lo: [28, 'Cheese', 0.1], flam: 0.05, ign: 300 });
+  def('Molten Plastic',{ kind: LIQUID, dens: 1.1, color: '#d8c8b0', temp: 200, visc: 0.8, spread: 1, lo: [120, 'Plastic', 0.08], flam: 0.2, ign: 350 });
+
+  // gases
+  def('Ammonia',   { kind: GAS, dens: 0.07, color: '#cfe3b8' });
+  def('Argon',     { kind: GAS, dens: 0.45, color: '#c6a8f0', heavy: true });
+  def('Toxic Gas', { kind: GAS, dens: 0.4,  color: '#8fd14f', heavy: true, flam: 0.2, ign: 400, burnLife: [8, 16] });
+  def('Ozone',     { kind: GAS, dens: 0.16, color: '#9fd8ff', decay: ['Oxygen', 0.004] });
+
+  // solids
+  def('Lead',      { kind: SOLID, dens: 11, color: '#7e8894', cond: 0.5, airloss: 0.0025, hi: [327, 'Molten Lead', 0.06], resist: 0.5 });
+  def('Steel',     { kind: SOLID, color: '#9aa4ae', cond: 0.55, airloss: 0.0025, hi: [1500, 'Molten Metal', 0.04], resist: 0.85 });
+  def('Aluminium', { kind: SOLID, color: '#cdd3d8', cond: 0.85, airloss: 0.003, hi: [660, 'Molten Metal', 0.06], resist: 0.4 });
+  def('Rubber',    { kind: SOLID, color: '#2b2b2f', cond: 0.02, airloss: 0, flam: 0.25, ign: 320, burnLife: [60, 120], resist: 0.4, noglow: true });
+  def('Plastic',   { kind: SOLID, color: '#e2ddd2', cond: 0.08, hi: [180, 'Molten Plastic', 0.06], flam: 0.2, ign: 400, resist: 0.3 });
+  def('Cloth',     { kind: SOLID, color: '#c86a8a', cond: 0.06, flam: 0.7, ign: 220, burnLife: [10, 20] });
+  def('Cardboard', { kind: SOLID, color: '#c89a62', cond: 0.06, flam: 0.5, ign: 240, burnLife: [12, 24] });
+  def('Bone',      { kind: SOLID, color: '#e8e2cf', cond: 0.12, acidproof: true, resist: 0.4 });
+  def('Marble',    { kind: SOLID, colors: ['#eceae4', '#dedbd2', '#f4f2ed', '#d2cec4'], cond: 0.25, hi: [1300, 'Lava', 0.03], resist: 0.7, blast: 'Gravel' });
+  def('Sandstone', { kind: SOLID, color: '#d8b781', cond: 0.2, resist: 0.3, blast: 'Sand' });
+  def('Amber',     { kind: SOLID, colors: ['#ffa53a', '#ff8f1a', '#ffc36a', '#f08a12'], cond: 0.1, acidproof: true, flam: 0.05, ign: 400, resist: 0.3 });
+  def('Cheese',    { kind: SOLID, color: '#f0c040', cond: 0.12, hi: [28, 'Melted Cheese', 0.2], flam: 0.05, ign: 300 });
+  def('Dough',     { kind: SOLID, color: '#f0dfc0', cond: 0.1, hi: [170, 'Bread', 0.04] });
+  def('Bread',     { kind: SOLID, color: '#d9a86c', cond: 0.07, flam: 0.35, ign: 260, burnLife: [20, 40] });
+  def('Ice Cream', { kind: SOLID, colors: ['#fdeee2', '#ffd9c0', '#ffe9d8', '#f8dcc8'], temp: -6, cond: 0.2, hi: [8, 'Milk', 0.15], noglow: true });
+  def('Battery',   { kind: SOLID, color: '#3d6b4a', cond: 0.3, resist: 0.4, acidproof: true });
+  def('Dried Paint',{kind: SOLID, colors: ['#c94a42', '#3f7cc9', '#d1a712', '#4aa85c'], cond: 0.15, noglow: true });
+
+  // life
+  def('Leaves',   { kind: SOLID, colors: ['#4aa83f', '#3f9a36', '#5cc04a', '#357f2e'], cond: 0.08, flam: 0.5, ign: 230, burnLife: [8, 16] });
+  def('Coral',    { kind: SOLID, colors: ['#ff7a7a', '#ff9ec4', '#ffb36a', '#f0668f'], cond: 0.2, resist: 0.2 });
+  def('Algae',    { kind: SOLID, color: '#2f8f5a', cond: 0.2, flam: 0.05, ign: 300 });
+  def('Cactus',   { kind: SOLID, colors: ['#3f8f4a', '#4aa055', '#36823f', '#58b466'], cond: 0.1, flam: 0.06, ign: 280 });
+  def('Bacteria', { kind: LIQUID, dens: 1.05, color: '#a8d14f', visc: 0.85, spread: 1, flam: 0.2, ign: 200 });
+
+  // fire & explosives
+  def('Blue Fire',  { kind: FLAME, temp: 1600, fixed: true, life: [18, 36], death: ['Smoke', 0.2], flame: BLUEFIRE_PAL });
+  def('Green Fire', { kind: FLAME, temp: 1100, fixed: true, life: [20, 40], death: ['Smoke', 0.2], flame: GREENFIRE_PAL });
+  def('Dynamite',   { kind: SOLID, color: '#b8342a', explode: 10, ignite: 0.45, ign: 260 });
+  def('Napalm',     { kind: LIQUID, dens: 1.1, color: '#d98a2b', visc: 0.94, spread: 1, flam: 0.8, ign: 200, burnLife: [120, 220] });
+
   // ---------- contact reactions ----------
   react('Plant', 'Water', null, 'Plant', 0.03);          // plants drink water and grow into it
   react('Plant', 'CO2', null, 'Oxygen', 0.05);           // ...and breathe out oxygen
@@ -586,6 +658,58 @@
   react('Sodium', 'Water', 'Plasma', 'Hydrogen', 0.3);   // sodium goes off in water
   react('Sodium', 'Saltwater', 'Plasma', 'Hydrogen', 0.3);
   react('Soap', 'Water', null, 'Bubbles', 0.03);         // soapy water makes bubbles
+
+  // ---- the new lot ----
+  react('Flour', 'Water', 'Dough', 'Empty', 0.08);          // flour and water make dough
+  react('Flour', 'Milk', 'Dough', 'Empty', 0.08);
+  react('Coffee Grounds', 'Water', 'Coffee', 'Empty', 0.08);
+  react('Baking Soda', 'Vinegar', 'Foam', 'CO2', 0.5);      // the volcano
+  react('Baking Soda', 'Water', 'Empty', 'Foam', 0.02);
+  react('Baking Soda', 'Fire', 'Empty', 'CO2', 0.4);        // ...and it puts fires out
+  react('Soda', 'Sugar', 'Foam', 'Foam', 0.35);             // the fountain
+  react('Soda', 'Salt', 'Foam', 'CO2', 0.2);
+  react('Vinegar', 'Rust', 'Empty', 'Metal', 0.02);         // vinegar cleans rust off metal
+  react('Iron Filings', 'Water', 'Rust', null, 0.01);
+  react('Iron Filings', 'Saltwater', 'Rust', null, 0.03);
+  react('Sulfur', 'Fire', 'Empty', 'Toxic Gas', 0.2);
+  react('Sulfur', 'Lava', 'Toxic Gas', null, 0.1);
+  react('Fertilizer', 'Dirt', 'Empty', 'Grass', 0.06);      // fertiliser wakes a garden up
+  react('Fertilizer', 'Mud', 'Empty', 'Plant', 0.05);
+  react('Fertilizer', 'Seed', 'Empty', 'Stem', 0.08);
+  react('Fertilizer', 'Water', 'Empty', 'Algae', 0.02);
+  react('Pixie Dust', 'Dirt', 'Empty', 'Flower', 0.06);     // pixie dust: dirt blooms,
+  react('Pixie Dust', 'Ash', 'Empty', 'Seed', 0.06);        // ash comes back to life,
+  react('Pixie Dust', 'Stone', 'Empty', 'Crystal', 0.03);   // stone turns to crystal
+  react('Pixie Dust', 'Water', 'Empty', 'Slime', 0.02);
+  react('Ink', 'Water', null, 'Ink', 0.02);                 // ink clouds through water
+  react('Paint', 'Water', null, 'Paint', 0.012);
+  react('Quicksand', 'Water', 'Mud', 'Empty', 0.05);
+  react('Sandstone', 'Water', 'Sand', null, 0.01);         // water wears sandstone away
+  react('Toxic Gas', 'Water', 'Empty', 'Acid', 0.02);
+  react('Ammonia', 'Chlorine', 'Toxic Gas', 'Toxic Gas', 0.25);
+  react('Ammonia', 'Acid', 'Steam', 'Salt', 0.1);
+  react('Lightning', 'Oxygen', null, 'Ozone', 0.2);
+  react('Oxygen', 'Lightning', 'Ozone', null, 0.25);         // lightning makes ozone
+  react('Fire', 'Copper', 'Green Fire', null, 0.03);        // copper burns green,
+  react('Fire', 'Sulfur', 'Blue Fire', null, 0.06);         // sulfur burns blue
+  react('Battery', 'Metal', null, 'Spark', 0.03);           // batteries spark into metal
+  react('Battery', 'Copper', null, 'Spark', 0.06);
+  react('Battery', 'Water', 'Rust', 'Hydrogen', 0.03);
+  react('Coral', 'Saltwater', null, 'Coral', 0.02);        // coral grows in sea water
+  react('Coral', 'Water', null, 'Coral', 0.01);
+  react('Algae', 'Water', null, 'Algae', 0.02);
+  react('Algae', 'Saltwater', null, 'Algae', 0.015);
+  react('Cactus', 'Sand', null, 'Cactus', 0.01);
+  react('Bacteria', 'Dirt', null, 'Bacteria', 0.01);        // bacteria eats nearly anything
+  react('Bacteria', 'Bread', null, 'Bacteria', 0.02);
+  react('Bacteria', 'Milk', null, 'Bacteria', 0.02);
+  react('Bacteria', 'Blood', null, 'Bacteria', 0.02);
+  react('Bacteria', 'Plant', null, 'Bacteria', 0.01);
+  react('Bacteria', 'Soap', 'Empty', null, 0.3);            // ...but soap washes it away
+  react('Bacteria', 'Toxic Gas', 'Empty', null, 0.2);
+  ['Plant', 'Grass', 'Vine', 'Flower', 'Moss', 'Stem', 'Seed', 'Mushroom', 'Leaves', 'Cactus', 'Algae', 'Coral'].forEach(function(p){
+    react('Toxic Gas', p, null, 'Ash', 0.04);               // toxic gas kills anything living
+  });
 
   // things that never change and don't carry heat can skip their update entirely
   for(var sid = 0; sid < NAMES.length; sid++){
