@@ -152,6 +152,31 @@
     border-top:1px solid var(--line);
   }
   .row{ display:flex; gap:6px; overflow-x:auto; scrollbar-width:thin; padding-bottom:2px; }
+  .toprow{ display:flex; align-items:center; gap:8px; }
+  .toprow .row{ flex:1; min-width:0; }
+  .search{
+    flex:none;
+    width:170px;
+    font:inherit;
+    font-size:12px;
+    color:var(--ink);
+    background:#26262b;
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:6px 12px;
+    outline:none;
+  }
+  .search:focus{ border-color:var(--accent); }
+  .search::placeholder{ color:var(--dim); }
+  /* a whole section's elements, wrapped into a short scrolling block */
+  #els{
+    flex-wrap:wrap;
+    overflow-x:hidden;
+    overflow-y:auto;
+    max-height:min(116px, 24vh);
+    align-content:flex-start;
+  }
+  .none{ color:var(--dim); font-size:12px; padding:7px 4px; }
 
   .cat{
     flex:none;
@@ -186,6 +211,8 @@
   @media (max-width:760px){
     .keys{ display:none; }
     input[type=range]{ width:80px; }
+    .search{ width:112px; }
+    .tool{ padding:5px 9px; font-size:12px; }
   }
 </style>
 </head>
@@ -205,12 +232,15 @@
 
 <div class="view" id="view">
   <canvas id="c"></canvas>
-  <div class="start-hint" id="hint">Pick a section, then an element, and <b>draw</b>.<br>Hover to read temperatures. Try vinegar on baking soda, flour in water, or a battery on copper.</div>
+  <div class="start-hint" id="hint">Pick a section (or search), then an element, and <b>draw</b>.<br>Hover to read temperatures. Try the Crush tool on stone, Mentos in soda, or an acorn on dirt.</div>
   <div class="legend" id="legend" hidden><span>&minus;273&deg;</span><span class="scale"></span><span>6000&deg;C</span></div>
 </div>
 
 <div class="tools">
-  <div class="row" id="cats" role="tablist" aria-label="Sections"></div>
+  <div class="toprow">
+    <input class="search" id="search" type="search" placeholder="Search elements" aria-label="Search elements" autocomplete="off" spellcheck="false">
+    <div class="row" id="cats" role="tablist" aria-label="Sections"></div>
+  </div>
   <div class="row" id="els"></div>
 </div>
 
@@ -252,7 +282,7 @@
     ['Explosives',    ['Gunpowder','TNT','C-4','Nitro','Thermite','Firework','Bomb','Fuse','Dynamite','Napalm']],
     ['Life',          ['Plant','Seed','Flower','Grass','Vine','Moss','Mushroom','Virus','Leaves','Coral','Algae','Cactus','Bacteria']],
     ['Special',       ['Clone','Void','Antimatter','Heater','Cooler']],
-    ['Tools',         ['Heat','Cool']]
+    ['Tools',         ['Heat','Cool','Crush','Compact','Mix']]
   ];
 
   // hot-path ids
@@ -264,33 +294,32 @@
       ACID = ID.Acid, WOOD = ID.Wood;
 
   // tools, not elements
-  var ERASE = 250, HEAT = 251, COOL = 252;
-  var TOOL_IDS = { 'Heat': HEAT, 'Cool': COOL };
-  var NONE = 255;       // "no change" in the property tables
+  var ERASE = 65000, HEAT = 65001, COOL = 65002, GRIND = 65003, COMPACT = 65004, MIX = 65005;
+  var TOOL_IDS = { 'Heat': HEAT, 'Cool': COOL, 'Crush': GRIND, 'Compact': COMPACT, 'Mix': MIX };
+  var NONE = 65535;     // "no change" in the property tables
   var AMBIENT = 22;     // room temperature, °C
 
   // ---------- property tables, one slot per element ----------
+  // Elements are collected first (def and react below just queue them), then buildTables()
+  // sizes every table to the final element count and fills it in.
   var POWDER = 1, LIQUID = 2, GAS = 3, SOLID = 4, FLAME = 5;
-  function u8(fill){ var a = new Uint8Array(256); if(fill) a.fill(fill); return a; }
-  function f32(){ return new Float32Array(256); }
+  var E = 0;
+  function u8(){ return new Uint8Array(E); }
+  function u16(fill){ var a = new Uint16Array(E); if(fill) a.fill(fill); return a; }
+  function f32(){ return new Float32Array(E); }
 
-  var KIND = u8(), DENS = f32(), MOVES = u8();
-  // temperature
-  var TEMP0 = f32(), COND = f32(), AIRLOSS = f32(), FIXED = u8(), GLOWS = u8();
-  var HI_T = f32(), HI_TO = u8(NONE), HI_P = f32(), HI_ALT = u8(NONE), HI_ALT_P = f32();
-  var LO_T = f32(), LO_TO = u8(NONE), LO_P = f32();
-  var IGN_T = f32(), FLAM = f32(), BURN_TO = u8(NONE), BURN_MIN = u8(), BURN_MAX = u8();
-  // everything else
-  var DECAY_TO = u8(NONE), DECAY_P = f32(), LIFE_MIN = u8(), LIFE_MAX = u8();
-  var DEATH_A = u8(NONE), DEATH_AP = f32(), DEATH_B = u8(NONE), DEATH_BP = f32();
-  var VISC = f32(), SPREAD = u8(), HEAVY = u8(), JUMP = u8();
-  var EXPLODE = u8(), IGNITE_P = f32();
-  var RESIST = f32(), BLAST_TO = u8(NONE), ACIDPROOF = u8();
-  var STATIC = u8(), RMODE = u8(), HAS_REACT = u8();
-  var PAL = new Uint32Array(256 * 4), FPAL = [], SWATCH = [], CUSTOM = [];
+  var KIND, DENS, MOVES,
+      TEMP0, COND, AIRLOSS, FIXED, GLOWS,
+      HI_T, HI_TO, HI_P, HI_ALT, HI_ALT_P, LO_T, LO_TO, LO_P,
+      IGN_T, FLAM, BURN_TO, BURN_MIN, BURN_MAX,
+      DECAY_TO, DECAY_P, LIFE_MIN, LIFE_MAX, DEATH_A, DEATH_AP, DEATH_B, DEATH_BP,
+      VISC, SPREAD, HEAVY, JUMP, EXPLODE, IGNITE_P, RESIST, BLAST_TO, ACIDPROOF,
+      STATIC, RMODE, HAS_REACT, NOWATER, WET, CRUSH, PRESS, PAL,
+      ARG1, ARG2, ARGP, ARGN;   // spare per-element settings for the special behaviours
+  var FPAL = [], SWATCH = [], CUSTOM = [], CRIT = [];
 
-  // pairwise contact reactions: [self][neighbour] -> what each becomes, and how often
-  var RX_TO = new Uint8Array(65536).fill(NONE), RX_OTHER = new Uint8Array(65536).fill(NONE), RX_P = new Float32Array(65536);
+  // pairwise contact reactions: [self][neighbour] -> what each becomes, how often, and how hot self must be
+  var RX_TO, RX_OTHER, RX_P, RX_T;
 
   // render modes
   var R_FLAT = 0, R_FLAME = 1, R_FLICKER = 2, R_GLITTER = 3, R_SPARKLE = 4;
@@ -364,7 +393,26 @@
   }
 
   // ---------- defining elements ----------
+  var DEFS = [], RXS = [], DEFINED = {};
+  function reg(name){
+    if(ID[name] === undefined){ ID[name] = NAMES.length; NAMES.push(name); }
+    return ID[name];
+  }
   function def(name, o){
+    if(DEFINED[name]) console.error('Powder: ' + name + ' is defined twice');
+    DEFINED[name] = 1;
+    reg(name);
+    DEFS.push([name, o]);
+    return name;
+  }
+  // minT: the reaction only happens once self is at least this hot (cooking, brewing)
+  function react(a, b, toA, toB, p, minT){ RXS.push([a, b, toA, toB, p, minT]); }
+  function idn(name){
+    if(!DEFINED[name]){ console.error('Powder: unknown element ' + name); return NONE; }
+    return ID[name];
+  }
+
+  function applyDef(name, o){
     var id = ID[name], kind = o.kind || 0;
     KIND[id] = kind;
     DENS[id] = o.dens != null ? o.dens
@@ -379,22 +427,22 @@
     FIXED[id] = o.fixed ? 1 : 0;
     GLOWS[id] = (kind === SOLID || kind === POWDER || kind === LIQUID) && !o.noglow ? 1 : 0;
     if(o.hi){
-      HI_T[id] = o.hi[0]; HI_TO[id] = ID[o.hi[1]]; HI_P[id] = o.hi[2] || 1;
-      if(o.hi[3]){ HI_ALT[id] = ID[o.hi[3]]; HI_ALT_P[id] = o.hi[4]; }
+      HI_T[id] = o.hi[0]; HI_TO[id] = idn(o.hi[1]); HI_P[id] = o.hi[2] || 1;
+      if(o.hi[3]){ HI_ALT[id] = idn(o.hi[3]); HI_ALT_P[id] = o.hi[4]; }
     }
-    if(o.lo){ LO_T[id] = o.lo[0]; LO_TO[id] = ID[o.lo[1]]; LO_P[id] = o.lo[2] || 1; }
+    if(o.lo){ LO_T[id] = o.lo[0]; LO_TO[id] = idn(o.lo[1]); LO_P[id] = o.lo[2] || 1; }
 
     FLAM[id] = o.flam || 0;
     IGN_T[id] = o.ign || (o.flam || o.explode ? 300 : 0);
-    BURN_TO[id] = o.burnTo ? ID[o.burnTo] : FIRE;
+    BURN_TO[id] = o.burnTo ? idn(o.burnTo) : FIRE;
     var bl = o.burnLife || [20, 40];
     BURN_MIN[id] = bl[0]; BURN_MAX[id] = bl[1];
 
-    if(o.decay){ DECAY_TO[id] = ID[o.decay[0]]; DECAY_P[id] = o.decay[1]; }
+    if(o.decay){ DECAY_TO[id] = idn(o.decay[0]); DECAY_P[id] = o.decay[1]; }
     if(o.life){ LIFE_MIN[id] = o.life[0]; LIFE_MAX[id] = o.life[1]; }
     if(o.death){
-      DEATH_A[id] = ID[o.death[0]]; DEATH_AP[id] = o.death[1];
-      if(o.death[2]){ DEATH_B[id] = ID[o.death[2]]; DEATH_BP[id] = o.death[3]; }
+      DEATH_A[id] = idn(o.death[0]); DEATH_AP[id] = o.death[1];
+      if(o.death[2]){ DEATH_B[id] = idn(o.death[2]); DEATH_BP[id] = o.death[3]; }
     }
     VISC[id] = o.visc || 0;
     SPREAD[id] = o.spread || (kind === LIQUID ? 3 : 0);
@@ -402,8 +450,15 @@
     JUMP[id] = o.jump ? 1 : 0;
     if(o.explode){ EXPLODE[id] = o.explode; IGNITE_P[id] = o.ignite || 0.5; }
     RESIST[id] = o.resist || 0;
-    if(o.blast) BLAST_TO[id] = ID[o.blast];
+    if(o.blast) BLAST_TO[id] = idn(o.blast);
     ACIDPROOF[id] = o.acidproof ? 1 : 0;
+    NOWATER[id] = o.nowater ? 1 : 0;   // a flame water can't put out
+    WET[id] = o.wet ? 1 : 0;           // fish can swim in it
+    if(o.arg1) ARG1[id] = idn(o.arg1);
+    if(o.arg2) ARG2[id] = idn(o.arg2);
+    ARGP[id] = o.argp || 0;
+    ARGN[id] = o.argn || 0;
+    if(o.crit) CRIT[id] = critSetup(o.crit);
     RMODE[id] = o.render != null ? o.render : (kind === FLAME ? R_FLAME : R_FLAT);
     var cols = o.colors || shadesOf(o.color || '#000000');
     for(var k = 0; k < 4; k++) PAL[id * 4 + k] = abgr(cols[k]);
@@ -413,12 +468,39 @@
     if(o.custom) CUSTOM[id] = o.custom;
   }
 
-  function react(a, b, toA, toB, p){
-    var k = ID[a] * 256 + ID[b];
-    RX_TO[k] = toA ? ID[toA] : NONE;
-    RX_OTHER[k] = toB ? ID[toB] : NONE;
-    RX_P[k] = p;
-    HAS_REACT[ID[a]] = 1;
+  function applyReact(r){
+    var a = idn(r[0]), b = idn(r[1]);
+    if(a === NONE || b === NONE) return;
+    var k = a * E + b;
+    RX_TO[k] = r[2] ? idn(r[2]) : NONE;
+    RX_OTHER[k] = r[3] ? idn(r[3]) : NONE;
+    RX_P[k] = r[4];
+    RX_T[k] = r[5] != null ? r[5] : -1e9;
+    HAS_REACT[a] = 1;
+  }
+
+  function buildTables(){
+    E = NAMES.length;
+    KIND = u8(); DENS = f32(); MOVES = u8();
+    TEMP0 = f32(); COND = f32(); AIRLOSS = f32(); FIXED = u8(); GLOWS = u8();
+    HI_T = f32(); HI_TO = u16(NONE); HI_P = f32(); HI_ALT = u16(NONE); HI_ALT_P = f32();
+    LO_T = f32(); LO_TO = u16(NONE); LO_P = f32();
+    IGN_T = f32(); FLAM = f32(); BURN_TO = u16(NONE); BURN_MIN = u16(); BURN_MAX = u16();
+    DECAY_TO = u16(NONE); DECAY_P = f32(); LIFE_MIN = u16(); LIFE_MAX = u16();
+    DEATH_A = u16(NONE); DEATH_AP = f32(); DEATH_B = u16(NONE); DEATH_BP = f32();
+    VISC = f32(); SPREAD = u8(); HEAVY = u8(); JUMP = u8();
+    EXPLODE = u8(); IGNITE_P = f32(); RESIST = f32(); BLAST_TO = u16(NONE); ACIDPROOF = u8();
+    STATIC = u8(); RMODE = u8(); HAS_REACT = u8(); NOWATER = u8(); WET = u8();
+    CRUSH = u16(NONE); PRESS = u16(NONE);
+    ARG1 = u16(NONE); ARG2 = u16(NONE); ARGP = f32(); ARGN = f32();
+    PAL = new Uint32Array(E * 4);
+    RX_TO = new Uint16Array(E * E).fill(NONE);
+    RX_OTHER = new Uint16Array(E * E).fill(NONE);
+    RX_P = new Float32Array(E * E);
+    RX_T = new Float32Array(E * E);
+    DEFS.forEach(function(d){ applyDef(d[0], d[1]); });
+    NAMES.forEach(function(n){ if(!DEFINED[n]) console.error('Powder: ' + n + ' was never defined'); });
+    RXS.forEach(applyReact);
   }
 
   // ---------- the elements ----------
@@ -440,7 +522,7 @@
   def('Glass Shards',{ kind: POWDER, dens: 2.6, color: '#cfe8ef', hi: [1400, 'Molten Glass', 0.05], acidproof: true });
   def('Rust',        { kind: POWDER, dens: 2.4, color: '#9a4a22' });
   def('Clay',        { kind: POWDER, dens: 2.3, color: '#b77a5a', hi: [900, 'Brick', 0.02] });
-  def('Sugar',       { kind: POWDER, dens: 1.6, color: '#f7f3ea', flam: 0.1, ign: 350 });
+  def('Sugar',       { kind: POWDER, dens: 1.6, color: '#f7f3ea', hi: [186, 'Caramel', 0.05], flam: 0.1, ign: 350 });
   def('Cement',      { kind: POWDER, dens: 2.8, color: '#a3a19b' });
   def('Glitter',     { kind: POWDER, dens: 1.4, colors: ['#ffd166', '#ff7eb6', '#6ee7f9', '#b794f6'], render: R_GLITTER, noglow: true });
   def('Corn',        { kind: POWDER, dens: 1.2, colors: ['#f2c14e', '#e8b53c', '#f7cf6a', '#dba830'], hi: [180, 'Popcorn', 0.15] });
@@ -448,11 +530,11 @@
   def('Magnesium',   { kind: POWDER, dens: 1.7, color: '#b9bec4', cond: 0.6, flam: 0.5, ign: 650, burnTo: 'Burning Magnesium', burnLife: [60, 120] });
   def('Burning Magnesium', { kind: POWDER, dens: 1.7, temp: 3000, fixed: true, life: [60, 120], death: ['Ash', 1], flame: MAGNESIUM_PAL, render: R_FLICKER, noglow: true });
   def('Sodium',      { kind: POWDER, dens: 0.97, color: '#d8dde2', cond: 0.6 });
-  def('Uranium',     { kind: POWDER, dens: 19, cond: 0.3, flame: URANIUM_PAL, render: R_FLICKER, swatch: '#3fd94a', noglow: true, custom: uraniumUpdate });
+  def('Uranium',     { kind: POWDER, dens: 19, cond: 0.3, flame: URANIUM_PAL, render: R_FLICKER, swatch: '#3fd94a', noglow: true, custom: uraniumUpdate, arg1: 'Radiation', argn: 0.004 });
 
   // liquids
-  def('Water',       { kind: LIQUID, dens: 1,    color: '#2f7be0', spread: 4, cond: 0.5, hi: [100, 'Steam', 0.5], lo: [0, 'Ice', 0.2], blast: 'Steam', acidproof: true, noglow: true });
-  def('Saltwater',   { kind: LIQUID, dens: 1.03, color: '#3a86c8', spread: 4, cond: 0.5, hi: [102, 'Steam', 0.5, 'Salt', 0.3], lo: [-21, 'Ice', 0.2], blast: 'Steam', acidproof: true, noglow: true });
+  def('Water',       { kind: LIQUID, dens: 1,    color: '#2f7be0', spread: 4, cond: 0.5, hi: [100, 'Steam', 0.5], lo: [0, 'Ice', 0.2], blast: 'Steam', acidproof: true, noglow: true, wet: true });
+  def('Saltwater',   { kind: LIQUID, dens: 1.03, color: '#3a86c8', spread: 4, cond: 0.5, hi: [102, 'Steam', 0.5, 'Salt', 0.3], lo: [-21, 'Ice', 0.2], blast: 'Steam', acidproof: true, noglow: true, wet: true });
   def('Oil',         { kind: LIQUID, dens: 0.8,  color: '#5b4126', flam: 0.35, ign: 250, burnLife: [25, 45] });
   def('Gasoline',    { kind: LIQUID, dens: 0.74, color: '#e8c872', flam: 0.85, ign: 250, burnLife: [8, 16], spread: 5 });
   def('Acid',        { kind: LIQUID, dens: 1.1,  color: '#9cf03a', custom: acidUpdate });
@@ -592,7 +674,7 @@
   // solids
   def('Lead',      { kind: SOLID, dens: 11, color: '#7e8894', cond: 0.5, airloss: 0.0025, hi: [327, 'Molten Lead', 0.06], resist: 0.5 });
   def('Steel',     { kind: SOLID, color: '#9aa4ae', cond: 0.55, airloss: 0.0025, hi: [1500, 'Molten Metal', 0.04], resist: 0.85 });
-  def('Aluminium', { kind: SOLID, color: '#cdd3d8', cond: 0.85, airloss: 0.003, hi: [660, 'Molten Metal', 0.06], resist: 0.4 });
+  def('Aluminium', { kind: SOLID, color: '#cdd3d8', cond: 0.85, airloss: 0.003, hi: [660, 'Molten Aluminium', 0.06], resist: 0.4 });
   def('Rubber',    { kind: SOLID, color: '#2b2b2f', cond: 0.02, airloss: 0, flam: 0.25, ign: 320, burnLife: [60, 120], resist: 0.4, noglow: true });
   def('Plastic',   { kind: SOLID, color: '#e2ddd2', cond: 0.08, hi: [180, 'Molten Plastic', 0.06], flam: 0.2, ign: 400, resist: 0.3 });
   def('Cloth',     { kind: SOLID, color: '#c86a8a', cond: 0.06, flam: 0.7, ign: 220, burnLife: [10, 20] });
@@ -603,7 +685,7 @@
   def('Amber',     { kind: SOLID, colors: ['#ffa53a', '#ff8f1a', '#ffc36a', '#f08a12'], cond: 0.1, acidproof: true, flam: 0.05, ign: 400, resist: 0.3 });
   def('Cheese',    { kind: SOLID, color: '#f0c040', cond: 0.12, hi: [28, 'Melted Cheese', 0.2], flam: 0.05, ign: 300 });
   def('Dough',     { kind: SOLID, color: '#f0dfc0', cond: 0.1, hi: [170, 'Bread', 0.04] });
-  def('Bread',     { kind: SOLID, color: '#d9a86c', cond: 0.07, flam: 0.35, ign: 260, burnLife: [20, 40] });
+  def('Bread',     { kind: SOLID, color: '#d9a86c', cond: 0.07, hi: [150, 'Toast', 0.08], flam: 0.35, ign: 320, burnLife: [20, 40] });
   def('Ice Cream', { kind: SOLID, colors: ['#fdeee2', '#ffd9c0', '#ffe9d8', '#f8dcc8'], temp: -6, cond: 0.2, hi: [8, 'Milk', 0.15], noglow: true });
   def('Battery',   { kind: SOLID, color: '#3d6b4a', cond: 0.3, resist: 0.4, acidproof: true });
   def('Dried Paint',{kind: SOLID, colors: ['#c94a42', '#3f7cc9', '#d1a712', '#4aa85c'], cond: 0.15, noglow: true });
@@ -711,6 +793,1729 @@
     react('Toxic Gas', p, null, 'Ash', 0.04);               // toxic gas kills anything living
   });
 
+
+  // =====================================================================
+  // ---------- the big expansion: metals, gems, food, creatures and more ----------
+  // =====================================================================
+  // each helper defines an element and hands its name back, so whole lists can go into a section at once
+  function mk(kind, name, col, o){
+    o = o || {};
+    o.kind = kind;
+    if(Array.isArray(col)) o.colors = col; else if(col) o.color = col;
+    return def(name, o);
+  }
+  function Pw(n, c, o){ return mk(POWDER, n, c, o); }
+  function Lq(n, c, o){ return mk(LIQUID, n, c, o); }
+  function Gs(n, c, o){ return mk(GAS, n, c, o); }
+  function So(n, c, o){ return mk(SOLID, n, c, o); }
+  function Fl(n, pal, o){ o = o || {}; o.kind = FLAME; o.flame = pal; return def(n, o); }
+
+  // adds names to a section, making the section the first time it's named
+  function sec(title){
+    var s = null;
+    for(var k = 0; k < SECTIONS.length; k++) if(SECTIONS[k][0] === title) s = SECTIONS[k];
+    if(!s){ s = [title, []]; SECTIONS.push(s); }
+    for(var a = 1; a < arguments.length; a++){
+      var v = arguments[a];
+      if(Array.isArray(v)) v.forEach(function(n){ s[1].push(n); }); else s[1].push(v);
+    }
+  }
+  function each(list, fn){ for(var k = 0; k < list.length; k++) fn(list[k], k); }
+  function merge(a, b){ var o = {}, k; for(k in a) o[k] = a[k]; for(k in b) o[k] = b[k]; return o; }
+
+  function mixHex(a, b, f){
+    var p = hexRGB(a), q = hexRGB(b);
+    return toHex(p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f, p[2] + (q[2] - p[2]) * f);
+  }
+  function tint(col, to, f){ return Array.isArray(col) ? col.map(function(c){ return mixHex(c, to, f); }) : mixHex(col, to, f); }
+  function firstCol(col){ return Array.isArray(col) ? col[0] : col; }
+  // a flame palette that runs from dark, through the colour, to white
+  function firePal(hex){
+    return [mixHex('#000000', hex, 0.2), mixHex('#000000', hex, 0.35), mixHex('#000000', hex, 0.55), mixHex('#000000', hex, 0.8),
+            hex, mixHex(hex, '#ffffff', 0.3), mixHex(hex, '#ffffff', 0.6), '#ffffff'];
+  }
+  // a soft shimmer for things that glow by themselves
+  function glowPal(hex){
+    return [hex, mixHex(hex, '#ffffff', 0.25), mixHex(hex, '#000000', 0.15), mixHex(hex, '#ffffff', 0.45), mixHex(hex, '#000000', 0.3)];
+  }
+
+  // things to set up once every element has an id
+  var AFTER = [];
+  var SOIL, FERRO, POOL = [], RAINBOW = [], MUTATE = {};
+
+  // ---------- new behaviours ----------
+  function isOpen(n){ return n === EMPTY || KIND[n] === GAS; }
+  function touchingId(x, y, set){
+    for(var k = 0; k < 8; k++){
+      var nx = x + NX[k], ny = y + NY[k];
+      if(nx >= 0 && nx < W && ny >= 0 && ny < H && set[grid[ny * W + nx]]) return true;
+    }
+    return false;
+  }
+
+  // taps, vents and machines: put ARG1 into an empty cell next door, ARGP of the time
+  function emitUpdate(i, x, y, t){
+    if(Math.random() < ARGP[t]){
+      var j = neighbour(x, y);
+      if(j >= 0 && grid[j] === EMPTY) spawn(j, ARG1[t]);
+    }
+    return true;
+  }
+
+  function rainbowUpdate(i, x, y){
+    if(Math.random() < 0.3){
+      var j = neighbour(x, y);
+      if(j >= 0 && grid[j] === EMPTY) spawn(j, RAINBOW[Math.random() * RAINBOW.length | 0]);
+    }
+    return true;
+  }
+
+  // drains swallow liquids, vents swallow gases (ARGN says which)
+  function drainUpdate(i, x, y, t){
+    for(var k = 0; k < 3; k++){
+      var j = neighbour(x, y);
+      if(j >= 0 && KIND[grid[j]] === ARGN[t]) grid[j] = EMPTY;
+    }
+    return true;
+  }
+
+  // bamboo, kelp, ivy and roots: grow a set length (ARGN -1 up, 1 down) into ARG1 (empty space by default),
+  // sometimes putting out ARG2 to the side. life = how much is left to grow; 1 = done
+  function growUpdate(i, x, y, t){
+    if(!life[i]) life[i] = 10 + (Math.random() * 26 | 0);
+    if(life[i] > 1 && Math.random() < ARGP[t]){
+      var ny = y + ARGN[t];
+      if(ny >= 0 && ny < H){
+        var j = ny * W + x, into = ARG1[t] !== NONE ? ARG1[t] : EMPTY;
+        if(grid[j] === into){
+          spawn(j, t);
+          life[j] = life[i] - 1;
+          if(ARG2[t] !== NONE && Math.random() < 0.3){
+            var s = Math.random() < 0.5 ? -1 : 1;
+            if(x + s >= 0 && x + s < W && grid[i + s] === into) spawn(i + s, ARG2[t]);
+          }
+        }
+      }
+      life[i] = 1;
+    }
+    return true;
+  }
+
+  // tree seeds fall like powder until they land on soil, then sprout: the seed climbs, leaving
+  // trunk (ARG1) behind, and finishes with a crown of ARG2 (ARGN 0 round, 1 a pine's triangle)
+  function treeUpdate(i, x, y, t){
+    if(!life[i]){
+      if(y + 1 < H && SOIL[grid[i + W]] && Math.random() < 0.03) life[i] = 10 + (Math.random() * 14 | 0);
+      return false;
+    }
+    if(Math.random() > 0.15) return true;
+    if(life[i] > 1 && y > 3 && grid[i - W] === EMPTY){
+      var h = life[i] - 1;
+      swap(i, i - W);
+      set(i, ARG1[t]);
+      life[i - W] = h;
+      return true;
+    }
+    crown(x, y, t);
+    return true;
+  }
+
+  function crown(cx, cy, t){
+    var leaf = ARG2[t], r = 3 + (Math.random() * 3 | 0), x, y, dx, dy;
+    if(ARGN[t] === 1){
+      for(dy = -r * 2; dy <= 1; dy++){
+        var half = Math.floor((dy + r * 2) * 0.5);
+        for(dx = -half; dx <= half; dx++){
+          x = cx + dx; y = cy + dy;
+          if(x >= 0 && x < W && y >= 0 && y < H && grid[y * W + x] === EMPTY) spawn(y * W + x, leaf);
+        }
+      }
+    } else {
+      for(dy = -r; dy <= r; dy++){
+        for(dx = -r - 1; dx <= r + 1; dx++){
+          if(dx * dx * 0.8 + dy * dy > r * r + Math.random() * 3) continue;
+          x = cx + dx; y = cy - 1 + dy;
+          if(x >= 0 && x < W && y >= 0 && y < H && grid[y * W + x] === EMPTY) spawn(y * W + x, leaf);
+        }
+      }
+    }
+    set(cy * W + cx, ARG1[t]);
+  }
+
+  // feathers, petals and snowflakes drift down slowly
+  function slowUpdate(i, x, y, t){
+    if(Math.random() < ARGP[t]) return true;
+    if(Math.random() < 0.3 && y + 1 < H){
+      var s = Math.random() < 0.5 ? -1 : 1;
+      if(x + s >= 0 && x + s < W && grid[i + W + s] === EMPTY){ swap(i, i + W + s); return true; }
+    }
+    return false;
+  }
+
+  // ---- creatures ----
+  // life slot: bit 0 is which way it faces. CRIT[t] holds what it eats, digs, leaves behind and so on.
+  function critSetup(c){
+    var o = {
+      speed: c.speed || 0.3, eatP: c.eatP || 0.1, breed: c.breed || 0,
+      trail: c.trail ? idn(c.trail) : NONE, trailP: c.trailP || 0,
+      corpse: c.corpse ? idn(c.corpse) : EMPTY, climb: !!c.climb, hop: c.hop || 0, swims: !!c.swims,
+      make: c.make ? idn(c.make) : NONE, makeP: c.makeP || 0, near: null,
+      grow: c.grow ? idn(c.grow) : NONE, growP: c.growP || 0,
+      eat: {}, dig: {}
+    };
+    if(c.eat) for(var k in c.eat) o.eat[idn(k)] = idn(c.eat[k]);
+    if(c.dig) c.dig.forEach(function(n){ o.dig[idn(n)] = 1; });
+    if(c.near){ o.near = {}; c.near.forEach(function(n){ o.near[idn(n)] = 1; }); }
+    return o;
+  }
+  function critEat(o, j, t){
+    var r = o.eat[grid[j]];
+    if(r === undefined || Math.random() > o.eatP) return false;
+    if(o.breed && Math.random() < o.breed) spawn(j, t);   // a good meal makes another one
+    else set(j, r);
+    return true;
+  }
+  function critMake(o, x, y){
+    if(o.make === NONE || Math.random() > o.makeP) return;
+    if(o.near && !touchingId(x, y, o.near)) return;
+    var j = neighbour(x, y);
+    if(j >= 0 && grid[j] === EMPTY) spawn(j, o.make);
+  }
+  function critTrail(o, i){
+    if(o.trail !== NONE && Math.random() < o.trailP && (grid[i] === EMPTY || WET[grid[i]])) spawn(i, o.trail);
+  }
+
+  // walks along the ground, steps up ledges, turns at walls; climbers cling to walls
+  function walkerUpdate(i, x, y, t){
+    var o = CRIT[t];
+    if(!o.swims && y > 0 && KIND[grid[i - W]] === LIQUID && Math.random() < 0.004){ set(i, o.corpse); return true; }   // drowned
+    var below = y + 1 < H ? grid[i + W] : WALL;
+    var cling = o.climb && ((x > 0 && KIND[grid[i - 1]] === SOLID) || (x + 1 < W && KIND[grid[i + 1]] === SOLID));
+    if(!cling && (isOpen(below) || (KIND[below] === LIQUID && DENS[below] < 3))){ swap(i, i + W); return true; }
+    critMake(o, x, y);
+    if(Math.random() > o.speed) return true;
+    var dir = life[i] & 1 ? 1 : -1;
+    if(Math.random() < 0.04){ life[i] ^= 1; return true; }
+    var nx = x + dir;
+    if(nx < 0 || nx >= W){ life[i] ^= 1; return true; }
+    if(o.hop && Math.random() < o.hop && y > 2){
+      var ci = i, cx = x;
+      for(var s = 0; s < 3; s++){
+        var up = ci - W, side = up + dir;
+        if(cx + dir >= 0 && cx + dir < W && s > 0 && isOpen(grid[side])){ swap(ci, side); ci = side; cx += dir; }
+        else if(up >= 0 && isOpen(grid[up])){ swap(ci, up); ci = up; }
+        else break;
+      }
+      return true;
+    }
+    var j = i + dir, n = grid[j];
+    if(critEat(o, j, t)) return true;
+    if(isOpen(n)){ swap(i, j); critTrail(o, i); return true; }
+    if(y > 0 && isOpen(grid[j - W]) && isOpen(grid[i - W])){ swap(i, j - W); critTrail(o, i); return true; }
+    if(o.dig[n] && Math.random() < 0.3){ swap(i, j); return true; }
+    if(o.climb && y > 0 && isOpen(grid[i - W])){ swap(i, i - W); return true; }
+    life[i] ^= 1;
+    return true;
+  }
+
+  // flutters about in the air; drowns if it ends up under liquid
+  function flyerUpdate(i, x, y, t){
+    var o = CRIT[t];
+    if(y > 0 && KIND[grid[i - W]] === LIQUID && Math.random() < 0.02){ set(i, o.corpse); return true; }
+    critMake(o, x, y);
+    if(Math.random() > o.speed) return true;
+    var dir = life[i] & 1 ? 1 : -1;
+    if(Math.random() < 0.06) life[i] ^= 1;
+    var dx = Math.random() < 0.6 ? dir : 0, dy = (Math.random() * 3 | 0) - 1;
+    var nx = x + dx, ny = y + dy;
+    if(nx < 0 || nx >= W){ life[i] ^= 1; return true; }
+    if(ny < 0 || ny >= H) return true;
+    var j = ny * W + nx;
+    if(critEat(o, j, t)) return true;
+    if(isOpen(grid[j])){ swap(i, j); critTrail(o, i); }
+    else if(dx) life[i] ^= 1;
+    return true;
+  }
+
+  // swims through anything WET; out of water it flops about and, given time, dies
+  function swimmerUpdate(i, x, y, t){
+    var o = CRIT[t];
+    var wet = (y > 0 && WET[grid[i - W]]) || (y + 1 < H && WET[grid[i + W]]) ||
+              (x > 0 && WET[grid[i - 1]]) || (x + 1 < W && WET[grid[i + 1]]);
+    if(!wet){
+      if(y + 1 < H && isOpen(grid[i + W])){ swap(i, i + W); return true; }
+      if(Math.random() < 0.004){ set(i, o.corpse); return true; }
+      if(Math.random() < 0.05){
+        var f = Math.random() < 0.5 ? -1 : 1;
+        if(x + f >= 0 && x + f < W && isOpen(grid[i + f])) swap(i, i + f);
+      }
+      return true;
+    }
+    if(o.grow !== NONE && Math.random() < o.growP){ set(i, o.grow); return true; }   // tadpoles become frogs
+    critMake(o, x, y);
+    if(Math.random() > o.speed) return true;
+    var dir = life[i] & 1 ? 1 : -1;
+    if(Math.random() < 0.05) life[i] ^= 1;
+    var dy = Math.random() < 0.3 ? (Math.random() * 3 | 0) - 1 : 0;
+    var nx = x + dir, ny = y + dy;
+    if(nx < 0 || nx >= W){ life[i] ^= 1; return true; }
+    if(ny < 0 || ny >= H) return true;
+    var j = ny * W + nx;
+    if(critEat(o, j, t)) return true;
+    if(WET[grid[j]]){ swap(i, j); critTrail(o, i); } else life[i] ^= 1;
+    return true;
+  }
+
+  // worms tunnel through soil in any direction, leaving compost behind
+  function burrowerUpdate(i, x, y, t){
+    var o = CRIT[t];
+    if(y + 1 < H && isOpen(grid[i + W])){ swap(i, i + W); return true; }
+    if(Math.random() > o.speed) return true;
+    var k = Math.random() * 8 | 0, nx = x + NX[k], ny = y + NY[k];
+    if(nx < 0 || nx >= W || ny < 0 || ny >= H) return true;
+    var j = ny * W + nx, n = grid[j];
+    if(critEat(o, j, t)) return true;
+    if(o.dig[n]){
+      swap(i, j);
+      if(o.trail !== NONE && Math.random() < o.trailP) set(i, o.trail);
+    }
+    return true;
+  }
+
+  // ---- radiation, black holes, magnets and other oddities ----
+  // radiation flies in a straight line (its direction is kept in the shade slot), two cells a tick,
+  // warming and mutating whatever it hits
+  function radiationUpdate(i, x, y){
+    var d = shade[i] & 7, ci = i, cx = x, cy = y;
+    for(var s = 0; s < 2; s++){
+      var nx = cx + NX[d], ny = cy + NY[d];
+      if(nx < 0 || nx >= W || ny < 0 || ny >= H){ grid[ci] = EMPTY; return true; }
+      var j = ny * W + nx, n = grid[j];
+      if(isOpen(n) || KIND[n] === FLAME){
+        if(KIND[n] === FLAME) return true;
+        swap(ci, j); ci = j; cx = nx; cy = ny;
+        continue;
+      }
+      if(!FIXED[n]) temp[j] += 12;
+      var m = MUTATE[n];
+      if(m !== undefined && Math.random() < 0.3) set(j, m);
+      grid[ci] = EMPTY;
+      return true;
+    }
+    return true;
+  }
+
+  // only the outside of a big blob of black hole or magnet needs to do the pulling
+  function inner(i, x, y, t){
+    return x > 0 && x + 1 < W && y > 0 && y + 1 < H && grid[i - 1] === t && grid[i + 1] === t && grid[i - W] === t && grid[i + W] === t;
+  }
+
+  // everything within R that which(n) accepts is dragged a step closer each tick, and with swallow,
+  // whatever touches it is gone. Rows and columns go from the middle outward, so a particle only
+  // ever moves into cells already looked at and can't be pulled twice in one go.
+  function pull(i, x, y, t, R, which, swallow){
+    for(var a = 0; a <= R; a++){
+      for(var sa = -1; sa <= 1; sa += 2){
+        if(a === 0 && sa > 0) continue;
+        var dy = a * sa, py = y + dy;
+        if(py < 0 || py >= H) continue;
+        for(var b = 0; b <= R; b++){
+          for(var sb = -1; sb <= 1; sb += 2){
+            if(b === 0 && sb > 0) continue;
+            var dx = b * sb, px = x + dx, d2 = dx * dx + dy * dy;
+            if(d2 === 0 || d2 > R * R || px < 0 || px >= W) continue;
+            var j = py * W + px, n = grid[j];
+            if(n === EMPTY || !which(n, t)) continue;
+            if(d2 <= 2){ if(swallow) grid[j] = EMPTY; continue; }
+            // two steps a tick, so the pull beats gravity
+            var cx = px, cy = py;
+            for(var s = 0; s < 2; s++){
+              var ex = cx - x, ey = cy - y;
+              if(ex * ex + ey * ey <= 2) break;
+              var nx = cx - (ex > 0 ? 1 : ex < 0 ? -1 : 0), ny = cy - (ey > 0 ? 1 : ey < 0 ? -1 : 0);
+              var k = ny * W + nx, m = grid[k];
+              if(!(isOpen(m) || (KIND[m] === LIQUID && !which(m, t)))) break;
+              swap(cy * W + cx, k);
+              cx = nx; cy = ny;
+            }
+          }
+        }
+      }
+    }
+  }
+  function holeFood(n, t){ return n !== t && n !== WALL && n !== CLONE && n !== VOID; }
+  function ferrous(n){ return FERRO[n] === 1; }
+
+  function blackHoleUpdate(i, x, y, t){
+    if(!inner(i, x, y, t)) pull(i, x, y, t, 12, holeFood, true);
+    return true;
+  }
+
+  function whiteHoleUpdate(i, x, y){
+    if(Math.random() < 0.25){
+      var j = neighbour(x, y);
+      if(j >= 0 && grid[j] === EMPTY) spawn(j, POOL[Math.random() * POOL.length | 0]);
+    }
+    return true;
+  }
+
+  // drags iron filings, magnetite, steel wool and ferrofluid toward it
+  function magnetUpdate(i, x, y, t){
+    if(!inner(i, x, y, t)) pull(i, x, y, t, 14, ferrous, false);
+    return true;
+  }
+
+  // fans push loose things along a line in front of them (ARGN: -1 left, 1 right, 2 up)
+  function fanUpdate(i, x, y, t){
+    var d = ARGN[t], dx = d === 2 ? 0 : d, dy = d === 2 ? -1 : 0;
+    for(var s = 1; s <= 16; s++){
+      var px = x + dx * s, py = y + dy * s;
+      if(px < 0 || px >= W || py < 0 || py >= H) break;
+      var j = py * W + px, n = grid[j];
+      if(n === EMPTY) continue;
+      if(KIND[n] === SOLID) break;
+      var qx = px + dx, qy = py + dy;
+      if(qx < 0 || qx >= W || qy < 0 || qy >= H) break;
+      var k = qy * W + qx;
+      if(grid[k] === EMPTY && Math.random() < 0.7) swap(j, k);
+    }
+    return true;
+  }
+
+  // conveyors carry whatever sits on top of them sideways
+  function conveyorUpdate(i, x, y, t){
+    if(y === 0) return true;
+    var up = i - W, n = grid[up], nx = x + ARGN[t];
+    if(n === EMPTY || KIND[n] === SOLID || nx < 0 || nx >= W || stamp[up] === tick) return true;
+    if(isOpen(grid[up + ARGN[t]])) swap(up, up + ARGN[t]);
+    return true;
+  }
+
+  // a mill: it takes whatever is sitting on top, breaks it down (CRUSH) or packs it together
+  // (PRESS, ARGN 1), and drops the result out underneath. No room below and it just jams.
+  function millUpdate(i, x, y, t){
+    if(y === 0 || y + 1 >= H || Math.random() > 0.25) return true;
+    // somewhere to put the result: straight down, else out of one side
+    var out = -1, d = Math.random() < 0.5 ? -1 : 1;
+    if(grid[i + W] === EMPTY) out = i + W;
+    else if(x + d >= 0 && x + d < W && grid[i + W + d] === EMPTY) out = i + W + d;
+    else if(x - d >= 0 && x - d < W && grid[i + W - d] === EMPTY) out = i + W - d;
+    else if(x + d >= 0 && x + d < W && grid[i + d] === EMPTY) out = i + d;
+    else if(x - d >= 0 && x - d < W && grid[i - d] === EMPTY) out = i - d;
+    if(out < 0) return true;   // jammed
+    // feed from the column above, so a solid block works its way down as well as a pile of powder
+    var table = ARGN[t] === 1 ? PRESS : CRUSH;
+    for(var s = 1; s <= 12 && y - s >= 0; s++){
+      var j = i - s * W, n = grid[j];
+      if(n === EMPTY) continue;
+      if(n === t || table[n] === NONE) return true;
+      grid[j] = EMPTY;
+      life[j] = 0;
+      spawn(out, table[n]);
+      return true;
+    }
+    return true;
+  }
+
+  // a mixer stirs the loose stuff around it, and makes any recipe between two things
+  // touching it happen properly instead of by luck
+  function mixerUpdate(i, x, y, t){
+    for(var s = 0; s < 4; s++){
+      // churns everything sitting on it, not just the cells it touches
+      var px = x + (Math.random() * 5 | 0) - 2, py = y - (Math.random() * 5 | 0);
+      if(px < 0 || px >= W || py < 0) continue;
+      var j = py * W + px;
+      var a = grid[j];
+      if(a === EMPTY || a === t || !(MOVES[a] || KIND[a] === POWDER)) continue;
+      var k = neighbour(j % W, (j / W) | 0);
+      if(k < 0 || k === i) continue;
+      var b = grid[k];
+      if(b === t) continue;
+      var key = a * E + b;
+      if(RX_P[key] && temp[j] >= RX_T[key]){
+        if(RX_OTHER[key] !== NONE) set(k, RX_OTHER[key]);
+        if(RX_TO[key] !== NONE) set(j, RX_TO[key]);
+      } else if(b === EMPTY || MOVES[b] || KIND[b] === POWDER){
+        swap(j, k);   // stir, so things actually meet
+      }
+    }
+    return true;
+  }
+
+  // a converter remembers the first thing to touch it, then turns everything else it touches into that
+  // (a whole block of converter shares what it learned, passing it from cell to cell)
+  function converterUpdate(i, x, y, t){
+    if(!life[i]){
+      var seen = 0;
+      for(var k = 0; k < 8; k++){
+        var nx = x + NX[k], ny = y + NY[k];
+        if(nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+        var q = ny * W + nx, m = grid[q];
+        if(m === t && life[q]){ seen = life[q]; break; }
+        if(!seen && m !== EMPTY && m !== t && m !== WALL && m !== VOID && m !== CLONE) seen = m;
+      }
+      life[i] = seen;
+      return true;
+    }
+    var j = neighbour(x, y);
+    if(j >= 0){
+      var n = grid[j];
+      if(n !== EMPTY && n !== t && n !== life[i] && n !== WALL && n !== VOID && n !== CLONE && Math.random() < 0.2) set(j, life[i]);
+    }
+    return true;
+  }
+
+  function randomizerUpdate(i, x, y, t){
+    var j = neighbour(x, y);
+    if(j >= 0){
+      var n = grid[j];
+      if(n !== EMPTY && n !== t && n !== WALL && n !== VOID && n !== CLONE && Math.random() < 0.08) set(j, POOL[Math.random() * POOL.length | 0]);
+    }
+    return true;
+  }
+
+  // strange matter slowly turns everything it touches into more of itself
+  function strangeUpdate(i, x, y, t){
+    var j = neighbour(x, y);
+    if(j >= 0){
+      var n = grid[j];
+      if(n !== EMPTY && n !== t && n !== WALL && n !== VOID && n !== CLONE && KIND[n] !== GAS && Math.random() < 0.03) set(j, t);
+    }
+    return false;
+  }
+
+  // dark matter and neutronium sink straight through anything but walls (ARGP: how fast)
+  function sinkUpdate(i, x, y, t){
+    if(y + 1 >= H) return true;
+    if(Math.random() < ARGP[t]){
+      var nx = x + (Math.random() * 3 | 0) - 1;
+      if(nx < 0 || nx >= W) nx = x;
+      var j = (y + 1) * W + nx, n = grid[j];
+      if(n !== WALL && n !== VOID && n !== CLONE && n !== t) swap(i, j);
+    }
+    return true;
+  }
+
+  // supersaturated liquids: sit happily in a smooth container, but freeze into ARG1 the moment
+  // anything else solid gets dropped in
+  var SMOOTH = {};
+  function seedCrystalUpdate(i, x, y, t){
+    var j = neighbour(x, y);
+    if(j >= 0){
+      var n = grid[j];
+      if(n !== EMPTY && n !== t && !SMOOTH[n] && (KIND[n] === SOLID || KIND[n] === POWDER) && Math.random() < 0.5){ spawn(i, ARG1[t]); return true; }
+    }
+    return false;
+  }
+
+  // touch powder goes off as soon as anything at all brushes it
+  function touchyUpdate(i, x, y, t){
+    var j = neighbour(x, y);
+    if(j >= 0){
+      var n = grid[j];
+      if(n !== EMPTY && n !== t && KIND[n] !== GAS && Math.random() < 0.3){ explode(x, y, EXPLODE[t]); return true; }
+    }
+    return false;
+  }
+
+  // mines go off when something lands on them
+  function mineUpdate(i, x, y, t){
+    if(y > 0){
+      var n = grid[i - W];
+      if(n !== EMPTY && n !== t && KIND[n] !== GAS && KIND[n] !== FLAME){ explode(x, y, EXPLODE[t]); return true; }
+    }
+    return true;
+  }
+
+  // grenades count up in their life slot and go off at ARGN ticks
+  function timerUpdate(i, x, y, t){
+    if(++life[i] >= ARGN[t]){ explode(x, y, EXPLODE[t]); return true; }
+    return false;
+  }
+
+  // meteors streak down at an angle (ARGN), trailing ARG1, and crater (ARGP) where they land, leaving ARG2
+  function meteorUpdate(i, x, y, t){
+    var ci = i, cx = x, cy = y, dx = ARGN[t];
+    for(var s = 0; s < 2; s++){
+      var nx = cx + (Math.random() < Math.abs(dx) ? (dx > 0 ? 1 : -1) : 0), ny = cy + 1;
+      if(ny >= H || nx < 0 || nx >= W){ impact(ci, cx, cy, t); return true; }
+      var j = ny * W + nx, n = grid[j];
+      if(n !== EMPTY && KIND[n] !== GAS && KIND[n] !== FLAME){ impact(ci, cx, cy, t); return true; }
+      swap(ci, j);
+      if(ARG1[t] !== NONE && Math.random() < 0.7) spawn(ci, ARG1[t]);
+      ci = j; cx = nx; cy = ny;
+    }
+    return true;
+  }
+  function impact(ci, cx, cy, t){
+    explode(cx, cy, ARGP[t] || 4);
+    if(ARG2[t] === NONE){ grid[ci] = EMPTY; return; }
+    spawn(ci, ARG2[t]);   // and a lump of whatever it was made of
+    for(var k = 0; k < 8; k++){
+      var nx = cx + NX[k], ny = cy + NY[k];
+      if(nx < 0 || nx >= W || ny < 0 || ny >= H || Math.random() < 0.4) continue;
+      var j = ny * W + nx;
+      if(grid[j] === EMPTY || KIND[grid[j]] === FLAME) spawn(j, ARG2[t]);
+    }
+  }
+
+  // ball lightning and wisps wander about; ball lightning bursts (ARGP) when it bumps into something
+  function ballUpdate(i, x, y, t){
+    var k = Math.random() * 8 | 0, nx = x + NX[k], ny = y + NY[k];
+    if(nx < 0 || nx >= W || ny < 0 || ny >= H) return true;
+    var j = ny * W + nx, n = grid[j];
+    if(isOpen(n)){ if(Math.random() < 0.5) swap(i, j); return true; }
+    if(KIND[n] === FLAME || !ARGP[t]) return true;
+    explode(x, y, ARGP[t]);
+    return true;
+  }
+
+  // a lit candle keeps a little flame on top and slowly burns down into the candle (ARG2) below it;
+  // water puts it back out
+  function candleUpdate(i, x, y, t){
+    if(y > 0){
+      var up = i - W, n = grid[up];
+      if(n === EMPTY && Math.random() < 0.3){ spawn(up, ARG1[t]); life[up] = 3 + (Math.random() * 5 | 0); }
+      else if(WET[n]){ set(i, ARG2[t]); return true; }
+    }
+    if(Math.random() < 0.0015){
+      if(y + 1 < H && grid[i + W] === ARG2[t]){ set(i + W, t); grid[i] = EMPTY; }
+      else set(i, idn('Liquid Wax'));
+      return true;
+    }
+    return true;
+  }
+
+  // geysers build up and then blow steam and hot water out of the top
+  function geyserUpdate(i, x, y, t){
+    life[i] = (life[i] + 1) % 420;
+    if(life[i] > 350 && y > 0 && grid[i - W] === EMPTY) spawn(i - W, Math.random() < 0.6 ? ARG1[t] : ARG2[t]);
+    return true;
+  }
+
+  // flint throws sparks when it rubs against steel (ARG1)
+  function flintUpdate(i, x, y, t){
+    if(Math.random() < 0.03 && touchingId(x, y, FLINTY)){
+      var j = neighbour(x, y);
+      if(j >= 0 && grid[j] === EMPTY) spawn(j, SPARK);
+    }
+    return true;
+  }
+  var FLINTY = {};
+
+  // ---------- metals: most of the periodic table, each with a molten form ----------
+  var RADIUM_PAL = ['#e8f0e0', '#c8f8d0', '#f4fff4', '#b0f0c0', '#ffffff'];
+  var RADIATION_PAL = ['#1a4a10', '#2a7a1a', '#3aa82a', '#5ad83a', '#8aff5a', '#b8ff8a', '#e0ffc8', '#ffffff'];
+  var METALS = [
+    // name, colour, melts at °C, density, heat conduction, extras
+    ['Lithium',     '#c9ced2', 180,  0.53, 0.7, { powder: 1 }],
+    ['Potassium',   '#bfc5cc', 63,   0.86, 0.7, { powder: 1 }],
+    ['Rubidium',    '#b8b0a8', 39,   1.53, 0.6, { powder: 1 }],
+    ['Caesium',     '#d8c07a', 28,   1.93, 0.5, { powder: 1 }],
+    ['Francium',    '#d8d0c0', 27,   2.5,  0.5, { powder: 1, custom: uraniumUpdate, argp: 0.3 }],
+    ['Calcium',     '#e2e2dc', 842,  1.55, 0.6, { powder: 1, flam: 0.2, ign: 700, burnTo: 'Orange Fire' }],
+    ['Strontium',   '#d9d4c4', 777,  2.6,  0.5, { powder: 1, flam: 0.3, ign: 600, burnTo: 'Red Fire' }],
+    ['Barium',      '#c7c2b0', 727,  3.5,  0.5, { powder: 1, flam: 0.3, ign: 550, burnTo: 'Green Fire' }],
+    ['Beryllium',   '#b5bcc2', 1287, 1.85, 0.8],
+    ['Scandium',    '#d0d2cf', 1541, 3,    0.5],
+    ['Titanium',    '#a9adb3', 1668, 4.5,  0.4, { resist: 0.9 }],
+    ['Vanadium',    '#9ea5ae', 1910, 6,    0.5],
+    ['Chromium',    '#c8ccd4', 1907, 7.2,  0.6, { acidproof: true }],
+    ['Manganese',   '#a39b95', 1246, 7.2,  0.4],
+    ['Cobalt',      '#8a93a8', 1495, 8.9,  0.6],
+    ['Nickel',      '#b8b2a0', 1455, 8.9,  0.6],
+    ['Zinc',        '#aab4bd', 420,  7.1,  0.7],
+    ['Gallium',     '#c4ccd4', 30,   5.9,  0.5],
+    ['Germanium',   '#8f9398', 938,  5.3,  0.4],
+    ['Yttrium',     '#b4b9bb', 1526, 4.5,  0.4],
+    ['Zirconium',   '#bcbfc2', 1855, 6.5,  0.4, { resist: 0.8 }],
+    ['Niobium',     '#9aa0b0', 2477, 8.6,  0.5],
+    ['Molybdenum',  '#9fa5ab', 2623, 10.2, 0.6, { resist: 0.8 }],
+    ['Technetium',  '#b8bcc4', 2157, 11,   0.4, { custom: uraniumUpdate, argp: 0.2 }],
+    ['Ruthenium',   '#b0b3b8', 2334, 12.4, 0.6],
+    ['Rhodium',     '#d3d6d9', 1964, 12.4, 0.7, { acidproof: true }],
+    ['Palladium',   '#c7c9c6', 1555, 12,   0.6],
+    ['Silver',      '#d8dbe0', 962,  10.5, 1],
+    ['Cadmium',     '#b8bcc6', 321,  8.7,  0.6],
+    ['Indium',      '#c2c6cc', 157,  7.3,  0.6],
+    ['Tin',         '#c6c8c4', 232,  7.3,  0.6],
+    ['Antimony',    '#a8acb4', 631,  6.7,  0.3],
+    ['Tellurium',   '#b0b4b8', 450,  6.2,  0.3],
+    ['Lanthanum',   '#c4c2b4', 920,  6.2,  0.4],
+    ['Cerium',      '#c2bca4', 795,  6.8,  0.4, { flam: 0.15, ign: 160, burnTo: 'Spark', burnLife: [4, 10] }],
+    ['Praseodymium','#c0c8b8', 935,  6.8,  0.4],
+    ['Neodymium',   '#b8b8c0', 1024, 7,    0.4],
+    ['Promethium',  '#c0d0c0', 1042, 7.3,  0.3, { custom: uraniumUpdate, argp: 0.4 }],
+    ['Samarium',    '#c8c4b0', 1072, 7.5,  0.4],
+    ['Europium',    '#c9c4b8', 822,  5.2,  0.4],
+    ['Gadolinium',  '#bdbdb8', 1313, 7.9,  0.4],
+    ['Terbium',     '#c4c8c0', 1356, 8.2,  0.4],
+    ['Dysprosium',  '#c4c4bc', 1412, 8.5,  0.4],
+    ['Holmium',     '#c8c8c0', 1474, 8.8,  0.4],
+    ['Erbium',      '#d0ccc8', 1529, 9,    0.4],
+    ['Thulium',     '#c8ccd0', 1545, 9.3,  0.4],
+    ['Ytterbium',   '#d0d0c8', 824,  6.9,  0.4],
+    ['Lutetium',    '#c0c4c8', 1652, 9.8,  0.4],
+    ['Hafnium',     '#b4b6b8', 2233, 13.3, 0.5, { resist: 0.8 }],
+    ['Tantalum',    '#a4a8b4', 3017, 16.7, 0.5, { resist: 0.85, acidproof: true }],
+    ['Rhenium',     '#b0b0b8', 3186, 21,   0.5, { resist: 0.85 }],
+    ['Osmium',      '#9ab0c8', 3033, 22.6, 0.6, { resist: 0.9 }],
+    ['Iridium',     '#d4d6dc', 2446, 22.5, 0.7, { resist: 0.9, acidproof: true }],
+    ['Platinum',    '#e4e4e2', 1768, 21.4, 0.7, { acidproof: true }],
+    ['Thallium',    '#b0b4b0', 304,  11.8, 0.4],
+    ['Bismuth',     ['#c28bd8', '#6fb0e0', '#e0c86a', '#d87aa0'], 271, 9.8, 0.2, { render: R_GLITTER }],
+    ['Polonium',    '#a8a8a0', 254,  9.2,  0.2, { custom: uraniumUpdate, argp: 1.2, arg1: 'Radiation', argn: 0.01 }],
+    ['Actinium',    '#d8e0e8', 1050, 10,   0.3, { custom: uraniumUpdate, argp: 0.9, arg1: 'Radiation', argn: 0.006 }],
+    ['Thorium',     '#a0a4a8', 1750, 11.7, 0.4, { custom: uraniumUpdate, argp: 0.2 }],
+    ['Protactinium','#bcc0c4', 1568, 15.4, 0.3, { custom: uraniumUpdate, argp: 0.3 }],
+    ['Neptunium',   '#b8bcc0', 644,  20.2, 0.3, { custom: uraniumUpdate, argp: 0.5 }],
+    ['Plutonium',   '#b8b0a0', 640,  19.8, 0.3, { custom: uraniumUpdate, argp: 1.5, arg1: 'Radiation', argn: 0.02 }],
+    ['Americium',   '#c8c0b8', 1176, 12,   0.3, { custom: uraniumUpdate, argp: 0.8, arg1: 'Radiation', argn: 0.006 }],
+    ['Radium',      '#e8f0e0', 700,  5.5,  0.3, { custom: uraniumUpdate, argp: 0.6, arg1: 'Radiation', argn: 0.01, flame: RADIUM_PAL, render: R_FLICKER, swatch: '#bff5c4', noglow: true }],
+    ['Silicon',     '#6a7078', 1414, 2.3,  0.4],
+    ['Boron',       '#5a4a40', 2076, 2.3,  0.3],
+    ['Selenium',    '#9a3a3a', 221,  4.8,  0.2, { powder: 1 }]
+  ];
+  var metalNames = [], moltenNames = ['Molten Aluminium'];
+  Lq('Molten Aluminium', '#ffb37a', { dens: 2.4, temp: 800, cond: 0.8, airloss: 0.002, visc: 0.6, spread: 2, lo: [640, 'Aluminium', 0.06] });
+  each(METALS, function(m){
+    var name = m[0], col = m[1], melt = m[2], x = m[5] || {}, mol = 'Molten ' + name;
+    var o = { dens: m[3], cond: m[4], airloss: 0.0025, hi: [melt, mol, 0.05], resist: 0.6 };
+    for(var k in x) if(k !== 'powder') o[k] = x[k];
+    (x.powder ? Pw : So)(name, col, o);
+    var hot = melt > 450;
+    Lq(mol, hot ? mixHex(firstCol(col), '#ff8a3d', 0.55) : mixHex(firstCol(col), '#ffffff', 0.15),
+       { dens: m[3], temp: melt + 120, cond: m[4], airloss: 0.002, visc: 0.6, spread: 2, lo: [melt - 15, name, 0.05], noglow: !hot });
+    metalNames.push(name); moltenNames.push(mol);
+  });
+
+  // ---------- alloys: pour two molten metals together ----------
+  function moltenOf(n){ return n === 'Metal' ? 'Molten Metal' : 'Molten ' + n; }
+  var ALLOYS = [
+    // name, colour, melts at, density, made from
+    ['Bronze',          '#b0793a', 950,  8.8,  'Copper',    'Tin'],
+    ['Brass',           '#d4a84a', 900,  8.5,  'Copper',    'Zinc'],
+    ['Pewter',          '#a8aaa6', 230,  7.3,  'Tin',       'Antimony'],
+    ['Solder',          '#b4b6b8', 185,  8.4,  'Tin',       'Lead'],
+    ['Electrum',        '#e0cc6a', 1030, 13,   'Gold',      'Silver'],
+    ['Rose Gold',       '#e8a888', 1000, 15,   'Gold',      'Copper'],
+    ['White Gold',      '#e8e4d4', 1100, 15,   'Gold',      'Palladium'],
+    ['Sterling Silver', '#dcdfe4', 890,  10.4, 'Silver',    'Copper'],
+    ['Stainless Steel', '#c4ccd4', 1450, 8,    'Metal',     'Chromium'],
+    ['Nichrome',        '#a4a8a0', 1400, 8.4,  'Nickel',    'Chromium'],
+    ['Duralumin',       '#c8ced4', 640,  2.8,  'Aluminium', 'Copper'],
+    ['Invar',           '#a8aaa8', 1427, 8.1,  'Metal',     'Nickel'],
+    ['Nitinol',         '#b0b4b8', 1310, 6.5,  'Nickel',    'Titanium'],
+    ['Constantan',      '#c0a080', 1221, 8.9,  'Copper',    'Nickel'],
+    ['Alnico',          '#8a8e94', 1350, 7.3,  'Cobalt',    'Aluminium'],
+    ['Gunmetal',        '#6a6c64', 1000, 8.7,  'Bronze',    'Zinc'],
+    ['Cast Iron',       '#5a5c60', 1150, 7.2,  null,        null],
+    ['Tungsten Carbide','#6a6e74', 2870, 15.6, null,        null]
+  ];
+  var alloyNames = [];
+  each(ALLOYS, function(a){
+    var name = a[0], mol = 'Molten ' + name;
+    So(name, a[1], { dens: a[3], cond: 0.5, airloss: 0.0025, hi: [a[2], mol, 0.05], resist: name === 'Tungsten Carbide' ? 1 : 0.7,
+                     acidproof: name === 'Stainless Steel' });
+    Lq(mol, mixHex(a[1], '#ff8a3d', a[2] > 450 ? 0.55 : 0.1), { dens: a[3], temp: a[2] + 120, cond: 0.6, airloss: 0.002, visc: 0.65, spread: 2, lo: [a[2] - 15, name, 0.05] });
+    alloyNames.push(name); moltenNames.push(mol);
+  });
+  Lq('Galinstan', '#c0c8d0', { dens: 6.4, cond: 0.6, spread: 3, noglow: true });
+  Pw('Amalgam', '#b4b8bc', { dens: 11, cond: 0.5 });
+  alloyNames.push('Galinstan', 'Amalgam');
+
+  // ---------- rocks ----------
+  var ROCKS = [
+    // name, colour(s), melts at, blast resistance, extras
+    ['Granite',       ['#9a8e88', '#c9b8b0', '#5a5250', '#b0a098'], 1215, 0.8],
+    ['Basalt',        '#3a3a3e', 1100, 0.8],
+    ['Slate',         '#4a5058', 1200, 0.6],
+    ['Limestone',     '#d8d0b8', 0,    0.5, { hi: [825, 'Quicklime', 0.02] }],
+    ['Chalk',         '#f4f2ea', 0,    0.2, { hi: [825, 'Quicklime', 0.03], blast: 'Dust' }],
+    ['Shale',         '#6a6258', 1100, 0.4],
+    ['Gneiss',        ['#8a8480', '#3a3634', '#c8c0b8', '#6a6460'], 1200, 0.8],
+    ['Schist',        ['#7a7a70', '#9a9a8a', '#6a6a60', '#b0b0a0'], 1200, 0.6, { render: R_GLITTER }],
+    ['Quartzite',     '#e8e0d8', 1600, 0.9],
+    ['Dolomite',      '#e0d4c4', 1300, 0.6],
+    ['Travertine',    '#e0d0b0', 1300, 0.5],
+    ['Soapstone',     '#8a9a8a', 1400, 0.4],
+    ['Tuff',          '#b8a888', 1100, 0.3],
+    ['Andesite',      '#7a7570', 1100, 0.7],
+    ['Diorite',       ['#e8e8e8', '#3a3a3a', '#d0d0d0', '#555555'], 1100, 0.8],
+    ['Gabbro',        '#2e3230', 1200, 0.8],
+    ['Rhyolite',      '#c8a898', 900,  0.6],
+    ['Conglomerate',  ['#8a7a6a', '#b0a090', '#6a5a4a', '#c8b8a0'], 1200, 0.5],
+    ['Petrified Wood',['#8a6a4a', '#a08060', '#6a5040', '#b09070'], 1400, 0.7],
+    ['Cobblestone',   ['#7a7874', '#8e8b86', '#6a6864', '#9a9792'], 1200, 0.7],
+    ['Meteorite',     ['#4a3e38', '#6a6a70', '#3a302a', '#8a8a90'], 3000, 0.8, { blast: 'Iron Filings', dens: 7 }],
+    ['Moon Rock',     '#b0b0ac', 1200, 0.6, { blast: 'Moon Dust' }],
+    ['Mars Rock',     '#b8583a', 1200, 0.6, { blast: 'Mars Dust' }],
+    ['Rock Salt',     '#e8c8c0', 800,  0.3, { blast: 'Salt' }],
+    ['Gypsum',        '#f4f0e8', 0,    0.3, { hi: [150, 'Plaster Powder', 0.02] }],
+    ['Flint',         '#3a3432', 1600, 0.7, { custom: flintUpdate }]
+  ];
+  var rockNames = [];
+  each(ROCKS, function(r){
+    var o = { cond: 0.3, resist: r[3], blast: 'Gravel' };
+    if(r[2]) o.hi = [r[2], 'Lava', 0.03];
+    var x = r[4] || {};
+    for(var k in x) o[k] = x[k];
+    rockNames.push(So(r[0], r[1], o));
+  });
+  rockNames.push(
+    Pw('Pumice',     '#d8d4c8', { dens: 0.6, hi: [1200, 'Lava', 0.03] }),   // light enough to float
+    Pw('Scoria',     '#5a2e24', { dens: 2.4, hi: [1150, 'Lava', 0.03] }),
+    Pw('Pebbles',    ['#8a8680', '#a09a92', '#6a6660', '#b0aaa2'], { dens: 3, cond: 0.3, hi: [1200, 'Lava', 0.03] }),
+    Pw('Silt',       '#9a8a70', { dens: 2.2 }),
+    Pw('Talc',       '#f0eee8', { dens: 2.7 }),
+    Pw('Kaolin',     '#f2eee6', { dens: 2.6, hi: [1300, 'Porcelain', 0.03] }),
+    Pw('Red Clay',   '#b8583a', { dens: 2.3, hi: [900, 'Terracotta', 0.02] }),
+    Pw('Lignite',    '#4a3a2a', { dens: 1.3, flam: 0.08, ign: 350, burnTo: 'Ember', burnLife: [80, 150] }),
+    Pw('Anthracite', ['#1a1a1e', '#2a2a30', '#141418', '#3a3a42'], { dens: 1.5, render: R_GLITTER, flam: 0.04, ign: 500, burnTo: 'Ember', burnLife: [250, 250] }),
+    Pw('Peat',       '#4a3424', { dens: 0.9, flam: 0.1, ign: 250, burnLife: [60, 120] }),
+    Pw('Magnetite',  '#2a2a2e', { dens: 5, cond: 0.5 }),
+    Pw('Moon Dust',  '#a8a8a4', { dens: 1.2 }),
+    Pw('Mars Dust',  '#c0603a', { dens: 1.5 }),
+    Pw('Stardust',   ['#fff4c0', '#c0d8ff', '#ffffff', '#ffd0f0'], { dens: 0.3, render: R_GLITTER, noglow: true })
+  );
+
+  // ---------- gems: crush one and you get its dust; heat the dust and it fuses back ----------
+  var GEMS = [
+    ['Ruby', '#e0115f', 2050], ['Sapphire', '#1f4fd8', 2050], ['Emerald', '#1faa5a', 1300], ['Amethyst', '#9a5ad8', 1650],
+    ['Topaz', '#f0a830', 1500], ['Opal', ['#e8f4f8', '#f8d8e8', '#d8f0e0', '#e8e0f8'], 1000], ['Jade', '#3aa870', 1000],
+    ['Onyx', '#1a1a1e', 1650], ['Garnet', '#8a1a2a', 1250], ['Peridot', '#a8c83a', 1900], ['Aquamarine', '#7ad8e0', 1300],
+    ['Turquoise', '#30c8b8', 1000], ['Lapis Lazuli', '#2a4aa8', 1100], ['Citrine', '#f0c030', 1650], ['Tourmaline', '#d84a8a', 1000],
+    ['Tanzanite', '#5a4ac8', 1200], ['Moonstone', '#dce4f0', 1200], ['Quartz', '#f0f0f4', 1670], ['Rose Quartz', '#f4c0cc', 1670],
+    ['Smoky Quartz', '#7a6a5e', 1670], ['Malachite', '#1a8a5a', 1000], ['Jasper', '#b04a30', 1600],
+    ['Agate', ['#c87a4a', '#e8c8a8', '#a0502a', '#f0dcc0'], 1600], ['Zircon', '#7ac0e8', 2550], ['Spinel', '#e8406a', 2130],
+    ['Alexandrite', '#3a8a6a', 1870], ["Tiger's Eye", ['#b0782a', '#d8a040', '#6a4418', '#c89038'], 1600], ['Sunstone', '#e88a4a', 1200],
+    ['Morganite', '#f0b8b0', 1300], ['Pyrite', '#c8b048', 1177], ['Fluorite', '#8ae0b8', 1400], ['Hematite', '#4a3a3a', 1565],
+    ['Carnelian', '#d05020', 1600], ['Labradorite', ['#4a6a8a', '#6a9ab0', '#3a4a5a', '#8ab0c0'], 1200], ['Rhodonite', '#d0607a', 1200],
+    ['Azurite', '#2a5ad0', 1000], ['Chrysocolla', '#30b0a8', 1000], ['Kunzite', '#e0a0d8', 1400], ['Pearl', '#f2eee4', 800],
+    ['Kryptonite', '#5aff5a', 3000]
+  ];
+  var gemNames = [], dustNames = [];
+  each(GEMS, function(g){
+    var name = g[0], dust = name + ' Dust';
+    gemNames.push(So(name, g[1], { render: R_GLITTER, cond: 0.3, hi: [g[2], 'Lava', 0.02], resist: 0.7, blast: dust, acidproof: name !== 'Pearl',
+                                   custom: name === 'Kryptonite' ? uraniumUpdate : undefined, argp: 0.05 }));
+    dustNames.push(Pw(dust, tint(g[1], '#ffffff', 0.25), { dens: 2.5, render: R_GLITTER, hi: [g[2] - 250, name, 0.02] }));
+  });
+
+  // ---------- colours: sand, stained glass, smoke, wool, plastic and dye in sixteen shades ----------
+  var COLOURS = [['Red', '#e0413a'], ['Orange', '#f08a2a'], ['Yellow', '#f2d33c'], ['Lime', '#9ad83a'], ['Green', '#3aa655'],
+                 ['Teal', '#1f9e8f'], ['Cyan', '#3ac8e0'], ['Blue', '#3a6fe0'], ['Indigo', '#4a3fb8'], ['Purple', '#9a4ad8'],
+                 ['Magenta', '#d83ab8'], ['Pink', '#f28ab8'], ['Brown', '#8a5a3a'], ['Black', '#26262a'], ['White', '#f2f2f0'], ['Grey', '#8a8a90']];
+  var colourNames = [];
+  each(COLOURS, function(c){
+    var n = c[0], h = c[1];
+    colourNames.push(
+      Pw(n + ' Sand', h, { dens: 3, hi: [1700, n + ' Glass', 0.05] }),
+      So(n + ' Glass', mixHex(h, '#ffffff', 0.2), { cond: 0.3, hi: [1400, 'Molten Glass', 0.05], acidproof: true, blast: 'Glass Shards' }),
+      Gs(n + ' Smoke', h, { dens: 0.12, life: [60, 140] }),
+      So(n + ' Wool', h, { cond: 0.04, flam: 0.5, ign: 250, burnLife: [10, 20] }),
+      So(n + ' Plastic', h, { cond: 0.08, hi: [180, 'Molten Plastic', 0.06], flam: 0.2, ign: 400, resist: 0.3 }),
+      Lq(n + ' Dye', mixHex(h, '#000000', 0.1), { dens: 1.02, spread: 4, noglow: true })
+    );
+    RAINBOW.push(n + ' Sand');
+  });
+  colourNames.push(Pw('Rainbow Sand', ['#ff5a5a', '#ffd35a', '#5ad8ff', '#b05aff'], { dens: 3, render: R_GLITTER, hi: [1700, 'Molten Glass', 0.05] }));
+
+  // ---------- food: most of it cooks, bakes or melts when heated ----------
+  var cooked = function(o){ return merge({ flam: 0.15, ign: 300 }, o || {}); };
+  var foodNames = [
+    Pw('Egg', ['#f4ecd8', '#efe4cc', '#f8f2e4', '#e8dcc4'], { dens: 1.1, hi: [80, 'Boiled Egg', 0.04], blast: 'Raw Egg' }),
+    Lq('Raw Egg', ['#f8d860', '#fbf4e0', '#f6d050', '#fbf0d8'], { dens: 1.03, visc: 0.7, spread: 2, hi: [70, 'Fried Egg', 0.08] }),
+    So('Fried Egg', ['#fbfaf2', '#f8d040', '#fbf7ea', '#f0c030'], cooked({ cond: 0.1 })),
+    Pw('Boiled Egg', '#f8f4ea', cooked({ dens: 1.1 })),
+    Pw('Rice', '#f4f0e4', { dens: 1.4 }),
+    Pw('Cooked Rice', '#fbf8ef', cooked({ dens: 1.2 })),
+    Pw('Pasta', '#f0d890', { dens: 1.3, flam: 0.15, ign: 300 }),
+    Pw('Cooked Pasta', '#f4e0a0', cooked({ dens: 1.1 })),
+    Pw('Noodles', '#f0d890', { dens: 0.8, flam: 0.2, ign: 280 }),
+    So('Raw Meat', ['#d8505a', '#c84450', '#e0606a', '#f0d0d0'], { cond: 0.12, hi: [70, 'Cooked Meat', 0.03] }),
+    So('Cooked Meat', ['#8a4a2a', '#7a3e22', '#9a5632', '#6a321a'], cooked({ cond: 0.1, burnLife: [40, 80] })),
+    So('Raw Bacon', ['#e87a7a', '#f8d8d0', '#e06a6a', '#f0e0d8'], { cond: 0.12, hi: [110, 'Bacon', 0.04] }),
+    So('Bacon', ['#a8402a', '#e8b080', '#98361e', '#d89868'], cooked({ cond: 0.1, flam: 0.25 })),
+    Pw('Sausage', '#c86a5a', { dens: 1.1, hi: [75, 'Cooked Sausage', 0.04] }),
+    Pw('Cooked Sausage', '#8a3a22', cooked({ dens: 1.1 })),
+    Pw('Hot Dog', ['#d8a060', '#a8442a', '#e0b070', '#c89050'], cooked({ dens: 1.1 })),
+    So('Raw Chicken', '#f0c8b8', { cond: 0.12, hi: [75, 'Roast Chicken', 0.03] }),
+    So('Roast Chicken', ['#c8843a', '#b8742a', '#d8944a', '#a8641a'], cooked({ cond: 0.1 })),
+    Pw('Raw Fish', '#c8d0d8', { dens: 1.1, hi: [60, 'Cooked Fish', 0.04] }),
+    Pw('Cooked Fish', '#e8d0b0', cooked({ dens: 1.1 })),
+    Pw('Raw Shrimp', '#a8b0b8', { dens: 1.1, hi: [60, 'Cooked Shrimp', 0.05] }),
+    Pw('Cooked Shrimp', ['#ff8a6a', '#ffa888', '#f07a5a', '#fff0e8'], cooked({ dens: 1.1 })),
+    Pw('Sushi', ['#fbf8ef', '#ff8a6a', '#1a2a1a', '#fbf8ef'], { dens: 1.2 }),
+    Pw('Burger', ['#d8a060', '#6a3a1a', '#5aa83a', '#f0c040'], cooked({ dens: 1.1 })),
+    Pw('Baked Potato', '#a8783a', cooked({ dens: 1.2 })),
+    Pw('Fries', ['#f0c040', '#e8b030', '#f8d060', '#d8a020'], cooked({ dens: 0.8, flam: 0.2 })),
+    Pw('Fried Onions', '#c08a3a', cooked({ dens: 0.9 })),
+    Pw('Baked Beans', ['#c0502a', '#b0401a', '#d0603a', '#a0300a'], { dens: 1.1 }),
+    Pw('Pickle', '#6a8a2a', { dens: 1.1 }),
+    Pw('Marshmallow', '#fbf6f0', { dens: 0.4, hi: [90, 'Toasted Marshmallow', 0.05], flam: 0.4, ign: 220 }),
+    Pw('Toasted Marshmallow', ['#d8a060', '#c89050', '#e8b070', '#fbf0e0'], { dens: 0.4, flam: 0.5, ign: 200, burnLife: [8, 16] }),
+    Lq('Pancake Batter', '#f0dcaa', { dens: 1.1, visc: 0.8, spread: 1, hi: [120, 'Pancake', 0.05] }),
+    So('Pancake', ['#d8a258', '#e8b870', '#c89048', '#f0c888'], cooked({ cond: 0.1 })),
+    Lq('Cake Batter', '#f0d0a0', { dens: 1.1, visc: 0.85, spread: 1, hi: [150, 'Cake', 0.04] }),
+    So('Cake', ['#f4d8a8', '#fbf0f4', '#f8b8d0', '#e8c898'], cooked({ cond: 0.08 })),
+    So('Cookie Dough', ['#dcb880', '#4a2a1a', '#e4c490', '#d0ac70'], { cond: 0.1, hi: [150, 'Cookie', 0.04] }),
+    So('Cookie', ['#c08a4a', '#3a2010', '#d09a5a', '#b07a3a'], cooked({ cond: 0.08 })),
+    So('Raw Pizza', ['#f0dfc0', '#c8201a', '#f6c33c', '#f0dfc0'], { cond: 0.1, hi: [200, 'Pizza', 0.04] }),
+    So('Pizza', ['#e0a858', '#b8201a', '#f6c33c', '#8a2a1a'], cooked({ cond: 0.08 })),
+    So('Toast', '#b8783a', { cond: 0.07, hi: [260, 'Burnt Toast', 0.03], flam: 0.1, ign: 330 }),
+    So('Burnt Toast', '#3a2a1e', { cond: 0.07, flam: 0.3, ign: 300 }),
+    So('Donut', ['#d8a060', '#f8b8d0', '#c89050', '#8a4a2a'], cooked({ cond: 0.08 })),
+    Lq('Caramel', '#c07a2a', { dens: 1.4, temp: 150, visc: 0.9, spread: 1, lo: [100, 'Toffee', 0.05], flam: 0.1, ign: 350 }),
+    So('Toffee', '#a8601a', { cond: 0.1, hi: [140, 'Caramel', 0.05] }),
+    Pw('Cotton Candy', ['#f8b8d8', '#b8d8f8', '#fbd0e4', '#d0e4fb'], { dens: 0.2, hi: [160, 'Caramel', 0.1], flam: 0.3, ign: 250 }),
+    So('Candy', ['#ff5a8a', '#5ad8ff', '#ffd35a', '#8aff8a'], { cond: 0.1, hi: [160, 'Caramel', 0.05] }),
+    Pw('Gummy Bears', ['#ff3a4a', '#ffa020', '#3ad04a', '#ffe040'], { dens: 1.2, hi: [60, 'Melted Gummy', 0.05] }),
+    Lq('Melted Gummy', ['#ff3a4a', '#ffa020', '#3ad04a', '#ffe040'], { dens: 1.2, visc: 0.85, spread: 1, lo: [35, 'Gummy Bears', 0.05] }),
+    So('Jello', ['#e84a6a', '#f05a7a', '#d83a5a', '#f86a8a'], { cond: 0.15, hi: [35, 'Liquid Jello', 0.05] }),
+    Lq('Liquid Jello', '#e84a6a', { dens: 1.05, spread: 3, lo: [8, 'Jello', 0.03] }),
+    So('Chewing Gum', '#f8a0c8', { cond: 0.1 }),
+    Pw('Mentos', '#f8f6f0', { dens: 1.5 }),
+    Pw('Pop Rocks', ['#ff5a8a', '#5ad8ff', '#b05aff', '#ff5a5a'], { dens: 1.4, render: R_GLITTER }),
+    Pw('Sprinkles', ['#ff5a8a', '#5ad8ff', '#ffd35a', '#8aff8a'], { dens: 1.2 }),
+    Pw('Boba', '#2a1a14', { dens: 1.1 }),
+    Pw('Cocoa Powder', '#5a3a2a', { dens: 1.2, flam: 0.3, ign: 250 }),
+    Pw('Brown Sugar', '#b8804a', { dens: 1.5, hi: [170, 'Caramel', 0.08] }),
+    Pw('Icing Sugar', '#fdfcf8', { dens: 1.0, flam: 0.4, ign: 300 }),
+    Lq('Cream', '#fbf4e0', { dens: 1.01, spread: 3, hi: [100, 'Steam', 0.3], noglow: true }),
+    Lq('Whipped Cream', '#fffdf6', { dens: 0.4, visc: 0.95, spread: 1, decay: ['Cream', 0.0005], noglow: true }),
+    Lq('Yogurt', '#f6f2ea', { dens: 1.05, visc: 0.85, spread: 1, noglow: true }),
+    Lq('Condensed Milk', '#f4e4c0', { dens: 1.3, visc: 0.8, spread: 1, hi: [110, 'Dulce de Leche', 0.02] }),
+    Lq('Dulce de Leche', '#b8742a', { dens: 1.35, visc: 0.92, spread: 1 }),
+    Lq('Maple Syrup', '#b8641a', { dens: 1.3, visc: 0.9, spread: 1, flam: 0.05, ign: 300 }),
+    Lq('Peanut Butter', '#c08a40', { dens: 1.2, visc: 0.95, spread: 1, flam: 0.1, ign: 300 }),
+    Lq('Jam', '#c0203a', { dens: 1.3, visc: 0.9, spread: 1 }),
+    Lq('Ketchup', '#c8201a', { dens: 1.1, visc: 0.85, spread: 1 }),
+    Lq('Mustard', '#e8c020', { dens: 1.1, visc: 0.85, spread: 1 }),
+    Lq('Mayonnaise', '#f4efd8', { dens: 1.0, visc: 0.9, spread: 1, noglow: true }),
+    Lq('Hot Sauce', '#d8401a', { dens: 1.05, spread: 3 }),
+    Lq('Soy Sauce', '#2a140a', { dens: 1.15, spread: 3 }),
+    Lq('Tomato Sauce', '#b8281a', { dens: 1.1, visc: 0.8, spread: 1 }),
+    Lq('Gravy', '#6a4020', { dens: 1.05, temp: 70, visc: 0.7, spread: 2 }),
+    Lq('Soup', ['#d88a3a', '#e89a4a', '#c87a2a', '#6aa83a'], { dens: 1.02, temp: 80, spread: 3, hi: [100, 'Steam', 0.3] }),
+    Lq('Noodle Soup', ['#e8b060', '#f0d890', '#e8b060', '#d8a050'], { dens: 1.02, temp: 80, spread: 3, hi: [100, 'Steam', 0.3] }),
+    Lq('Curry', '#d89a2a', { dens: 1.05, temp: 80, visc: 0.6, spread: 2 }),
+    Lq('Porridge', '#e8dcc0', { dens: 1.1, temp: 70, visc: 0.9, spread: 1 }),
+    Lq('Guacamole', '#8ab04a', { dens: 1.05, visc: 0.9, spread: 1 }),
+    Lq('Olive Oil', '#a8a03a', { dens: 0.91, flam: 0.3, ign: 300, burnLife: [25, 45] }),
+    Pw('Cereal', ['#f0a030', '#e85a3a', '#f0d040', '#8ad04a'], { dens: 0.5, flam: 0.3, ign: 250 }),
+    Pw('Soggy Cereal', '#c8a870', { dens: 1.1 }),
+    Pw('Oats', '#d8c498', { dens: 0.9, flam: 0.3, ign: 260 }),
+    Pw('Wheat', '#e0c070', { dens: 0.9, flam: 0.4, ign: 250 }),
+    Pw('Barley', '#d0b060', { dens: 1, flam: 0.3, ign: 260 }),
+    Pw('Coffee Beans', '#9aa060', { dens: 1.2, hi: [200, 'Coffee Grounds', 0.03] }),
+    Pw('Cocoa Beans', '#8a5a3a', { dens: 1.1, hi: [150, 'Cocoa Powder', 0.03] }),
+    Pw('Tea Leaves', '#3a6a2a', { dens: 0.6, flam: 0.3, ign: 250 }),
+    Pw('Chestnuts', '#6a3a1a', { dens: 1.2, hi: [150, 'Roasted Chestnuts', 0.04] }),
+    Pw('Roasted Chestnuts', '#8a5a2a', cooked({ dens: 1.2 })),
+    Pw('Peanuts', '#d0a060', { dens: 1.1, flam: 0.3, ign: 280 }),
+    Pw('Almonds', '#b08050', { dens: 1.1, flam: 0.2, ign: 280 }),
+    Pw('Walnuts', '#8a6a40', { dens: 1.0, flam: 0.2, ign: 280 }),
+    Pw('Soybeans', '#e8d890', { dens: 1.2 }),
+    So('Tofu', '#f4f0e0', { cond: 0.1, noglow: true }),
+    Pw('Black Pepper', '#2a2624', { dens: 1.1, flam: 0.2, ign: 250 }),
+    Pw('Cinnamon', '#a0602a', { dens: 0.9, flam: 0.6, ign: 200, burnLife: [4, 10] }),
+    Pw('Chili Powder', '#c8301a', { dens: 1.0, flam: 0.3, ign: 250 }),
+    Pw('Curry Powder', '#e0a020', { dens: 1.0 }),
+    Pw('Yeast', '#d8c088', { dens: 1.0, hi: [60, 'Dust', 0.02] })
+  ];
+
+  // fruit and veg: squash or blast the juicy ones and you get juice
+  var PRODUCE = [
+    ['Apple', ['#d8302a', '#e84a3a', '#c8201a', '#f0f0a0'], 'Apple Juice'],
+    ['Banana', '#f0d040'], ['Orange', '#f08a1a', 'Orange Juice'], ['Lemon', '#f4e04a', 'Lemon Juice'],
+    ['Strawberry', ['#e8203a', '#d8102a', '#f0404a', '#f8e080']], ['Blueberry', '#3a4ab0'],
+    ['Grapes', ['#7a3a8a', '#8a4a9a', '#6a2a7a', '#9a5aaa'], 'Grape Juice'],
+    ['Watermelon', ['#e84a5a', '#2a8a3a', '#f05a6a', '#1a1a1a'], 'Watermelon Juice'], ['Cherry', '#b01a2a'],
+    ['Pineapple', ['#f0c040', '#e8b030', '#5a8a2a', '#f8d050'], 'Pineapple Juice'], ['Mango', '#f0a830'],
+    ['Peach', '#f8b088'], ['Pear', '#c8d050'], ['Kiwi', ['#7ab83a', '#6a4a2a', '#8ac84a', '#1a1a1a']],
+    ['Coconut', '#6a4a2a', 'Coconut Water'], ['Avocado', '#4a6a2a'], ['Plum', '#6a1a4a'], ['Raspberry', '#d0204a'],
+    ['Tomato', '#e8402a', 'Tomato Juice'], ['Carrot', '#f08a2a', 'Carrot Juice'],
+    ['Potato', '#c8a060'], ['Broccoli', ['#3a8a3a', '#2a7a2a', '#4a9a4a', '#1a6a1a']], ['Peas', '#7ac04a'],
+    ['Onion', '#e8d8c8'], ['Garlic', '#f0ece0'], ['Chili Pepper', '#d8201a'], ['Lettuce', '#8ad05a'],
+    ['Cabbage', '#a8d08a'], ['Pumpkin', '#f08020'], ['Eggplant', '#5a2a5a'], ['Cucumber', '#4a9a3a'],
+    ['Beans', '#8a3a2a'], ['Olives', '#5a6a2a']
+  ];
+  var produceNames = [];
+  var produceHeat = { 'Potato': [150, 'Baked Potato'], 'Onion': [120, 'Fried Onions'], 'Tomato': [100, 'Tomato Sauce'], 'Beans': [100, 'Baked Beans'] };
+  each(PRODUCE, function(p){
+    var o = { dens: 1.1, flam: 0.05, ign: 320 };
+    if(p[2]) o.blast = p[2];
+    if(produceHeat[p[0]]) o.hi = [produceHeat[p[0]][0], produceHeat[p[0]][1], 0.04];
+    produceNames.push(Pw(p[0], p[1], o));
+  });
+
+  // ---------- drinks ----------
+  function drink(n, c, o){ return Lq(n, c, merge({ dens: 1.02, spread: 4, hi: [100, 'Steam', 0.3], noglow: true }, o || {})); }
+  function juice(n, c){ return drink(n, c, { dens: 1.04, lo: [-3, 'Popsicle', 0.1] }); }
+  function booze(n, c, o){ return drink(n, c, merge({ dens: 0.99, flam: 0.3, ign: 400, burnTo: 'Blue Fire', burnLife: [8, 16], hi: [85, 'Alcohol', 0.02] }, o || {})); }
+  var drinkNames = [
+    drink('Tea', '#a8601a', { temp: 80 }), drink('Iced Tea', '#b8702a', { temp: 4 }), drink('Milk Tea', '#d8a878', { temp: 70 }),
+    drink('Bubble Tea', ['#d8a878', '#2a1a14', '#d8a878', '#c89868']), drink('Kombucha', '#c8903a'),
+    drink('Latte', '#c8905a', { temp: 70 }), drink('Cappuccino', ['#b8804a', '#f4ecdc', '#c8905a', '#f4ecdc'], { temp: 70 }),
+    drink('Mocha', '#7a4a2a', { temp: 70 }), drink('Hot Chocolate', '#6a3a22', { temp: 75 }), drink('Milkshake', '#f4d8e0', { dens: 1.1, visc: 0.6, spread: 2, temp: 4 }),
+    drink('Smoothie', '#e86a8a', { dens: 1.1, visc: 0.7, spread: 2, temp: 6 }), drink('Lemonade', '#f8f0a0'),
+    juice('Apple Juice', '#e8c040'), juice('Orange Juice', '#f8a020'), juice('Lemon Juice', '#f8f080'), juice('Grape Juice', '#6a1a5a'),
+    juice('Pineapple Juice', '#f8e070'), juice('Watermelon Juice', '#f0606a'), juice('Tomato Juice', '#c8301a'), juice('Carrot Juice', '#f0801a'),
+    juice('Fruit Punch', '#e8203a'), drink('Coconut Water', '#f0f4ec'), drink('Soy Milk', '#f4f0e0'), drink('Almond Milk', '#f4ece0'),
+    drink('Energy Drink', '#c8f03a'), drink('Sports Drink', '#3ab0f0'), drink('Sparkling Water', '#d8ecf8', { decay: ['CO2', 0.0006], wet: true }),
+    booze('Wine', '#7a1a3a'), booze('Cider', '#e8b850'), booze('Beer', '#e8a830'), booze('Sake', '#f4f4ea'),
+    drink('Wort', '#a8701a')
+  ];
+  var popsicle = So('Popsicle', ['#ff5a6a', '#ffb03a', '#6ad84a', '#b05aff'], { temp: -8, cond: 0.2, hi: [4, 'Fruit Punch', 0.1], noglow: true });
+
+  // ---------- plants ----------
+  function woodO(o){ return merge({ cond: 0.08, flam: 0.06, ign: 300, burnTo: 'Burning Wood', burnLife: [90, 170] }, o || {}); }
+  var leafy = function(o){ return merge({ cond: 0.08, flam: 0.4, ign: 230, burnLife: [8, 16] }, o || {}); };
+  var FLOWERS = [['Rose', '#e0203a'], ['Tulip', '#f05a8a'], ['Sunflower', ['#f0c020', '#6a3a1a', '#f8d030', '#e0b010']],
+                 ['Daisy', ['#f8f8f0', '#f0c020', '#ffffff', '#f8f8f0']], ['Lily', '#f8e8f0'], ['Lavender', '#9a7ad8'], ['Orchid', '#d86ad8'],
+                 ['Poppy', '#e8301a'], ['Bluebell', '#5a6ae0'], ['Marigold', '#f09a10'], ['Hibiscus', '#e83a5a']];
+  var flowerNames = FLOWERS.map(function(f){ return So(f[0], f[1], leafy({ flam: 0.3 })); });
+  flowerNames.push(So('Dandelion', ['#f0d020', '#f8e040', '#e8c010', '#4a9a3a'], leafy({ flam: 0.3, decay: ['Dandelion Fluff', 0.0006] })));
+  var plantNames = [
+    So('Oak Wood', '#8a5a30', woodO()), So('Pine Wood', '#a8784a', woodO()),
+    So('Birch Wood', ['#e8e0d0', '#2a2624', '#f0e8d8', '#d8d0c0'], woodO()), So('Maple Wood', '#b87a4a', woodO()),
+    So('Cherry Wood', '#9a4a3a', woodO()), So('Ebony', '#2a1e1a', woodO()), So('Mahogany', '#6a2a1a', woodO()),
+    So('Redwood', '#8a3a2a', woodO()), So('Balsa', '#e8d8b0', woodO({ flam: 0.12 })), So('Driftwood', '#b8b0a0', woodO()),
+    So('Cork', '#c8a070', { cond: 0.02, flam: 0.05, ign: 300 }),
+    Pw('Charcoal', '#262424', { dens: 1.2, flam: 0.08, ign: 350, burnTo: 'Ember', burnLife: [120, 220], acidproof: true }),
+    So('Bamboo', ['#8ab83a', '#7aa82a', '#9ac84a', '#6a982a'], { cond: 0.1, flam: 0.08, ign: 280, custom: growUpdate, argn: -1, argp: 0.08, arg2: 'Leaves' }),
+    So('Beanstalk', ['#3aa83a', '#2a982a', '#4ab84a', '#5ac85a'], { cond: 0.1, flam: 0.08, ign: 280, custom: growUpdate, argn: -1, argp: 0.25, arg2: 'Leaves' }),
+    So('Sugar Cane', ['#b8c86a', '#a8b85a', '#c8d87a', '#98a84a'], { cond: 0.1, flam: 0.1, ign: 260, custom: growUpdate, argn: -1, argp: 0.04 }),
+    So('Ivy', ['#2a7a3a', '#1a6a2a', '#3a8a4a', '#2a7030'], { cond: 0.1, flam: 0.1, ign: 260, custom: growUpdate, argn: -1, argp: 0.03, arg2: 'Leaves' }),
+    So('Kelp', ['#3a6a2a', '#4a7a3a', '#2a5a1a', '#5a8a4a'], { cond: 0.2, custom: growUpdate, argn: -1, argp: 0.03, arg1: 'Water' }),
+    So('Seaweed', ['#6a5a2a', '#5a4a1a', '#7a6a3a', '#4a3a10'], { cond: 0.2, custom: growUpdate, argn: -1, argp: 0.03, arg1: 'Saltwater' }),
+    So('Roots', ['#8a6a4a', '#7a5a3a', '#9a7a5a', '#6a4a2a'], { cond: 0.1, custom: growUpdate, argn: 1, argp: 0.03, arg1: 'Dirt' }),
+    Pw('Acorn', '#8a6a3a', { dens: 1.5, custom: treeUpdate, arg1: 'Oak Wood', arg2: 'Leaves' }),
+    Pw('Pine Cone', '#7a5a3a', { dens: 1.4, custom: treeUpdate, arg1: 'Pine Wood', arg2: 'Pine Needles', argn: 1 }),
+    Pw('Cherry Pit', '#c8a080', { dens: 1.4, custom: treeUpdate, arg1: 'Cherry Wood', arg2: 'Cherry Blossom' }),
+    Pw('Maple Seed', '#b8904a', { dens: 1.2, custom: treeUpdate, arg1: 'Maple Wood', arg2: 'Autumn Leaves' }),
+    So('Pine Needles', ['#2a5a3a', '#1a4a2a', '#3a6a4a', '#2a5030'], leafy({ flam: 0.6 })),
+    So('Cherry Blossom', ['#f8c0d8', '#fbd8e8', '#f0a8c8', '#ffffff'], leafy()),
+    So('Autumn Leaves', ['#e8601a', '#d8401a', '#f0a020', '#c8301a'], leafy({ flam: 0.6 })),
+    Pw('Petals', ['#f8c0d8', '#fbd8e8', '#f0a8c8', '#ffe0ec'], { dens: 0.3, flam: 0.4, ign: 230, custom: slowUpdate, argp: 0.75 }),
+    Gs('Dandelion Fluff', '#f4f4ec', { dens: 0.08, life: [200, 400], death: ['Seed', 0.6] }),
+    Pw('Lily Pad', ['#4a9a3a', '#3a8a2a', '#5aaa4a', '#f8e8f0'], { dens: 0.5, flam: 0.05, ign: 300 }),
+    Pw('Lotus', ['#f8b8d0', '#fbd0e0', '#f0a0c0', '#4a9a3a'], { dens: 0.5, flam: 0.05, ign: 300 }),
+    Pw('Pollen', '#f8e040', { dens: 0.3, flam: 0.3, ign: 250 }),
+    Pw('Hay', ['#e0c060', '#d0b050', '#e8d070', '#c8a040'], { dens: 0.6, flam: 0.7, ign: 220, burnLife: [8, 16] }),
+    Pw('Cotton', '#fbfbf6', { dens: 0.3, flam: 0.8, ign: 210, burnLife: [4, 8] }),
+    So('Fern', ['#3a8a3a', '#4a9a4a', '#2a7a2a', '#5aaa5a'], leafy()),
+    So('Clover', ['#4aa83a', '#5ab84a', '#3a982a', '#ffffff'], leafy()),
+    So('Thorns', ['#5a4a2a', '#6a5a3a', '#4a3a1a', '#3a6a2a'], { cond: 0.08, flam: 0.1, ign: 280 }),
+    So('Mycelium', ['#d8d0c0', '#c8c0b0', '#e8e0d0', '#b8b0a0'], { cond: 0.1, flam: 0.05, ign: 300 }),
+    So('Glowing Mushroom', '#3ae0ff', { flame: ['#3ae0ff', '#5af0ff', '#2ac8e8', '#8af8ff', '#3ad8f0'], render: R_FLICKER, swatch: '#5af0ff', noglow: true, flam: 0.05, ign: 300 }),
+    So('Toadstool', ['#d8201a', '#ffffff', '#c8101a', '#f0f0f0'], { flam: 0.05, ign: 300 }),
+    Gs('Spores', '#c8b89a', { dens: 0.1, life: [120, 240] }),
+    So('Lichen', ['#a8b08a', '#c0c890', '#90987a', '#d0d8a0'], { cond: 0.2 }),
+    So('Venus Flytrap', ['#5ab83a', '#d8403a', '#4aa82a', '#e05a4a'], { cond: 0.1, flam: 0.1, ign: 260 }),
+    So('Mutant Plant', ['#9a3ad8', '#5aff5a', '#8a2ac8', '#4af04a'], { cond: 0.1, flam: 0.1, ign: 260 }),
+    So('Mold', ['#6a8a4a', '#8aa06a', '#4a6a3a', '#a0b080'], { cond: 0.1, flam: 0.1, ign: 250 }),
+    Pw('Tumbleweed', ['#b89a60', '#a88a50', '#c8aa70', '#98803a'], { dens: 0.3, flam: 0.8, ign: 200, custom: walkerUpdate, crit: { speed: 0.5 } }),
+    Lq('Sap', '#c8801a', { dens: 1.2, visc: 0.95, spread: 1, decay: ['Amber', 0.0004], hi: [104, 'Maple Syrup', 0.02] }),
+    Lq('Latex', '#f4f0e8', { dens: 1.0, visc: 0.8, spread: 1, decay: ['Rubber', 0.002], noglow: true })
+  ];
+
+  // ---------- creatures ----------
+  function crit(n, col, move, c, o){
+    return Pw(n, col, merge({ dens: 1.2, cond: 0.1, flam: 0.3, ign: 150, hi: [60, 'Ash', 0.2], lo: [-15, 'Ice', 0.05], noglow: true, custom: move, crit: c }, o || {}));
+  }
+  var BUGFOOD = ['Sugar', 'Bread', 'Candy', 'Cake', 'Cookie', 'Jam', 'Honey', 'Brown Sugar', 'Cotton Candy', 'Donut'];
+  function eats(list, result){ var o = {}; list.forEach(function(n){ o[n] = result; }); return o; }
+  var FLOWERY = ['Flower', 'Rose', 'Tulip', 'Sunflower', 'Daisy', 'Lily', 'Lavender', 'Orchid', 'Poppy', 'Bluebell', 'Marigold', 'Hibiscus', 'Dandelion', 'Clover', 'Cherry Blossom'];
+  var WOOLS = COLOURS.map(function(c){ return c[0] + ' Wool'; }).concat(['Cloth', 'Silk', 'Cotton']);
+  var WOODS = ['Wood', 'Oak Wood', 'Pine Wood', 'Birch Wood', 'Maple Wood', 'Cherry Wood', 'Ebony', 'Mahogany', 'Redwood', 'Balsa', 'Driftwood', 'Paper', 'Cardboard', 'Newspaper'];
+  var FLIES = ['Fly', 'Mosquito', 'Moth', 'Firefly'];
+  var creatureNames = [
+    crit('Ant', ['#2a1a14', '#3a2218', '#1a100c', '#2a1a14'], walkerUpdate, { speed: 0.5, climb: 1, eat: eats(BUGFOOD, 'Empty'), eatP: 0.2, breed: 0.3, dig: ['Dirt', 'Sand', 'Mud', 'Compost'] }),
+    crit('Termite', ['#e8dcc8', '#d8ccb8', '#f0e4d0', '#c8b8a0'], walkerUpdate, { speed: 0.4, climb: 1, eat: eats(WOODS, 'Sawdust'), eatP: 0.1, breed: 0.15 }),
+    crit('Worm', ['#d87a7a', '#c86a6a', '#e08a8a', '#b85a5a'], burrowerUpdate, { speed: 0.3, dig: ['Dirt', 'Mud', 'Compost', 'Sand', 'Grass'], trail: 'Compost', trailP: 0.03, eat: eats(['Leaves', 'Ash', 'Autumn Leaves'], 'Compost'), eatP: 0.1 }),
+    crit('Snail', ['#b08a5a', '#8a6a4a', '#c8a070', '#d8c8a0'], walkerUpdate, { speed: 0.05, climb: 1, trail: 'Slime', trailP: 0.03, eat: eats(['Leaves', 'Lettuce', 'Plant', 'Cabbage'], 'Empty') }),
+    crit('Spider', '#1a1a1a', walkerUpdate, { speed: 0.4, climb: 1, trail: 'Web', trailP: 0.06, eat: eats(FLIES.concat(['Ant']), 'Empty'), eatP: 0.3, breed: 0.1 }),
+    crit('Beetle', ['#1a3a2a', '#2a5a3a', '#0a2a1a', '#3a6a4a'], walkerUpdate, { speed: 0.2, eat: eats(['Leaves', 'Plant', 'Autumn Leaves'], 'Empty') }),
+    crit('Ladybug', ['#e02a1a', '#1a1a1a', '#e02a1a', '#f03a2a'], walkerUpdate, { speed: 0.3, climb: 1, eat: eats(['Mold'], 'Empty') }),
+    crit('Mouse', ['#8a8a8a', '#9a9a9a', '#7a7a7a', '#f0b0b0'], walkerUpdate, { speed: 0.6, eat: eats(['Cheese', 'Bread', 'Corn', 'Wheat', 'Rice', 'Cookie', 'Seed', 'Peanuts'], 'Empty'), eatP: 0.3, breed: 0.1 }),
+    crit('Crab', ['#e05a2a', '#d04a1a', '#f06a3a', '#c83a1a'], walkerUpdate, { speed: 0.3, swims: 1, eat: eats(['Algae', 'Raw Fish', 'Seaweed'], 'Empty') }),
+    crit('Frog', ['#4ab83a', '#3aa82a', '#5ac84a', '#2a8a1a'], walkerUpdate, { speed: 0.3, hop: 0.08, swims: 1, eat: eats(FLIES.concat(['Ant', 'Dragonfly']), 'Empty'), eatP: 0.4 }),
+    crit('Lizard', ['#6a9a3a', '#5a8a2a', '#7aaa4a', '#4a7a1a'], walkerUpdate, { speed: 0.6, climb: 1, eat: eats(FLIES.concat(['Ant', 'Spider']), 'Empty'), eatP: 0.3 }),
+    crit('Chicken', ['#fbfbf6', '#f0f0e8', '#e02a1a', '#f8f8f0'], walkerUpdate, { speed: 0.3, eat: eats(['Seed', 'Corn', 'Wheat', 'Rice', 'Worm', 'Barley'], 'Empty'), eatP: 0.3, make: 'Egg', makeP: 0.0015 }),
+    crit('Cow', ['#fbfbf6', '#1a1a1a', '#fbfbf6', '#2a2a2a'], walkerUpdate, { speed: 0.15, eat: merge(eats(['Grass'], 'Dirt'), eats(['Hay', 'Wheat'], 'Empty')), eatP: 0.1, make: 'Milk', makeP: 0.002 }),
+    crit('Sheep', ['#f4f2ea', '#e8e4d8', '#fbfaf4', '#3a3a3a'], walkerUpdate, { speed: 0.15, eat: merge(eats(['Grass'], 'Dirt'), eats(['Hay'], 'Empty')), eatP: 0.1, make: 'White Wool', makeP: 0.0015 }),
+    crit('Penguin', ['#1a1a1e', '#fbfbf6', '#1a1a1e', '#f0a020'], walkerUpdate, { speed: 0.2, swims: 1, eat: eats(['Fish', 'Raw Fish', 'Shrimp'], 'Empty'), eatP: 0.3 }, { hi: [40, 'Ash', 0.1], lo: [-80, 'Ice', 0.02] }),
+    crit('Bird', ['#3a6ae0', '#e8c040', '#5a8af0', '#2a4ab0'], flyerUpdate, { speed: 0.7, eat: eats(['Seed', 'Worm', 'Fly', 'Corn', 'Wheat', 'Blueberry', 'Cherry'], 'Empty'), eatP: 0.2, make: 'Feather', makeP: 0.0008 }),
+    crit('Bee', ['#f0c020', '#1a1a1a', '#f0c020', '#f8d030'], flyerUpdate, { speed: 0.6, make: 'Honey', makeP: 0.01, near: FLOWERY }),
+    crit('Butterfly', ['#f08a1a', '#3a8af0', '#f0d020', '#e04ad0'], flyerUpdate, { speed: 0.5 }),
+    crit('Fly', ['#2a2a30', '#3a3a40', '#1a1a20', '#4a6a8a'], flyerUpdate, { speed: 0.8, make: 'Fly', makeP: 0.004, near: ['Raw Meat', 'Mold', 'Burnt Toast', 'Cooked Meat'] }),
+    crit('Firefly', '#c8ff3a', flyerUpdate, { speed: 0.4 }, { flame: ['#c8ff3a', '#2a3a10', '#e8ff8a', '#1a2a0a', '#a8f02a'], render: R_FLICKER }),
+    crit('Moth', ['#b8a890', '#a89880', '#c8b8a0', '#988870'], flyerUpdate, { speed: 0.5, eat: eats(WOOLS, 'Empty'), eatP: 0.05, breed: 0.2 }),
+    crit('Bat', ['#3a2a2a', '#4a3a3a', '#2a1a1a', '#5a4a4a'], flyerUpdate, { speed: 0.8, eat: eats(FLIES, 'Empty'), eatP: 0.3, breed: 0.05 }),
+    crit('Mosquito', ['#5a5050', '#6a6060', '#4a4040', '#7a7070'], flyerUpdate, { speed: 0.7, eat: eats(['Blood'], 'Empty'), eatP: 0.3, breed: 0.3 }),
+    crit('Dragonfly', ['#3ad8e0', '#2a6ae0', '#3ad8e0', '#1a4ab0'], flyerUpdate, { speed: 0.9, eat: eats(['Mosquito', 'Fly'], 'Empty'), eatP: 0.4 }),
+    crit('Fish', ['#8ab0c8', '#9ac0d8', '#7aa0b8', '#aac8e0'], swimmerUpdate, { speed: 0.4, corpse: 'Raw Fish', eat: eats(['Plankton', 'Algae'], 'Water'), eatP: 0.2, breed: 0.2 }, { hi: [60, 'Cooked Fish', 0.2], lo: [-2, 'Ice', 0.05] }),
+    crit('Goldfish', ['#f0a030', '#e89020', '#f8b040', '#d88010'], swimmerUpdate, { speed: 0.3, corpse: 'Raw Fish', eat: eats(['Plankton', 'Algae'], 'Water'), eatP: 0.2, breed: 0.2 }, { hi: [60, 'Cooked Fish', 0.2], lo: [-2, 'Ice', 0.05] }),
+    crit('Shark', ['#6a7a8a', '#8a9aaa', '#5a6a7a', '#f0f0f0'], swimmerUpdate, { speed: 0.6, corpse: 'Raw Fish', eat: eats(['Fish', 'Goldfish', 'Shrimp', 'Piranha', 'Octopus', 'Pufferfish', 'Seahorse', 'Penguin'], 'Water'), eatP: 0.3, breed: 0.05 }, { hi: [60, 'Cooked Fish', 0.2] }),
+    crit('Jellyfish', '#e88af0', swimmerUpdate, { speed: 0.1, eat: eats(['Plankton'], 'Water'), eatP: 0.2, breed: 0.1 }, { flame: glowPal('#e88af0'), render: R_FLICKER }),
+    crit('Eel', ['#3a4a2a', '#4a5a3a', '#2a3a1a', '#5a6a4a'], swimmerUpdate, { speed: 0.5, corpse: 'Raw Fish', trail: 'Spark', trailP: 0.004, eat: eats(['Fish', 'Shrimp'], 'Water'), eatP: 0.2 }),
+    crit('Octopus', ['#d86a8a', '#c85a7a', '#e87a9a', '#b84a6a'], swimmerUpdate, { speed: 0.3, trail: 'Ink', trailP: 0.01, eat: eats(['Crab', 'Shrimp'], 'Water'), eatP: 0.3 }),
+    crit('Shrimp', ['#a8b0b8', '#98a0a8', '#b8c0c8', '#8890a0'], swimmerUpdate, { speed: 0.3, corpse: 'Raw Shrimp', eat: eats(['Plankton', 'Algae'], 'Water'), eatP: 0.2, breed: 0.2 }, { hi: [60, 'Cooked Shrimp', 0.2] }),
+    crit('Tadpole', '#2a2a1a', swimmerUpdate, { speed: 0.3, grow: 'Frog', growP: 0.0008, eat: eats(['Algae', 'Plankton'], 'Water'), eatP: 0.1 }),
+    crit('Piranha', ['#8a9aa8', '#d8402a', '#7a8a98', '#e8503a'], swimmerUpdate, { speed: 0.6, corpse: 'Raw Fish', eat: eats(['Raw Meat', 'Fish', 'Goldfish', 'Cooked Meat', 'Raw Chicken'], 'Water'), eatP: 0.3, breed: 0.1 }),
+    crit('Plankton', '#3ae0c8', swimmerUpdate, { speed: 0.1 }, { flame: glowPal('#3ae0c8'), render: R_FLICKER, dens: 1 }),
+    crit('Seahorse', ['#f0a040', '#e89030', '#f8b050', '#d88020'], swimmerUpdate, { speed: 0.1, eat: eats(['Plankton'], 'Water') }),
+    crit('Pufferfish', ['#e8d070', '#d8c060', '#f0e080', '#8a7a3a'], swimmerUpdate, { speed: 0.2, corpse: 'Raw Fish', eat: eats(['Shrimp', 'Algae'], 'Water') }),
+    So('Anthill', ['#8a6a4a', '#7a5a3a', '#9a7a5a', '#6a4a2a'], { cond: 0.2, custom: emitUpdate, arg1: 'Ant', argp: 0.004 }),
+    So('Beehive', ['#d8a040', '#c89030', '#e8b050', '#8a5a1a'], { cond: 0.1, flam: 0.3, ign: 250, custom: emitUpdate, arg1: 'Bee', argp: 0.004 }),
+    So('Web', '#e8e8f0', { cond: 0.02, flam: 0.8, ign: 150, burnLife: [2, 6], noglow: true }),
+    Pw('Feather', ['#f4f2ea', '#e8e4d8', '#fbfaf4', '#d8d4c8'], { dens: 0.1, flam: 0.7, ign: 200, burnLife: [3, 6], custom: slowUpdate, argp: 0.8, noglow: true })
+  ];
+
+  // ---------- chemistry ----------
+  var chemNames = [
+    Lq('Hydrochloric Acid', '#d8f08a', { dens: 1.18, custom: acidUpdate, argp: 0.1 }),
+    Lq('Sulfuric Acid', '#f0e87a', { dens: 1.8, visc: 0.3, custom: acidUpdate, argp: 0.14 }),
+    Lq('Nitric Acid', '#f8f0c8', { dens: 1.5, custom: acidUpdate, argp: 0.12 }),
+    Lq('Hydrofluoric Acid', '#e8f8f8', { dens: 1.15, custom: acidUpdate, argp: 0.1 }),
+    Lq('Aqua Regia', '#e8702a', { dens: 1.3, custom: acidUpdate, argp: 0.15 }),
+    Lq('Fluoroantimonic Acid', '#f0f8e8', { dens: 2.9, custom: acidUpdate, argp: 0.35 }),
+    Lq('Formic Acid', '#f4f4ec', { dens: 1.2, custom: acidUpdate, argp: 0.03 }),
+    Pw('Citric Acid', '#fbfbf4', { dens: 1.66 }),
+    Lq('Lye', '#e8ecf0', { dens: 1.5, noglow: true }),
+    Lq('Bleach', '#f0f4d8', { dens: 1.1, noglow: true }),
+    Lq('Hydrogen Peroxide', '#e8f4ff', { dens: 1.45, decay: ['Water', 0.0003], noglow: true }),
+    Lq('Elephant Toothpaste', ['#f8f8f0', '#f8d0d0', '#f8f8f0', '#d0e0f8'], { dens: 0.3, visc: 0.6, spread: 2, life: [200, 400], noglow: true }),
+    Pw('Saltpeter', '#f4f4f0', { dens: 2.1 }),
+    Pw('Potassium Chlorate', '#f8f8f8', { dens: 2.3, flam: 0.3, ign: 350, burnTo: 'Purple Fire' }),
+    Pw('Potassium Permanganate', ['#6a1a6a', '#8a2a8a', '#5a0a5a', '#9a3a9a'], { dens: 2.7, render: R_GLITTER }),
+    Pw('Ammonium Nitrate', '#f4f2ec', { dens: 1.7, explode: 6, ignite: 0.3, ign: 210 }),
+    Lq('Glycerin', '#f4f4ec', { dens: 1.26, visc: 0.85, spread: 1, noglow: true }),
+    Lq('Acetone', '#eef2f6', { dens: 0.78, spread: 5, flam: 0.8, ign: 465, burnLife: [8, 16], noglow: true }),
+    Lq('Methanol', '#e8eef4', { dens: 0.79, spread: 5, flam: 0.7, ign: 470, burnTo: 'Blue Fire', burnLife: [10, 20], noglow: true }),
+    Lq('Kerosene', '#d8c890', { dens: 0.8, spread: 4, flam: 0.6, ign: 220, burnLife: [20, 40] }),
+    Lq('Diesel', '#c8a860', { dens: 0.83, spread: 3, flam: 0.5, ign: 210, burnLife: [25, 45] }),
+    Lq('Jet Fuel', '#e0d0a0', { dens: 0.8, spread: 4, flam: 0.7, ign: 210, burnLife: [15, 30] }),
+    Lq('Rocket Fuel', '#c8e0f0', { dens: 0.9, spread: 3, flam: 0.9, ign: 300, burnTo: 'White Fire', burnLife: [10, 20] }),
+    Lq('Lighter Fluid', '#f0f0d0', { dens: 0.6, spread: 5, flam: 0.9, ign: 200, burnLife: [6, 12] }),
+    Lq('Crude Oil', '#1a1410', { dens: 0.9, visc: 0.85, spread: 1, flam: 0.1, ign: 420, burnLife: [60, 120], hi: [350, 'Gasoline', 0.02, 'Tar', 0.4] }),
+    Lq('Turpentine', '#f0e8d0', { dens: 0.86, spread: 4, flam: 0.6, ign: 250 }),
+    Lq('Antifreeze', '#3ae08a', { dens: 1.1, spread: 3, noglow: true }),
+    So('Petroleum Jelly', '#f0e8c0', { cond: 0.1, hi: [60, 'Oil', 0.05] }),
+    Gs('Nitrous Oxide', '#e0e8f0', { dens: 0.15 }),
+    Gs('Carbon Monoxide', '#b8b8b8', { dens: 0.1, flam: 0.5, ign: 600, burnTo: 'Blue Fire', burnLife: [6, 12] }),
+    Gs('Hydrogen Sulfide', '#d8d8a0', { dens: 0.12, heavy: true, flam: 0.4, ign: 260, burnLife: [8, 14] }),
+    Gs('Nitrogen Dioxide', '#b8602a', { dens: 0.3, heavy: true }),
+    Gs('Sulfur Dioxide', '#e0e0b0', { dens: 0.4, heavy: true }),
+    Gs('Fluorine', '#f0f0a0', { dens: 0.13, custom: acidUpdate, argp: 0.2 }),
+    Lq('Bromine', '#8a2a1a', { dens: 3.1, custom: acidUpdate, argp: 0.05, hi: [59, 'Bromine Vapor', 0.05] }),
+    Gs('Bromine Vapor', '#b85a3a', { dens: 0.5, heavy: true, lo: [50, 'Bromine', 0.05] }),
+    Pw('Iodine', ['#3a2a4a', '#4a3a5a', '#2a1a3a', '#6a5a7a'], { dens: 4.9, render: R_GLITTER, hi: [114, 'Iodine Vapor', 0.05] }),
+    Gs('Iodine Vapor', '#9a4ad8', { dens: 0.6, heavy: true, lo: [100, 'Iodine', 0.03] }),
+    Pw('White Phosphorus', '#f4f0d8', { dens: 1.8, flam: 0.4, ign: 34, burnTo: 'Yellow Fire', burnLife: [30, 60] }),
+    Pw('Red Phosphorus', '#a8302a', { dens: 2.3, flam: 0.5, ign: 240, burnLife: [10, 20] }),
+    Pw('Calcium Carbide', '#5a5a60', { dens: 2.2 }),
+    Gs('Acetylene', '#e8e8f4', { dens: 0.09, flam: 0.95, ign: 305, burnTo: 'White Fire', burnLife: [6, 12] }),
+    Gs('Butane', '#d8d8c8', { dens: 0.6, heavy: true, flam: 0.7, ign: 405, burnLife: [8, 16] }),
+    Gs('Freon', '#d8f0ff', { dens: 0.5, heavy: true, temp: -30 }),
+    Lq('Liquid Helium', '#f8e0f0', { dens: 0.12, temp: -269, cond: 0.5, spread: 5, hi: [-260, 'Helium', 0.05], noglow: true }),
+    Lq('Liquid Hydrogen', '#d8e4ff', { dens: 0.07, temp: -253, cond: 0.5, spread: 5, hi: [-245, 'Hydrogen', 0.05], noglow: true }),
+    Lq('Liquid Argon', '#e0d0f8', { dens: 1.4, temp: -186, cond: 0.5, spread: 5, hi: [-180, 'Argon', 0.05], noglow: true }),
+    Gs('Xenon', '#9ab8ff', { dens: 0.55, heavy: true }),
+    Gs('Krypton', '#e0f0ff', { dens: 0.35, heavy: true }),
+    Gs('Radon', '#b0f0b0', { dens: 0.9, heavy: true, custom: uraniumUpdate, argp: 0.3, arg1: 'Radiation', argn: 0.004 }),
+    Gs('Tritium', '#9aff9a', { dens: 0.01, flame: glowPal('#9aff9a'), render: R_FLICKER, custom: uraniumUpdate, argp: 0.05 }),
+    Lq('Heavy Water', '#2a6ad0', { dens: 1.11, spread: 4, cond: 0.5, hi: [101, 'Steam', 0.5], lo: [4, 'Ice', 0.2], noglow: true, wet: true, acidproof: true }),
+    Lq('Nuclear Waste', '#6aff3a', { dens: 1.4, visc: 0.7, spread: 2, flame: glowPal('#6aff3a'), render: R_FLICKER, noglow: true, custom: uraniumUpdate, argp: 1, arg1: 'Radiation', argn: 0.01 }),
+    Pw('Fallout', ['#8a9a6a', '#6a7a4a', '#a0b080', '#7a8a5a'], { dens: 1.1, custom: uraniumUpdate, argp: 0.2, arg1: 'Radiation', argn: 0.002 }),
+    Pw('Copper Sulfate', ['#1a6ae0', '#2a7af0', '#0a5ad0', '#3a8af8'], { dens: 2.3, render: R_GLITTER }),
+    Pw('Silver Nitrate', '#f0f0f0', { dens: 4.35 }),
+    Pw('Epsom Salt', '#f0f4f8', { dens: 1.7 }),
+    Pw('Borax', '#f4f4f0', { dens: 1.7 }),
+    Pw('Quicklime', '#f0ece4', { dens: 3.3 }),
+    Pw('Slaked Lime', '#f4f2ec', { dens: 2.2 }),
+    Lq('Luminol', '#e8f0f8', { dens: 1.1, noglow: true }),
+    Lq('Luminol Glow', '#5aa0ff', { dens: 1.1, flame: glowPal('#3a8aff'), render: R_FLICKER, noglow: true, life: [250, 250] }),
+    Lq('Glow Stick Juice', '#8aff3a', { dens: 1.05, flame: glowPal('#8aff3a'), render: R_FLICKER, noglow: true }),
+    Lq('Fluorescein', '#f0a020', { dens: 1.1 }),
+    Lq('Glowing Water', '#3aff8a', { dens: 1, spread: 4, flame: glowPal('#3aff8a'), render: R_FLICKER, noglow: true, wet: true, hi: [100, 'Steam', 0.5] }),
+    Lq('Ferrofluid', '#141418', { dens: 1.3, visc: 0.6, spread: 2, noglow: true }),
+    Pw('Graphite', ['#3a3a3e', '#4a4a50', '#2a2a2e', '#5a5a60'], { dens: 2.2, cond: 0.8, render: R_GLITTER }),
+    So('Graphene', '#2a2a2e', { cond: 1, resist: 0.95 }),
+    Pw('Activated Charcoal', '#1a1a1a', { dens: 0.8 }),
+    Lq('Sodium Acetate', '#f4f8fb', { dens: 1.45, custom: seedCrystalUpdate, arg1: 'Hot Ice', noglow: true }),
+    So('Hot Ice', ['#f4f8fb', '#e8eef4', '#fbfdff', '#dce6ee'], { temp: 55, cond: 0.2, hi: [58, 'Sodium Acetate', 0.02], noglow: true }),
+    Pw('Aluminium Powder', '#c8ccd0', { dens: 1.5, flam: 0.3, ign: 650, burnTo: 'White Fire' }),
+    Pw('Steel Wool', ['#9aa0a8', '#8a9098', '#aab0b8', '#7a8088'], { dens: 0.6, flam: 0.4, ign: 300, burnTo: 'Spark', burnLife: [6, 14] }),
+    So('Aerogel', '#dfe8f4', { cond: 0, airloss: 0, resist: 0.1, noglow: true }),
+    Gs('Pepper Spray', '#f0a080', { dens: 0.3, heavy: true, life: [80, 160] }),
+    Pw('Strange Matter', ['#ff3ab8', '#3affd8', '#ffd83a', '#8a3aff'], { dens: 3, render: R_GLITTER, custom: strangeUpdate, noglow: true }),
+    Pw('Dark Matter', '#1a0a2a', { dens: 1, custom: sinkUpdate, argp: 0.25, noglow: true }),
+    Pw('Neutronium', '#e8ecff', { dens: 99, custom: sinkUpdate, argp: 1, noglow: true, resist: 1, acidproof: true }),
+    Lq('Liquid Light', '#fff8d0', { dens: 0.5, spread: 4, flame: glowPal('#fff4b0'), render: R_FLICKER, noglow: true })
+  ];
+
+  // ---------- fire and energy ----------
+  var fire = function(o){ return merge({ fixed: true, life: [20, 40], death: ['Smoke', 0.2] }, o); };
+  var fireNames = [
+    Fl('Red Fire', firePal('#ff3a2a'), fire({ temp: 1000 })),
+    Fl('Orange Fire', firePal('#ff8a1a'), fire({ temp: 1000 })),
+    Fl('Yellow Fire', firePal('#ffd21a'), fire({ temp: 1000 })),
+    Fl('Purple Fire', firePal('#b04aff'), fire({ temp: 1100 })),
+    Fl('Pink Fire', firePal('#ff5ab8'), fire({ temp: 1000 })),
+    Fl('Cyan Fire', firePal('#2ae0ff'), fire({ temp: 1300 })),
+    Fl('White Fire', firePal('#e8f0ff'), fire({ temp: 2200 })),
+    Fl('Rainbow Fire', ['#ff3a3a', '#ff8a1a', '#ffd21a', '#5ad83a', '#2ae0ff', '#3a6aff', '#b04aff', '#ffffff'], fire({ temp: 1000 })),
+    Fl('Shadow Fire', ['#0a0010', '#140022', '#1e0034', '#2a0048', '#3a0a60', '#4a1a78', '#5a2a90', '#7a4ab0'], fire({ temp: 800 })),
+    Fl('Hellfire', ['#1a0000', '#3a0000', '#6a0a00', '#9a1a00', '#c83a00', '#e86a1a', '#ff9a3a', '#ffd08a'], fire({ temp: 2500, life: [30, 60] })),
+    Fl('Soul Fire', firePal('#3ad8ff'), fire({ temp: 600, death: ['Smoke', 0.05] })),
+    Fl('Ghost Fire', ['#1a2a2a', '#2a3a3a', '#4a6a6a', '#6a9a9a', '#9acaca', '#c0f0f0', '#e0fbfb', '#ffffff'], fire({ temp: 30, death: null, cond: 0.1 })),
+    Fl('Greek Flame', firePal('#ff7a1a'), fire({ temp: 1100, life: [60, 120], nowater: true, death: ['Smoke', 0.3] })),
+    Fl('Radiation', RADIATION_PAL.slice(3), { temp: 60, fixed: true, life: [10, 30], custom: radiationUpdate, render: R_FLICKER }),
+    Fl('Static', ['#3a4a8a', '#5a6aaa', '#7a8aca', '#9aaaea', '#bac8ff', '#dae4ff', '#f0f4ff', '#ffffff'], { temp: 200, fixed: true, life: [10, 30], custom: sparkUpdate }),
+    Fl('Ball Lightning', BOLT_PAL, { temp: 3000, fixed: true, life: [200, 255], death: ['Spark', 1], custom: ballUpdate, argp: 4 }),
+    Fl("Will-o'-Wisp", ['#2a4a4a', '#3a6a6a', '#5a9a9a', '#7ac8c8', '#9ae8e8', '#baf8f8', '#dafcfc', '#ffffff'], { temp: 40, fixed: true, life: [200, 255], custom: ballUpdate, argp: 0 }),
+    Gs('Aurora', '#6aff9a', { dens: 0.02, life: [200, 255], flame: ['#3aff8a', '#6affb0', '#8a5aff', '#3ae0c8', '#b07aff'], render: R_FLICKER, airloss: 0 }),
+    Pw('Meteor', ['#5a4a3a', '#ff8a2a', '#4a3a2a', '#ffb04a'], { dens: 5, temp: 1200, custom: meteorUpdate, arg1: 'Fire', arg2: 'Meteorite', argp: 6, argn: 0.3, noglow: true }),
+    Pw('Comet', ['#c8e8ff', '#ffffff', '#a8d8ff', '#e8f4ff'], { dens: 3, temp: -50, custom: meteorUpdate, arg1: 'Blue Fire', arg2: 'Ice', argp: 5, argn: -0.4, noglow: true }),
+    Pw('Fireball', '#ff8a2a', { dens: 2, temp: 1000, custom: meteorUpdate, arg1: 'Fire', argp: 4, flame: FIRE_PAL, render: R_FLICKER, noglow: true }),
+    So('Sun', '#fff4c0', { temp: 5500, fixed: true, cond: 0.6, resist: 1, acidproof: true, flame: ['#fff4c0', '#ffe080', '#ffffff', '#ffd040', '#fff8e0'], render: R_FLICKER, noglow: true }),
+    So('Tesla Coil', ['#b87333', '#8a8e94', '#c8854a', '#6a6e74'], { custom: emitUpdate, arg1: 'Static', argp: 0.15, resist: 0.8, cond: 0.6 })
+  ];
+
+  // ---------- explosives ----------
+  var FIREWORK_COLOURS = [['Red', 1], ['Gold', 2], ['Green', 3], ['Blue', 4], ['Purple', 5], ['Pink', 6], ['Rainbow', 7]];
+  var boomNames = [
+    So('Semtex', '#e89a4a', { explode: 11, ignite: 0.4, ign: 350 }),
+    Pw('RDX', '#f4f4f0', { dens: 1.8, explode: 10, ignite: 0.5, ign: 230 }),
+    Pw('PETN', '#fbfbf6', { dens: 1.77, explode: 11, ignite: 0.5, ign: 190 }),
+    Pw('HMX', '#f0f0ea', { dens: 1.9, explode: 12, ignite: 0.5, ign: 280 }),
+    Pw('ANFO', '#e8d8b8', { dens: 1.1, explode: 8, ignite: 0.4, ign: 300 }),
+    So('Guncotton', '#fbfbf6', { explode: 4, ignite: 0.9, ign: 180 }),
+    Pw('Flash Powder', '#c8ccd4', { dens: 2, explode: 3, ignite: 1, ign: 150 }),
+    Pw('Touch Powder', '#6a3a2a', { dens: 2.5, explode: 3, ignite: 1, ign: 60, custom: touchyUpdate }),
+    Pw('Lead Azide', '#f4f4ea', { dens: 4.7, explode: 4, ignite: 0.8, ign: 150 }),
+    Pw('Mercury Fulminate', '#d8d0c0', { dens: 4.4, explode: 5, ignite: 0.8, ign: 170, custom: bombUpdate }),
+    Pw('Nuke', ['#3a4a3a', '#f0d020', '#3a4a3a', '#2a3a2a'], { dens: 5, explode: 30, ignite: 0.5, ign: 400, custom: bombUpdate, arg2: 'Fallout', argp: 0.04 }),
+    Pw('H-Bomb', ['#2a3a4a', '#f0d020', '#2a3a4a', '#1a2a3a'], { dens: 5, explode: 44, ignite: 0.5, ign: 400, custom: bombUpdate, arg2: 'Fallout', argp: 0.04 }),
+    Pw('Cluster Bomb', '#4a4a3a', { dens: 4, explode: 5, ignite: 0.5, ign: 250, custom: bombUpdate, arg1: 'Bomb' }),
+    Pw('Glitter Bomb', ['#ff7eb6', '#b794f6', '#6ee7f9', '#ffd166'], { dens: 3, render: R_GLITTER, explode: 5, ignite: 0.5, ign: 250, custom: bombUpdate, arg2: 'Glitter', argp: 0.5 }),
+    So('Mine', ['#3a3a30', '#5a5a48', '#d8201a', '#3a3a30'], { explode: 7, ignite: 0.5, ign: 300, custom: mineUpdate }),
+    Pw('Grenade', '#4a5a3a', { dens: 3, explode: 7, ignite: 0.5, ign: 300, custom: timerUpdate, argn: 180 }),
+    Pw('Firecracker', '#d8201a', { dens: 1.5, explode: 2, ignite: 0.6, ign: 180 }),
+    Pw('Cherry Bomb', '#b8101a', { dens: 2, explode: 4, ignite: 0.6, ign: 200 }),
+    So('Sparkler', '#8a8a90', { flam: 0.5, ign: 200, burnTo: 'Lit Sparkler' }),
+    Pw('Smoke Bomb', '#6a6a70', { dens: 2, flam: 0.5, ign: 200, burnTo: 'Burning Smoke Bomb' }),
+    So('Flare', '#d8301a', { flam: 0.5, ign: 200, burnTo: 'Lit Flare' }),
+    Lq('Greek Fire', '#c85a1a', { dens: 0.9, spread: 3, flam: 0.9, ign: 200, burnTo: 'Greek Flame', burnLife: [60, 120] })
+  ];
+  Fl('Candle Flame', FIRE_PAL, { temp: 800, fixed: true, life: [4, 8], cond: 0.05 });   // no ash, no smoke
+  So('Lit Sparkler', '#fff2b0', { flame: SPARK_PAL, render: R_FLICKER, temp: 900, fixed: true, life: [240, 255], death: ['Ash', 1], custom: emitUpdate, arg1: 'Spark', argp: 0.5, noglow: true });
+  Pw('Burning Smoke Bomb', '#6a6a70', { dens: 2, temp: 300, fixed: true, life: [200, 255], death: ['Ash', 1], custom: emitUpdate, arg1: 'Smoke', argp: 0.6, noglow: true });
+  So('Lit Flare', '#ff3a2a', { flame: firePal('#ff3a2a').slice(3), render: R_FLICKER, temp: 1500, fixed: true, life: [250, 255], death: ['Ash', 1], custom: emitUpdate, arg1: 'Red Fire', argp: 0.3, noglow: true });
+  each(FIREWORK_COLOURS, function(f){
+    Fl(f[0] + ' Rocket', SPARK_PAL, { temp: 1000, fixed: true, life: [18, 34], custom: rocketUpdate, argn: f[1] });
+    boomNames.push(Pw(f[0] + ' Firework', f[1] === 7 ? ['#ff5a5a', '#ffd166', '#6ee06e', '#b794f6'] : SPARKLE_COLORS[f[1] - 1],
+                      { dens: 2, flam: 0.4, ign: 200, burnTo: f[0] + ' Rocket', burnLife: [18, 34] }));
+  });
+
+  // ---------- nature and weather ----------
+  var cloud = function(o){ return merge({ dens: 0.08, temp: 10, airloss: 0, custom: cloudUpdate }, o); };
+  var natureNames = [
+    Gs('Snow Cloud', '#f4f8fc', cloud({ temp: -5, arg1: 'Snow', argp: 0.006 })),
+    Gs('Storm Cloud', '#6a7078', cloud({ arg1: 'Water', argp: 0.012, arg2: 'Lightning', argn: 0.0004 })),
+    Gs('Acid Cloud', '#b8d08a', cloud({ arg1: 'Acid', argp: 0.004 })),
+    Gs('Hail Cloud', '#a8b8c8', cloud({ temp: -5, arg1: 'Hail', argp: 0.006 })),
+    Gs('Ash Cloud', '#4a4a4e', cloud({ arg1: 'Volcanic Ash', argp: 0.006 })),
+    Pw('Hail', ['#e0f0ff', '#d0e8fb', '#f0f8ff', '#c8e0f8'], { dens: 0.95, temp: -5, hi: [2, 'Water', 0.1], noglow: true }),
+    Pw('Snowflakes', ['#ffffff', '#eef6ff', '#f8fbff', '#e0eefb'], { dens: 0.3, temp: -8, hi: [0.5, 'Water', 0.3], noglow: true, custom: slowUpdate, argp: 0.7 }),
+    Lq('Slush', '#c8dce8', { dens: 0.98, temp: -1, visc: 0.7, spread: 1, hi: [3, 'Water', 0.05], lo: [-5, 'Ice', 0.02], noglow: true }),
+    So('Frost', '#e8f4fb', { temp: -20, cond: 0.4, hi: [0, 'Water', 0.1], noglow: true }),
+    Gs('Fog', '#b8c0c8', { dens: 0.13, heavy: true, life: [255, 255], airloss: 0 }),
+    Gs('Mist', '#d8e0e8', { dens: 0.1, life: [100, 250] }),
+    So('Permafrost', ['#6a5a4a', '#c8e0f0', '#5a4a3a', '#a8c0d0'], { temp: -10, cond: 0.3, hi: [2, 'Mud', 0.02], noglow: true }),
+    So('Glacier Ice', '#7ab8e8', { temp: -25, cond: 0.4, hi: [0.5, 'Water', 0.05], blast: 'Snow', noglow: true }),
+    So('Packed Snow', '#e4eef6', { temp: -5, cond: 0.3, hi: [0.5, 'Water', 0.2], blast: 'Snow', noglow: true }),
+    So('Fire Ice', '#e8f0f0', { temp: -10, cond: 0.3, hi: [5, 'Water', 0.05, 'Methane', 0.5], flam: 0.5, ign: 400, burnTo: 'Blue Fire', noglow: true }),
+    Lq('Magma', '#ff3a0a', { dens: 2.6, temp: 1400, cond: 0.25, airloss: 0.0015, visc: 0.8, spread: 2, lo: [900, 'Basalt', 0.05] }),
+    Lq('Blue Lava', '#2a6aff', { dens: 2.5, temp: 1200, cond: 0.25, airloss: 0.0015, visc: 0.75, spread: 2, lo: [800, 'Sulfur', 0.05] }),
+    Pw('Volcanic Ash', ['#5a5a5e', '#6a6a6e', '#4a4a4e', '#7a7a7e'], { dens: 1.0, temp: 300 }),
+    So('Geyser', ['#8a8070', '#6a6050', '#a09080', '#7a7060'], { resist: 0.8, custom: geyserUpdate, arg1: 'Steam', arg2: 'Hot Water' }),
+    Lq('Hot Water', '#3a8ae8', { dens: 1, temp: 90, spread: 4, cond: 0.5, hi: [100, 'Steam', 0.5], lo: [40, 'Water', 0.02], noglow: true, wet: true, acidproof: true }),
+    Lq('Swamp Water', '#4a6a3a', { dens: 1.02, spread: 3, cond: 0.5, hi: [100, 'Steam', 0.5], lo: [0, 'Ice', 0.2], noglow: true, wet: true }),
+    Lq('Brine', '#5a96c8', { dens: 1.2, spread: 4, cond: 0.5, hi: [105, 'Steam', 0.5, 'Salt', 0.6], lo: [-30, 'Ice', 0.2], noglow: true, wet: true, acidproof: true }),
+    Pw('Seashells', ['#f8f0e8', '#f8d8d0', '#fbf4ec', '#e8d0c0'], { dens: 1.5 }),
+    Pw('Compost', ['#3a2a1a', '#4a3424', '#2e2014', '#54402a'], { dens: 1.8 }),
+    Pw('Wet Sand', '#b89a58', { dens: 3.2, hi: [100, 'Sand', 0.05] })
+  ];
+
+  // ---------- building ----------
+  var buildNames = [
+    So('Asphalt', ['#2a2a2e', '#3a3a3e', '#1e1e22', '#4a4a4e'], { cond: 0.2, hi: [240, 'Tar', 0.02], resist: 0.5 }),
+    Pw('Plaster Powder', '#f0eee6', { dens: 1.6 }),
+    So('Plaster', '#f4f2ea', { cond: 0.1, resist: 0.3 }),
+    So('Drywall', '#e8e4d8', { cond: 0.05, resist: 0.2, flam: 0.02, ign: 400 }),
+    So('Tile', ['#f4f4f0', '#e0e0dc', '#f4f4f0', '#c8c8c4'], { cond: 0.3, resist: 0.5, acidproof: true }),
+    So('Porcelain', '#f8f8fb', { cond: 0.2, resist: 0.4, acidproof: true, blast: 'Gravel' }),
+    So('Terracotta', '#c8603a', { cond: 0.2, resist: 0.4 }),
+    So('Adobe', '#b8905a', { cond: 0.15, resist: 0.4 }),
+    So('Stone Brick', ['#7a7874', '#6a6864', '#8a8884', '#5a5854'], { cond: 0.3, resist: 0.75, blast: 'Gravel' }),
+    So('Firebrick', '#d8b890', { cond: 0.02, airloss: 0, resist: 0.8, noglow: true }),
+    So('Reinforced Concrete', ['#9a9892', '#8a8882', '#6a6e74', '#9a9892'], { cond: 0.25, resist: 0.9 }),
+    So('Rebar', '#6a4a3a', { cond: 0.6, hi: [1500, 'Molten Metal', 0.04], resist: 0.7 }),
+    So('Bulletproof Glass', '#a8d0e0', { cond: 0.2, resist: 0.95, acidproof: true, hi: [1400, 'Molten Glass', 0.03] }),
+    So('Mirror', ['#e8eef4', '#ffffff', '#d0d8e0', '#f4f8fb'], { cond: 0.3, render: R_GLITTER, blast: 'Glass Shards', acidproof: true }),
+    So('Fiberglass', '#e8e0c0', { cond: 0.02, resist: 0.4 }),
+    So('Kevlar', '#e8c830', { cond: 0.05, resist: 0.85 }),
+    So('Carbon Fiber', ['#1a1a1e', '#2a2a2e', '#1a1a1e', '#3a3a3e'], { cond: 0.3, resist: 0.8 }),
+    So('Sandbag', ['#b8a070', '#a89060', '#c8b080', '#988050'], { cond: 0.1, resist: 0.9 }),
+    Lq('Spray Foam', '#f0e080', { dens: 0.4, visc: 0.9, spread: 1, decay: ['Foam Block', 0.005], noglow: true }),
+    So('Foam Block', '#f0e4a0', { cond: 0.01, airloss: 0, flam: 0.3, ign: 300 }),
+    So('Styrofoam', '#fbfbfb', { cond: 0.02, hi: [240, 'Molten Plastic', 0.05], flam: 0.4, ign: 350, noglow: true }),
+    So('Newspaper', ['#e8e4dc', '#3a3a3a', '#e8e4dc', '#c8c4bc'], { cond: 0.05, flam: 0.6, ign: 230, burnLife: [8, 16] }),
+    So('Tissue', '#fbfbf8', { cond: 0.05, flam: 0.8, ign: 220, burnLife: [4, 8], noglow: true }),
+    So('Parchment', '#e8d8a8', { cond: 0.05, flam: 0.5, ign: 240 }),
+    So('Cash', ['#8ab88a', '#7aa87a', '#9ac89a', '#6a986a'], { cond: 0.05, flam: 0.5, ign: 230 }),
+    So('Rope', ['#b8985a', '#a8884a', '#c8a86a', '#98783a'], { cond: 0.05, flam: 0.4, ign: 250 }),
+    So('Leather', '#8a5a3a', { cond: 0.08, flam: 0.1, ign: 350 }),
+    So('Silk', ['#f8f0f8', '#f0e0f0', '#fbf8fb', '#e8d8e8'], { cond: 0.05, flam: 0.6, ign: 230 }),
+    So('Denim', ['#3a5a8a', '#2a4a7a', '#4a6a9a', '#3a5a8a'], { cond: 0.05, flam: 0.4, ign: 250 }),
+    So('Nylon', '#f0f0e8', { cond: 0.05, hi: [220, 'Molten Plastic', 0.05], flam: 0.2, ign: 400 }),
+    So('Candle', '#f4ecd8', { cond: 0.1, flam: 0.9, ign: 150, burnTo: 'Lit Candle', hi: [70, 'Liquid Wax', 0.1] }),
+    So('Lit Candle', '#f8f0dc', { cond: 0, airloss: 0, custom: candleUpdate, arg1: 'Candle Flame', arg2: 'Candle' }),
+    So('Matches', ['#c8a060', '#d8301a', '#c8a060', '#c8a060'], { cond: 0.05, flam: 1, ign: 120, burnLife: [15, 30] })
+  ];
+
+  // ---------- machines and oddities ----------
+  var machine = function(o){ return merge({ resist: 1, acidproof: true, cond: 0, airloss: 0, noglow: true }, o); };
+  var tap = function(what, p, o){ return machine(merge({ custom: emitUpdate, arg1: what, argp: p }, o || {})); };
+  var specialNames = [
+    So('Faucet', '#c0c8d0', tap('Water', 0.3)),
+    So('Sand Spout', '#c8a860', tap('Sand', 0.3)),
+    So('Lava Vent', '#5a2a1a', tap('Lava', 0.15)),
+    So('Steam Vent', '#8a8a8a', tap('Steam', 0.2)),
+    So('Snow Machine', '#d8e8f8', tap('Snow', 0.2)),
+    So('Smoke Machine', '#4a4a50', tap('Smoke', 0.3)),
+    So('Fog Machine', '#8a9098', tap('Fog', 0.2)),
+    So('Bubble Machine', '#b8e0f8', tap('Bubbles', 0.2)),
+    So('Fire Pit', '#3a2a20', tap('Fire', 0.4)),
+    So('Spark Plug', '#d8d8d0', tap('Spark', 0.1)),
+    So('Oil Well', '#2a2420', tap('Oil', 0.15)),
+    So('Gas Leak', '#6a7a6a', tap('Methane', 0.2)),
+    So('Confetti Cannon', ['#ff5a8a', '#ffd166', '#6ee7f9', '#9b6bff'], tap('Confetti', 0.3)),
+    So('Rainbow Spout', ['#ff5a5a', '#ffd35a', '#5ad8ff', '#b05aff'], machine({ custom: rainbowUpdate })),
+    So('Drain', '#2a2a30', machine({ custom: drainUpdate, argn: LIQUID })),
+    So('Vent', '#3a3a44', machine({ custom: drainUpdate, argn: GAS })),
+    So('Black Hole', '#000000', machine({ custom: blackHoleUpdate, swatch: '#2a0a3a' })),
+    So('White Hole', '#ffffff', machine({ custom: whiteHoleUpdate })),
+    So('Magnet', ['#c83a3a', '#8a8e94', '#c83a3a', '#8a8e94'], machine({ custom: magnetUpdate, resist: 0.9, cond: 0.4 })),
+    So('Fan Left', '#6a8aa8', machine({ custom: fanUpdate, argn: -1, resist: 0.9 })),
+    So('Fan Right', '#6a8aa8', machine({ custom: fanUpdate, argn: 1, resist: 0.9 })),
+    So('Fan Up', '#6a8aa8', machine({ custom: fanUpdate, argn: 2, resist: 0.9 })),
+    So('Conveyor Left', ['#3a3a40', '#5a5a60', '#3a3a40', '#6a6a70'], machine({ custom: conveyorUpdate, argn: -1, resist: 0.9 })),
+    So('Conveyor Right', ['#3a3a40', '#5a5a60', '#3a3a40', '#6a6a70'], machine({ custom: conveyorUpdate, argn: 1, resist: 0.9 })),
+    So('Converter', '#8a3ad8', machine({ custom: converterUpdate })),
+    So('Randomizer', ['#ff5a5a', '#5aff5a', '#5a5aff', '#ffff5a'], machine({ custom: randomizerUpdate, render: R_GLITTER })),
+    So('Furnace', '#b8401a', machine({ temp: 1600, fixed: true, cond: 0.8, resist: 0.95 })),
+    So('Cryo Block', '#aee8ff', machine({ temp: -250, fixed: true, cond: 0.8, resist: 0.95 }))
+  ];
+
+  // ---------- how the new things react ----------
+  // anything molten hitting water sets with a hiss
+  moltenNames.forEach(function(m){ react(m, 'Water', m.slice(7), 'Steam', 0.2); });
+
+  // alkali metals go off in water, each with its own colour of flame
+  ['Water', 'Saltwater', 'Hot Water', 'Swamp Water', 'Brine'].forEach(function(w){
+    react('Lithium', w, 'Red Fire', 'Hydrogen', 0.15);
+    react('Potassium', w, 'Purple Fire', 'Hydrogen', 0.35);
+    react('Rubidium', w, 'Plasma', 'Hydrogen', 0.4);
+    react('Caesium', w, 'Plasma', 'Plasma', 0.5);
+    react('Francium', w, 'Plasma', 'Plasma', 0.7);
+    react('Calcium', w, 'Slaked Lime', 'Hydrogen', 0.01);
+    react('Calcium Carbide', w, 'Slaked Lime', 'Acetylene', 0.1);
+    react('Quicklime', w, 'Slaked Lime', 'Steam', 0.1);
+  });
+
+  // alloys: pour the two molten metals together
+  each(ALLOYS, function(a){
+    if(!a[4]) return;
+    var A = moltenOf(a[4]), B = moltenOf(a[5]), M = 'Molten ' + a[0];
+    react(A, B, M, M, 0.1);
+    react(B, A, M, M, 0.1);
+  });
+  react('Molten Metal', 'Coal', 'Molten Cast Iron', 'Empty', 0.1);
+  react('Molten Metal', 'Charcoal', 'Molten Cast Iron', 'Empty', 0.1);
+  react('Tungsten', 'Coal', 'Tungsten Carbide', 'Empty', 0.02, 1400);
+  react('Molten Gallium', 'Molten Indium', 'Galinstan', 'Galinstan', 0.1);
+  react('Molten Indium', 'Molten Gallium', 'Galinstan', 'Galinstan', 0.1);
+  react('Molten Gallium', 'Aluminium', null, 'Aluminium Powder', 0.02);   // gallium makes aluminium crumble
+  react('Galinstan', 'Aluminium', null, 'Aluminium Powder', 0.02);
+  ['Silver', 'Tin', 'Gold'].forEach(function(m){ react('Mercury', m, 'Amalgam', 'Amalgam', 0.02); });
+  react('Palladium', 'Hydrogen', null, 'Empty', 0.1);                     // palladium soaks up hydrogen
+  react('Silver', 'Bacteria', null, 'Empty', 0.1);
+  react('Copper', 'Silver Nitrate', null, 'Silver', 0.02);                // silver crystals grow on copper
+  react('Copper Sulfate', 'Metal', 'Empty', 'Copper', 0.02);              // iron gets copper-plated
+  react('Copper Sulfate', 'Iron Filings', 'Empty', 'Copper', 0.05);
+  react('Copper Sulfate', 'Water', 'Empty', 'Blue Dye', 0.05);
+  react('Aluminium Powder', 'Rust', 'Thermite', 'Thermite', 0.05);
+
+  // acids and bases
+  var ACIDS = ['Acid', 'Hydrochloric Acid', 'Sulfuric Acid', 'Nitric Acid', 'Formic Acid', 'Vinegar', 'Citric Acid'];
+  ACIDS.forEach(function(a){
+    react('Lye', a, 'Saltwater', 'Saltwater', 0.3);
+    if(a !== 'Vinegar') react('Baking Soda', a, 'CO2', 'Water', 0.3);   // (vinegar has its own volcano)
+    react('Slaked Lime', a, 'Water', 'Water', 0.2);
+  });
+  var GLASSY = ['Glass', 'Glass Shards', 'Bulletproof Glass', 'Mirror'].concat(COLOURS.map(function(c){ return c[0] + ' Glass'; }));
+  GLASSY.forEach(function(g){
+    react('Hydrofluoric Acid', g, null, 'Empty', 0.05);                   // the one acid that eats glass
+    react('Fluoroantimonic Acid', g, null, 'Empty', 0.1);
+  });
+  ['Gold', 'Platinum', 'Palladium', 'Rhodium', 'Electrum', 'Rose Gold', 'White Gold'].forEach(function(g){
+    react('Aqua Regia', g, null, 'Empty', 0.05);                          // aqua regia dissolves gold
+  });
+  react('Lye', 'Oil', 'Soap', 'Soap', 0.1);                               // soap making
+  react('Lye', 'Olive Oil', 'Soap', 'Soap', 0.1);
+  react('Lye', 'Melted Butter', 'Soap', 'Soap', 0.1);
+  react('Bleach', 'Ammonia', 'Toxic Gas', 'Toxic Gas', 0.3);              // never mix these
+  ['Ink', 'Paint', 'Blood', 'Coffee', 'Soy Sauce'].forEach(function(s){ react('Bleach', s, null, 'Water', 0.1); });
+  ['Bacteria', 'Mold', 'Virus'].forEach(function(b){ react('Bleach', b, null, 'Empty', 0.3); });
+  react('Bleach', 'Dried Paint', null, 'Empty', 0.05);
+  react('Hydrogen Peroxide', 'Yeast', 'Elephant Toothpaste', 'Elephant Toothpaste', 0.3);
+  react('Elephant Toothpaste', 'Empty', null, 'Elephant Toothpaste', 0.02);
+  react('Hydrogen Peroxide', 'Elephant Toothpaste', 'Elephant Toothpaste', null, 0.1);
+  react('Hydrogen Peroxide', 'Blood', 'Foam', null, 0.1);
+  react('Potassium Permanganate', 'Glycerin', 'Fire', 'Fire', 0.01);     // slowly, then all at once
+  react('Potassium Permanganate', 'Water', null, 'Purple Dye', 0.03);
+  react('Potassium Chlorate', 'Sugar', 'Purple Fire', 'Purple Fire', 0.05);
+  react('Potassium Chlorate', 'Gummy Bears', 'Purple Fire', 'Purple Fire', 0.2);
+  react('Saltpeter', 'Charcoal', 'Gunpowder', 'Gunpowder', 0.05);
+  react('Saltpeter', 'Sulfur', 'Gunpowder', 'Gunpowder', 0.02);
+  react('Ammonium Nitrate', 'Diesel', 'ANFO', 'ANFO', 0.1);
+  react('Ammonium Nitrate', 'Oil', 'ANFO', 'ANFO', 0.1);
+  react('Ammonium Nitrate', 'Dirt', 'Empty', 'Grass', 0.03);
+  react('Nitric Acid', 'Glycerin', 'Nitro', 'Nitro', 0.1);
+  react('Nitric Acid', 'Cotton', null, 'Guncotton', 0.1);
+  react('Sulfuric Acid', 'Sugar', null, 'Charcoal', 0.1);                 // the black carbon snake
+  react('Sulfuric Acid', 'Water', null, 'Steam', 0.03);
+  ['Plastic', 'Styrofoam', 'Nylon'].forEach(function(p){ react('Acetone', p, null, 'Empty', 0.05); });
+  react('Turpentine', 'Paint', null, 'Empty', 0.1);
+  react('Turpentine', 'Dried Paint', null, 'Paint', 0.05);
+  ['Ice', 'Snow', 'Hail', 'Frost', 'Slush', 'Packed Snow'].forEach(function(s){ react('Antifreeze', s, null, 'Water', 0.1); });
+  react('Fire', 'Nitrous Oxide', 'Blue Fire', 'Oxygen', 0.3);
+  react('Nitrogen Dioxide', 'Water', 'Empty', 'Nitric Acid', 0.05);      // acid rain
+  react('Sulfur Dioxide', 'Water', 'Empty', 'Sulfuric Acid', 0.05);
+  react('Sulfur', 'Oxygen', 'Sulfur Dioxide', 'Empty', 0.01, 200);
+  react('Fluorine', 'Water', 'Oxygen', 'Hydrofluoric Acid', 0.2);
+  react('Slaked Lime', 'CO2', 'Limestone', 'Empty', 0.05);
+  react('Luminol', 'Blood', 'Luminol Glow', 'Luminol Glow', 0.3);
+  react('Fluorescein', 'Water', null, 'Glowing Water', 0.05);
+  react('Glowing Water', 'Water', null, 'Glowing Water', 0.004);
+  ['Toxic Gas', 'Chlorine', 'Smoke', 'Hydrogen Sulfide', 'Pepper Spray'].forEach(function(g){ react('Activated Charcoal', g, null, 'Empty', 0.3); });
+  react('Activated Charcoal', 'Ink', null, 'Water', 0.2);
+  react('Borax', 'Glue', 'Empty', 'Slime', 0.1);
+  react('Epsom Salt', 'Water', 'Empty', null, 0.04);
+  react('Citric Acid', 'Baking Soda', 'CO2', 'Foam', 0.3);                // a bath bomb
+  react('Hot Ice', 'Sodium Acetate', null, 'Hot Ice', 0.5);
+  react('Steel Wool', 'Battery', 'Spark', null, 0.1);
+  react('Latex', 'Sulfur', 'Rubber', 'Empty', 0.1);
+
+  // cooking: things that need boiling water (or water they've heated up themselves)
+  function boil(food, toA, toB, p, minT){
+    react(food, 'Water', toA, toB, p, minT);
+    react(food, 'Hot Water', toA, toB, p);
+    react(food, 'Steam', toA, null, p);
+  }
+  boil('Rice', 'Cooked Rice', 'Empty', 0.05, 72);
+  boil('Pasta', 'Cooked Pasta', 'Empty', 0.05, 72);
+  boil('Noodles', 'Noodle Soup', 'Noodle Soup', 0.05, 65);
+  boil('Oats', 'Porridge', 'Porridge', 0.05, 65);
+  boil('Curry Powder', 'Curry', 'Curry', 0.05, 65);
+  boil('Tea Leaves', 'Tea', 'Tea', 0.05, 65);
+  boil('Barley', 'Wort', 'Wort', 0.05, 55);
+  ['Carrot', 'Potato', 'Onion', 'Peas', 'Broccoli', 'Cabbage', 'Pumpkin', 'Raw Meat', 'Raw Chicken'].forEach(function(v){ boil(v, 'Soup', 'Soup', 0.03, 72); });
+  react('Soybeans', 'Water', 'Soy Milk', 'Soy Milk', 0.05);
+  react('Almonds', 'Water', 'Almond Milk', 'Almond Milk', 0.05);
+  react('Cocoa Powder', 'Milk', 'Hot Chocolate', 'Hot Chocolate', 0.05, 40);
+  react('Milk', 'Sugar', 'Condensed Milk', 'Empty', 0.05, 80);
+  react('Dough', 'Oil', 'Donut', null, 0.05, 150);
+  react('Potato', 'Oil', 'Fries', null, 0.05, 150);
+  // mixing
+  react('Tea', 'Milk', 'Milk Tea', 'Milk Tea', 0.1);
+  react('Milk Tea', 'Boba', 'Bubble Tea', 'Bubble Tea', 0.1);
+  react('Tea', 'Ice', 'Iced Tea', 'Water', 0.05);
+  react('Tea', 'Yeast', 'Kombucha', null, 0.03);
+  react('Coffee', 'Milk', 'Latte', 'Latte', 0.1);
+  react('Latte', 'Foam', 'Cappuccino', 'Cappuccino', 0.1);
+  react('Latte', 'Melted Chocolate', 'Mocha', 'Mocha', 0.1);
+  react('Milk', 'Ice Cream', 'Milkshake', 'Milkshake', 0.1);
+  react('Lemon Juice', 'Sugar', 'Lemonade', 'Empty', 0.1);
+  ['Strawberry', 'Banana', 'Blueberry', 'Mango', 'Raspberry', 'Peach'].forEach(function(f){ react('Yogurt', f, 'Smoothie', 'Smoothie', 0.1); });
+  react('Grape Juice', 'Yeast', 'Wine', null, 0.03);                      // brewing
+  react('Apple Juice', 'Yeast', 'Cider', null, 0.03);
+  react('Wort', 'Yeast', 'Beer', null, 0.03);
+  react('Cooked Rice', 'Yeast', 'Sake', null, 0.02);
+  react('Sugar', 'Yeast', 'Alcohol', null, 0.01);
+  react('Milk', 'Bacteria', 'Yogurt', null, 0.03);
+  react('Cream', 'Sugar', 'Whipped Cream', 'Empty', 0.05);
+  react('Raw Egg', 'Oil', 'Mayonnaise', 'Mayonnaise', 0.1);
+  react('Raw Egg', 'Flour', 'Pancake Batter', 'Empty', 0.1);
+  react('Pancake Batter', 'Sugar', 'Cake Batter', 'Empty', 0.1);
+  react('Dough', 'Chocolate', 'Cookie Dough', 'Empty', 0.1);
+  react('Dough', 'Tomato Sauce', 'Raw Pizza', 'Empty', 0.1);
+  react('Cooked Rice', 'Raw Fish', 'Sushi', 'Empty', 0.1);
+  react('Bread', 'Cooked Meat', 'Burger', 'Empty', 0.1);
+  react('Cooked Sausage', 'Bread', 'Hot Dog', 'Empty', 0.1);
+  react('Cucumber', 'Vinegar', 'Pickle', null, 0.05);
+  react('Avocado', 'Salt', 'Guacamole', 'Empty', 0.1);
+  react('Avocado', 'Lemon Juice', 'Guacamole', 'Guacamole', 0.1);
+  react('Tomato', 'Vinegar', 'Ketchup', 'Ketchup', 0.1);
+  react('Soy Milk', 'Salt', 'Tofu', 'Empty', 0.05);
+  react('Cereal', 'Milk', 'Soggy Cereal', null, 0.005);
+  // milling and pressing: grind it against stone
+  react('Peanuts', 'Stone', 'Peanut Butter', null, 0.02);
+  react('Wheat', 'Stone', 'Flour', null, 0.02);
+  react('Olives', 'Stone', 'Olive Oil', null, 0.02);
+  react('Sugar Cane', 'Stone', 'Sugar', null, 0.01);
+  PRODUCE.forEach(function(p){ if(p[2]) react(p[0], 'Stone', p[2], null, 0.02); });
+  ['Strawberry', 'Raspberry', 'Blueberry', 'Cherry', 'Plum', 'Peach', 'Apple', 'Grapes', 'Orange'].forEach(function(f){ react(f, 'Sugar', 'Jam', 'Empty', 0.05); });
+  // fizz, pop and burn
+  ['Soda', 'Energy Drink', 'Sparkling Water'].forEach(function(s){
+    react('Mentos', s, 'Foam', 'Foam', 0.9);
+    react(s, 'Mentos', 'Foam', 'Foam', 0.9);
+  });
+  react('Soda', 'Foam', 'Foam', null, 0.08);                               // once it starts, the whole bottle goes
+  react('Pop Rocks', 'Water', 'Spark', null, 0.1);
+  react('Hot Sauce', 'Ice', null, 'Water', 0.05);
+  react('Chili Pepper', 'Fire', 'Pepper Spray', null, 0.2);
+  react('Chili Powder', 'Fire', 'Pepper Spray', null, 0.2);
+  react('Baked Beans', 'Empty', null, 'Methane', 0.0008);
+  ['Virus', 'Bacteria'].forEach(function(b){ react('Garlic', b, null, 'Empty', 0.05); });
+  // food goes off
+  ['Bread', 'Cheese', 'Cake', 'Cooked Rice', 'Apple', 'Orange', 'Strawberry', 'Banana', 'Tomato', 'Toast', 'Pizza', 'Cooked Meat'].forEach(function(f){
+    react('Mold', f, null, 'Mold', 0.004);
+  });
+  react('Bacteria', 'Raw Meat', null, 'Bacteria', 0.02);
+
+  // plants
+  flowerNames.concat(['Flower']).forEach(function(f){ react('Pollen', f, 'Seed', null, 0.05); });
+  react('Mycelium', 'Dirt', null, 'Mycelium', 0.004);
+  react('Mycelium', 'Empty', null, 'Mushroom', 0.0006);
+  react('Glowing Mushroom', 'Dirt', null, 'Glowing Mushroom', 0.0015);
+  react('Toadstool', 'Empty', null, 'Spores', 0.001);
+  WOODS.concat(['Dirt', 'Compost']).forEach(function(w){ react('Spores', w, 'Empty', 'Mushroom', 0.1); });
+  ['Stone', 'Granite', 'Basalt', 'Cobblestone', 'Limestone', 'Slate', 'Sandstone', 'Stone Brick'].forEach(function(r){ react('Lichen', r, null, 'Lichen', 0.001); });
+  FLIES.concat(['Ant', 'Bee', 'Butterfly', 'Dragonfly']).forEach(function(b){ react('Venus Flytrap', b, null, 'Venus Flytrap', 0.2); });
+  ['Water', 'Plant', 'Grass', 'Dirt', 'Leaves'].forEach(function(n){ react('Mutant Plant', n, null, 'Mutant Plant', 0.02); });
+  react('Hay', 'Mud', 'Adobe', 'Adobe', 0.05);
+  react('Plankton', 'Water', null, 'Plankton', 0.0003);
+  react('Plankton', 'Saltwater', null, 'Plankton', 0.0003);
+
+  // creatures don't like poison gas
+  var critterNames = creatureNames.filter(function(n){ return ['Anthill', 'Beehive', 'Web', 'Feather'].indexOf(n) < 0; });
+  critterNames.forEach(function(c){
+    react(c, 'Toxic Gas', 'Ash', null, 0.05);
+    react(c, 'Chlorine', 'Ash', null, 0.05);
+    react(c, 'Pepper Spray', 'Ash', null, 0.03);
+  });
+
+  // colours: dye spreads through water and colours sand, glass and wool
+  each(COLOURS, function(c){
+    var n = c[0];
+    react(n + ' Dye', 'Water', null, n + ' Dye', 0.02);
+    react(n + ' Dye', 'White Wool', 'Empty', n + ' Wool', 0.2);
+    react(n + ' Dye', 'Cloth', 'Empty', n + ' Wool', 0.2);
+    react(n + ' Dye', 'Sand', 'Empty', n + ' Sand', 0.2);
+    react(n + ' Dye', 'Glass', 'Empty', n + ' Glass', 0.1);
+    react('Bleach', n + ' Dye', null, 'Water', 0.2);
+    react('Acetone', n + ' Plastic', null, 'Empty', 0.05);
+  });
+
+  // nature and building
+  react('Frost', 'Water', null, 'Ice', 0.02);
+  react('Frost', 'Steam', null, 'Frost', 0.05);
+  react('Swamp Water', 'Empty', null, 'Methane', 0.0004);
+  ['Seashells', 'Chalk', 'Limestone', 'Pearl', 'Marble'].forEach(function(s){ react('Vinegar', s, 'CO2', 'Empty', 0.03); });
+  react('Silt', 'Water', 'Mud', 'Empty', 0.03);
+  react('Rock Salt', 'Water', null, 'Saltwater', 0.01);
+  react('Plaster Powder', 'Water', 'Plaster', 'Empty', 0.05);
+  react('Spray Foam', 'Empty', null, 'Spray Foam', 0.012);
+  react('Tissue', 'Water', 'Empty', null, 0.05);
+  react('Magma', 'Water', 'Basalt', 'Steam', 0.15);
+  react('Blue Lava', 'Water', 'Sulfur', 'Steam', 0.15);
+
+  // ---------- where it all goes in the picker ----------
+  SECTIONS.forEach(function(s){ if(s[0] === 'Life') s[0] = 'Plants'; });
+  sec('Metals', metalNames, alloyNames);
+  sec('Molten', moltenNames, ['Molten Metal', 'Molten Gold', 'Molten Copper', 'Molten Lead', 'Molten Glass', 'Molten Plastic']);
+  sec('Rocks', rockNames);
+  sec('Gems', gemNames, dustNames, ['Diamond', 'Crystal', 'Amber', 'Obsidian']);
+  sec('Colours', colourNames);
+  sec('Food', foodNames, produceNames);
+  sec('Drinks', drinkNames, popsicle);
+  sec('Plants', flowerNames, plantNames);
+  sec('Creatures', creatureNames);
+  sec('Chemicals', chemNames);
+  sec('Nature', natureNames);
+  sec('Building', buildNames);
+  sec('Fire & Energy', fireNames);
+  sec('Explosives', boomNames);
+  sec('Special', specialNames);
+  var ORDER = ['Powders', 'Liquids', 'Gases', 'Solids', 'Metals', 'Molten', 'Rocks', 'Gems', 'Colours', 'Food', 'Drinks', 'Plants', 'Creatures',
+               'Chemicals', 'Nature', 'Building', 'Fire & Energy', 'Explosives', 'Special', 'Tools'];
+  SECTIONS.sort(function(a, b){ return ORDER.indexOf(a[0]) - ORDER.indexOf(b[0]); });
+
+  AFTER.push(function(){
+    SOIL = new Uint8Array(E);
+    ['Dirt', 'Mud', 'Grass', 'Compost', 'Peat', 'Fertilizer'].forEach(function(n){ SOIL[idn(n)] = 1; });
+    FERRO = new Uint8Array(E);
+    ['Iron Filings', 'Magnetite', 'Ferrofluid', 'Steel Wool'].forEach(function(n){ FERRO[idn(n)] = 1; });
+    ['Steel', 'Metal', 'Stainless Steel', 'Iron Filings'].forEach(function(n){ FLINTY[idn(n)] = 1; });
+    GLASSY.concat(['Wall', 'Metal', 'Steel', 'Stainless Steel', 'Plastic', 'Insulator', 'Heater', 'Cooler', 'Porcelain', 'Tile']).forEach(function(n){ SMOOTH[idn(n)] = 1; });
+    RAINBOW = RAINBOW.map(idn);
+    ['Plant', 'Grass', 'Vine', 'Flower', 'Leaves', 'Moss', 'Stem', 'Fern', 'Ivy', 'Clover'].forEach(function(n){ MUTATE[idn(n)] = idn('Mutant Plant'); });
+    // what the white hole and randomizer pick from: everything in the picker bar the machines and bombs
+    var seen = {};
+    SECTIONS.forEach(function(s){
+      if(s[0] === 'Special' || s[0] === 'Tools' || s[0] === 'Explosives') return;
+      s[1].forEach(function(n){ var id = ID[n]; if(id !== undefined && !seen[id]){ seen[id] = 1; POOL.push(id); } });
+    });
+  });
+
+
+  // ---------- crushing, pressing and mixing ----------
+  // Drop something on a Crusher and it breaks down (stone to gravel to sand to dust) and falls out
+  // underneath. A Press packs it back the other way. Both jam if there's no room below them.
+  var CRUSHES = [], PRESSES = [];
+  function crushTo(to){ for(var k = 1; k < arguments.length; k++) CRUSHES.push([arguments[k], to]); }
+  function pressTo(to){ for(var k = 1; k < arguments.length; k++) PRESSES.push([arguments[k], to]); }
+
+  // ---------- ore: mine it, crush it, smelt it, cast it ----------
+  var ORES = [
+    // ore, colours, what it melts into, the dust crushing gives, dust colour, melting point
+    ['Iron Ore',     ['#8a7a6a', '#b06a4a', '#7a6a5a', '#c08060'], 'Molten Metal',    'Iron Filings',      null,      1538],
+    ['Copper Ore',   ['#7a8a7a', '#3aa87a', '#6a7a6a', '#2a9a6a'], 'Molten Copper',   'Copper Dust',       '#d08a4a', 1085],
+    ['Gold Ore',     ['#8a8278', '#f2c14e', '#7a7268', '#ffd76a'], 'Molten Gold',     'Gold Dust',         '#f4cf6a', 1064],
+    ['Silver Ore',   ['#8a8a8a', '#d8dbe0', '#7a7a7a', '#eef0f4'], 'Molten Silver',   'Silver Dust',       '#dfe2e7', 962],
+    ['Tin Ore',      ['#8a8478', '#c6c8c4', '#7a746a', '#d8dad6'], 'Molten Tin',      'Tin Dust',          '#cdcfcb', 232],
+    ['Lead Ore',     ['#6a6a70', '#9aa0a8', '#5a5a60', '#8a9098'], 'Molten Lead',     'Lead Dust',         '#8a929c', 327],
+    ['Zinc Ore',     ['#8a8a84', '#aab4bd', '#7a7a74', '#c0c8d0'], 'Molten Zinc',     'Zinc Dust',         '#b2bcc4', 420],
+    ['Nickel Ore',   ['#8a8a7a', '#b8b2a0', '#7a7a6a', '#c8c2b0'], 'Molten Nickel',   'Nickel Dust',       '#c0baa8', 1455],
+    ['Cobalt Ore',   ['#6a7a8a', '#8a93a8', '#5a6a7a', '#9aa3b8'], 'Molten Cobalt',   'Cobalt Dust',       '#929bb0', 1495],
+    ['Bauxite',      ['#b07a5a', '#c08a6a', '#a06a4a', '#d09a7a'], 'Molten Aluminium','Aluminium Powder',  null,      660],
+    ['Titanium Ore', ['#8a8a90', '#a9adb3', '#7a7a80', '#b9bdc3'], 'Molten Titanium', 'Titanium Dust',     '#b1b5bb', 1668],
+    ['Tungsten Ore', ['#6a6a6a', '#6c7178', '#5a5a5a', '#7c8188'], 'Molten Metal',    'Tungsten Dust',     '#747980', 3422],
+    ['Platinum Ore', ['#8a8a88', '#e4e4e2', '#7a7a78', '#f4f4f2'], 'Molten Platinum', 'Platinum Dust',     '#ececea', 1768],
+    ['Uranium Ore',  ['#6a7a5a', '#3fd94a', '#5a6a4a', '#2fbf3a'], 'Molten Metal',    'Uranium',           null,      1132]
+  ];
+  var oreNames = [], oreDusts = [];
+  each(ORES, function(o){
+    oreNames.push(So(o[0], o[1], { cond: 0.3, resist: 0.6, blast: 'Gravel', hi: [o[5], o[2], 0.03] }));
+    if(o[4]) oreDusts.push(Pw(o[3], o[4], { dens: 4, cond: 0.4, hi: [o[5], o[2], 0.05] }));
+    crushTo(o[3], o[0]);
+  });
+  sec('Rocks', oreNames);
+  sec('Metals', oreDusts);
+
+  sec('Powders', Pw('Bone Meal', '#efe8d8', { dens: 1.4 }));
+  sec('Food', Lq('Fruit Pulp', ['#e8a06a', '#f0b880', '#e08a5a', '#f8d0a0'], { dens: 1.1, visc: 0.8, spread: 1 }));
+
+  // ---------- what breaks down into what ----------
+  var RUBBLE = ['Granite', 'Basalt', 'Slate', 'Shale', 'Gneiss', 'Schist', 'Quartzite', 'Dolomite', 'Travertine', 'Soapstone',
+                'Tuff', 'Andesite', 'Diorite', 'Gabbro', 'Rhyolite', 'Conglomerate', 'Cobblestone', 'Petrified Wood', 'Flint',
+                'Limestone', 'Marble', 'Moon Rock', 'Mars Rock', 'Stone Brick', 'Brick', 'Concrete', 'Reinforced Concrete',
+                'Terracotta', 'Porcelain', 'Tile', 'Plaster', 'Drywall', 'Asphalt', 'Obsidian', 'Scoria'];
+  crushTo.apply(null, ['Gravel'].concat(RUBBLE));
+  crushTo('Gravel', 'Stone');
+  crushTo('Sand', 'Gravel', 'Pebbles', 'Sandstone');
+  crushTo('Dust', 'Sand');
+  crushTo('Dust', 'Pumice', 'Silt', 'Chalk', 'Coal', 'Charcoal', 'Lignite', 'Anthracite', 'Peat', 'Ash');
+  crushTo('Sand', 'Seashells', 'Coral', 'Glass Shards');
+  crushTo('Glass Shards', 'Glass', 'Mirror', 'Bulletproof Glass', 'Crystal');
+  COLOURS.forEach(function(c){ crushTo('Glass Shards', c[0] + ' Glass'); });
+  crushTo('Snow', 'Ice', 'Packed Snow', 'Glacier Ice', 'Hail');
+  crushTo('Salt', 'Rock Salt');
+  crushTo('Plaster Powder', 'Gypsum');
+  crushTo('Bone Meal', 'Bone');
+  crushTo('Meteorite', 'Iron Filings');
+  crushTo('Sawdust', 'Wood', 'Cardboard', 'Cork', 'Balsa');
+  WOODS.forEach(function(w){ if(w !== 'Paper' && w !== 'Cardboard' && w !== 'Newspaper') crushTo('Sawdust', w); });
+  crushTo('Confetti', 'Paper', 'Newspaper', 'Parchment', 'Cash');
+  crushTo('Iron Filings', 'Metal', 'Steel', 'Cast Iron', 'Stainless Steel', 'Rebar', 'Steel Wool');
+  crushTo('Aluminium Powder', 'Aluminium', 'Duralumin');
+  [['Copper', 'Copper Dust'], ['Gold', 'Gold Dust'], ['Silver', 'Silver Dust'], ['Tin', 'Tin Dust'], ['Lead', 'Lead Dust'],
+   ['Zinc', 'Zinc Dust'], ['Nickel', 'Nickel Dust'], ['Cobalt', 'Cobalt Dust'], ['Titanium', 'Titanium Dust'],
+   ['Tungsten', 'Tungsten Dust'], ['Platinum', 'Platinum Dust']].forEach(function(m){ crushTo(m[1], m[0]); });
+  each(GEMS, function(g){ crushTo(g[0] + ' Dust', g[0]); });
+  // food: fruit and veg squash into juice, or pulp if there's no juice for them
+  PRODUCE.forEach(function(p){ crushTo(p[2] || 'Fruit Pulp', p[0]); });
+  crushTo('Flour', 'Wheat', 'Barley', 'Oats', 'Rice', 'Corn', 'Almonds', 'Walnuts');
+  crushTo('Coffee Grounds', 'Coffee Beans');
+  crushTo('Cocoa Powder', 'Cocoa Beans');
+  crushTo('Peanut Butter', 'Peanuts');
+  crushTo('Olive Oil', 'Olives');
+  crushTo('Sugar', 'Sugar Cane', 'Candy', 'Toffee');
+  crushTo('Raw Egg', 'Egg', 'Boiled Egg');
+  crushTo('Cocoa Powder', 'Chocolate');
+
+  // ---------- and what packs back together ----------
+  pressTo('Sandstone', 'Sand');
+  pressTo('Stone', 'Gravel');
+  pressTo('Clay', 'Dust', 'Silt', 'Dirt');
+  pressTo('Packed Snow', 'Snow');
+  pressTo('Ice', 'Packed Snow', 'Hail');
+  pressTo('Diamond', 'Graphite', 'Coal');        // squeeze carbon hard enough
+  pressTo('Coal', 'Charcoal');
+  pressTo('Cardboard', 'Sawdust');
+  pressTo('Paper', 'Confetti');
+  pressTo('Cloth', 'Cotton');
+  pressTo('Brick', 'Clay');
+  pressTo('Glass', 'Glass Shards');
+  pressTo('Rock Salt', 'Salt');
+  pressTo('Candy', 'Sugar');
+  pressTo('Limestone', 'Seashells');
+  pressTo('Bone', 'Bone Meal');
+  pressTo('Metal', 'Iron Filings');
+  pressTo('Aluminium', 'Aluminium Powder');
+  [['Copper', 'Copper Dust'], ['Gold', 'Gold Dust'], ['Silver', 'Silver Dust'], ['Tin', 'Tin Dust'], ['Lead', 'Lead Dust'],
+   ['Zinc', 'Zinc Dust'], ['Nickel', 'Nickel Dust'], ['Cobalt', 'Cobalt Dust'], ['Titanium', 'Titanium Dust'],
+   ['Tungsten', 'Tungsten Dust'], ['Platinum', 'Platinum Dust']].forEach(function(m){ pressTo(m[0], m[1]); });
+  each(GEMS, function(g){ pressTo(g[0], g[0] + ' Dust'); });
+
+  // ---------- the machines ----------
+  sec('Special',
+    So('Crusher', ['#6a6e74', '#8a8e94', '#5a5e64', '#9a9ea4'], machine({ custom: millUpdate, resist: 0.9, cond: 0.3 })),
+    So('Press', ['#8a6a3a', '#a08050', '#6a4a2a', '#b08a5a'], machine({ custom: millUpdate, resist: 0.9, cond: 0.3, argn: 1 })),
+    So('Mixer', ['#3a7a8a', '#4a8a9a', '#2a6a7a', '#5a9aaa'], machine({ custom: mixerUpdate, resist: 0.9, cond: 0.3 }))
+  );
+
+  // ---------- mixing colours ----------
+  // mixes worth making; nothing turns a mixed colour into another one, so purple stays purple
+  var DYE_MIX = [['Red', 'Blue', 'Purple'], ['Red', 'Yellow', 'Orange'], ['Blue', 'Yellow', 'Green'], ['Cyan', 'Yellow', 'Green'],
+                 ['Green', 'White', 'Lime'], ['Green', 'Cyan', 'Teal'], ['Blue', 'Black', 'Indigo'], ['Purple', 'Pink', 'Magenta'],
+                 ['Red', 'White', 'Pink'], ['Black', 'White', 'Grey'], ['Red', 'Green', 'Brown'], ['Red', 'Black', 'Brown']];
+  each(DYE_MIX, function(m){
+    react(m[0] + ' Dye', m[1] + ' Dye', m[2] + ' Dye', m[2] + ' Dye', 0.08);
+    react(m[1] + ' Dye', m[0] + ' Dye', m[2] + ' Dye', m[2] + ' Dye', 0.08);
+  });
+
+  // bone meal feeds a garden, same as fertiliser
+  react('Bone Meal', 'Dirt', 'Empty', 'Grass', 0.06);
+  react('Bone Meal', 'Mud', 'Empty', 'Plant', 0.05);
+  react('Bone Meal', 'Seed', 'Empty', 'Stem', 0.08);
+  react('Fruit Pulp', 'Sugar', 'Jam', 'Empty', 0.05);
+  react('Fruit Pulp', 'Yeast', 'Wine', null, 0.02);
+
+  AFTER.push(function(){
+    CRUSHES.forEach(function(c){ CRUSH[idn(c[0])] = idn(c[1]); });
+    PRESSES.forEach(function(c){ PRESS[idn(c[0])] = idn(c[1]); });
+  });
+
+  buildTables();
+  AFTER.forEach(function(f){ f(); });
+
   // things that never change and don't carry heat can skip their update entirely
   for(var sid = 0; sid < NAMES.length; sid++){
     if(KIND[sid] === SOLID && !COND[sid] && !LIFE_MAX[sid] && DECAY_TO[sid] === NONE && !CUSTOM[sid] && !FLAM[sid] &&
@@ -739,8 +2544,8 @@
     W = w; H = h; N = W * H;
     canvas.width = W;
     canvas.height = H;
-    grid  = new Uint8Array(N);
-    life  = new Uint8Array(N);
+    grid  = new Uint16Array(N);
+    life  = new Uint16Array(N);
     shade = new Uint8Array(N);
     stamp = new Uint8Array(N);
     temp  = new Float32Array(N).fill(AMBIENT);
@@ -842,7 +2647,8 @@
 
   // a crater of plasma in the middle, a fireball around it; tough materials survive but get hot
   function explode(cx, cy, r){
-    var r2 = r * r, core = r2 * 0.2;
+    // nuclear-sized blasts have a far bigger core and hit hard enough to melt rock
+    var r2 = r * r, core = r2 * (r >= 20 ? 0.5 : 0.2), hot = r >= 20 ? 4000 : 500;
     for(var dy = -r; dy <= r; dy++){
       var y = cy + dy;
       if(y < 0 || y >= H) continue;
@@ -852,12 +2658,12 @@
         var x = cx + dx;
         if(x < 0 || x >= W) continue;
         var j = y * W + x, n = grid[j];
-        var heat = 500 * (1 - d2 / r2);
+        var heat = hot * (1 - d2 / r2);
         if(RESIST[n] >= 1 || (RESIST[n] > 0 && Math.random() < RESIST[n])){
           if(n && !FIXED[n]) temp[j] += heat;
           continue;
         }
-        if(BLAST_TO[n] !== NONE){ set(j, BLAST_TO[n]); continue; }
+        if(BLAST_TO[n] !== NONE && r < 20){ set(j, BLAST_TO[n]); continue; }
         if(EXPLODE[n]){ set(j, FIRE); life[j] = 3 + (Math.random() * 5 | 0); continue; }   // sets off the next charge
         var heavy = KIND[n] === SOLID || KIND[n] === POWDER || KIND[n] === LIQUID;
         if(heavy && !FLAM[n] && d2 > core){
@@ -881,8 +2687,8 @@
     // touching particles happens in its own pass, see conduct())
     if(n === EMPTY && AIRLOSS[t]) temp[i] += (AMBIENT - temp[i]) * AIRLOSS[t];
 
-    var key = t * 256 + n, p = RX_P[key];
-    if(p && Math.random() < p){
+    var key = t * E + n, p = RX_P[key];
+    if(p && Math.random() < p && temp[i] >= RX_T[key]){
       var a = RX_TO[key], b = RX_OTHER[key];
       if(b !== NONE) set(j, b);
       if(a !== NONE){ set(i, a); return true; }
@@ -914,9 +2720,9 @@
       var j = neighbour(x, y);
       if(j < 0) continue;
       var n = grid[j];
-      if(n === WATER || n === SALTWATER){
+      if(WET[n]){
         set(j, STEAM);
-        if(!hot){ grid[i] = EMPTY; return true; }   // water puts out ordinary fire; plasma just boils it
+        if(!hot && !NOWATER[t]){ grid[i] = EMPTY; return true; }   // water puts out ordinary fire; plasma just boils it
         continue;
       }
       if(n === CO2 && !hot){ set(i, SMOKE); return true; }
@@ -947,7 +2753,7 @@
       var j = neighbour(x, y);
       if(j < 0) continue;
       var n = grid[j];
-      if(n === WATER || n === SALTWATER){ set(j, STEAM); set(i, WOOD); temp[i] = 150; return true; }
+      if(WET[n]){ set(j, STEAM); set(i, WOOD); temp[i] = 150; return true; }
       if(n === CO2){ set(i, WOOD); temp[i] = 150; return true; }
       if(EXPLODE[n] && Math.random() < IGNITE_P[n]){ explode(j % W, (j / W) | 0, EXPLODE[n]); return true; }
       if(FLAM[n] && Math.random() < FLAM[n]) ignite(j);
@@ -957,8 +2763,12 @@
   }
 
   // uranium keeps warming itself; a big enough pile gets very hot
-  function uraniumUpdate(i){
-    if(temp[i] < 2500) temp[i] += 0.8;
+  function uraniumUpdate(i, x, y, t){
+    if(temp[i] < 2500) temp[i] += ARGP[t] || 0.8;
+    if(ARG1[t] !== NONE && Math.random() < ARGN[t]){   // and gives off radiation, in any direction
+      var j = neighbour(x, y);
+      if(j >= 0 && grid[j] === EMPTY){ spawn(j, ARG1[t]); shade[j] = Math.random() * 8 | 0; }
+    }
     return false;
   }
 
@@ -970,20 +2780,26 @@
     return true;
   }
 
-  function acidUpdate(i, x, y){
+  // acids eat what they touch (ARGP: how strong); they leave other acids alone
+  function acidUpdate(i, x, y, t){
     var j = neighbour(x, y);
     if(j < 0) return false;
     var n = grid[j];
-    if(n !== EMPTY && n !== ACID && !ACIDPROOF[n] && KIND[n] !== GAS && KIND[n] !== FLAME &&
-       Math.random() < 0.08 * (1 - RESIST[n])){
+    if(n !== EMPTY && CUSTOM[n] !== acidUpdate && !ACIDPROOF[n] && KIND[n] !== GAS && KIND[n] !== FLAME &&
+       Math.random() < (ARGP[t] || 0.08) * (1 - RESIST[n])){
       if(Math.random() < 0.3) set(j, SMOKE); else grid[j] = EMPTY;
       if(Math.random() < 0.35){ grid[i] = EMPTY; return true; }   // acid gets used up
     }
     return false;
   }
 
-  function cloudUpdate(i, x, y){
-    if(y + 1 < H && grid[i + W] === EMPTY && Math.random() < 0.004) spawn(i + W, WATER);   // rain
+  // clouds drop ARG1 (rain by default); storm clouds sometimes drop ARG2 instead
+  function cloudUpdate(i, x, y, t){
+    if(y + 1 < H && grid[i + W] === EMPTY){
+      var r = Math.random();
+      if(ARG2[t] !== NONE && r < ARGN[t]) spawn(i + W, ARG2[t]);
+      else if(r < (ARGP[t] || 0.004)) spawn(i + W, ARG1[t] !== NONE ? ARG1[t] : WATER);
+    }
     if(Math.random() < 0.04){
       var s = Math.random() < 0.5 ? -1 : 1;
       if(x + s >= 0 && x + s < W && grid[i + s] === EMPTY) swap(i, i + s);
@@ -1019,14 +2835,14 @@
     return true;
   }
 
-  function rocketUpdate(i, x, y){
+  function rocketUpdate(i, x, y, t){
     var ci = i, cx = x, cy = y;
     for(var s = 0; s < 2; s++){
-      if(life[ci] <= 3 || cy <= 1){ burst(cx, cy); return true; }
+      if(life[ci] <= 3 || cy <= 1){ burst(cx, cy, t); return true; }
       var nx = cx + (Math.random() < 0.2 ? (Math.random() < 0.5 ? -1 : 1) : 0);
       if(nx < 0 || nx >= W) nx = cx;
       var j = (cy - 1) * W + nx, n = grid[j];
-      if(n !== EMPTY && KIND[n] !== GAS){ burst(cx, cy); return true; }
+      if(n !== EMPTY && KIND[n] !== GAS){ burst(cx, cy, t); return true; }
       swap(ci, j);
       if(Math.random() < 0.6) set(ci, SPARK);   // a trail of sparks behind it
       ci = j; cx = nx; cy = cy - 1;
@@ -1034,8 +2850,10 @@
     return true;
   }
 
-  function burst(cx, cy){
-    var fam = Math.random() * SPARKLE_COLORS.length | 0, r = 5 + (Math.random() * 3 | 0);
+  // ARGN picks the colour: 0 any one colour, 1-6 a fixed one, 7 every colour at once
+  function burst(cx, cy, t){
+    var pick = ARGN[t] || 0, rainbow = pick === 7;
+    var fam = pick >= 1 && pick <= 6 ? pick - 1 : Math.random() * SPARKLE_COLORS.length | 0, r = 5 + (Math.random() * 3 | 0);
     for(var dy = -r; dy <= r; dy++){
       for(var dx = -r; dx <= r; dx++){
         if(dx * dx + dy * dy > r * r || Math.random() > 0.45) continue;
@@ -1044,7 +2862,7 @@
         var j = y * W + x, n = grid[j];
         if(n !== EMPTY && KIND[n] !== GAS && n !== ROCKET && n !== SPARK) continue;
         set(j, SPARKLE);
-        shade[j] = fam;
+        shade[j] = rainbow ? Math.random() * SPARKLE_COLORS.length | 0 : fam;
         life[j] = 18 + (Math.random() * 26 | 0);
       }
     }
@@ -1060,17 +2878,38 @@
   }
 
   // bombs go off the moment they land on something
-  function bombUpdate(i, x, y){
-    if(y + 1 >= H){ explode(x, y, EXPLODE[BOMB]); return true; }
-    var b = grid[i + W];
-    if(b !== EMPTY && b !== BOMB && KIND[b] !== GAS && KIND[b] !== FLAME){ explode(x, y, EXPLODE[BOMB]); return true; }
-    return false;
+  // ARG1: bomblets a cluster bomb throws out; ARG2: what a nuke or glitter bomb leaves all over
+  // the blast (ARGP of the space it cleared)
+  function bombUpdate(i, x, y, t){
+    var hit = y + 1 >= H;
+    if(!hit){ var b = grid[i + W]; hit = b !== EMPTY && b !== t && KIND[b] !== GAS && KIND[b] !== FLAME; }
+    if(!hit) return false;
+    var r = EXPLODE[t];
+    explode(x, y, r);
+    var k, bx, by;
+    if(ARG1[t] !== NONE){
+      for(k = 0; k < 9; k++){
+        bx = x + (Math.random() * 25 | 0) - 12; by = y - 6 - (Math.random() * 10 | 0);
+        if(bx >= 0 && bx < W && by >= 0 && by < H && grid[by * W + bx] === EMPTY) spawn(by * W + bx, ARG1[t]);
+      }
+    }
+    if(ARG2[t] !== NONE){
+      var R = r + 2, p = ARGP[t] || 0.1;
+      for(by = Math.max(0, y - R); by <= Math.min(H - 1, y + R); by++){
+        for(bx = Math.max(0, x - R); bx <= Math.min(W - 1, x + R); bx++){
+          var dx = bx - x, dy = by - y, j = by * W + bx;
+          if(dx * dx + dy * dy > R * R || Math.random() > p) continue;
+          if(grid[j] === EMPTY || KIND[grid[j]] === FLAME) spawn(j, ARG2[t]);
+        }
+      }
+    }
+    return true;
   }
 
   function seedUpdate(i, x, y){
     if(y + 1 < H){
       var b = grid[i + W];
-      if((b === DIRT || b === MUD || b === GRASS) && Math.random() < 0.01){
+      if(SOIL[b] && Math.random() < 0.01){
         set(i, STEM);
         life[i] = 6 + (Math.random() * 14 | 0);   // how tall it'll grow
         return true;
@@ -1356,7 +3195,8 @@
     ctx.putImageData(img, 0, 0);
 
     if(pointer.inside){
-      ctx.strokeStyle = tool === HEAT ? 'rgba(255,120,60,0.8)' : tool === COOL ? 'rgba(110,200,255,0.8)' : 'rgba(255,255,255,0.45)';
+      ctx.strokeStyle = tool === HEAT ? 'rgba(255,120,60,0.8)' : tool === COOL ? 'rgba(110,200,255,0.8)'
+      : tool === GRIND ? 'rgba(200,205,212,0.8)' : tool === COMPACT ? 'rgba(232,216,176,0.8)' : tool === MIX ? 'rgba(150,120,240,0.85)' : 'rgba(255,255,255,0.45)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.arc(pointer.x + 0.5, pointer.y + 0.5, Math.max(0.5, brush - 0.5), 0, Math.PI * 2);
@@ -1386,6 +3226,16 @@
           if(n && !FIXED[n]) temp[j] = Math.max(-273, Math.min(9999, temp[j] + (t === HEAT ? 25 : -25)));
           continue;
         }
+        if(t === GRIND || t === COMPACT){
+          // crush breaks things down (stone, gravel, sand, dust); compact packs them back up
+          var tab = t === GRIND ? CRUSH : PRESS;
+          if(n !== EMPTY && tab[n] !== NONE && Math.random() < 0.1) set(j, tab[n]);
+          continue;
+        }
+        if(t === MIX){
+          if(n !== EMPTY) stirAt(j, x, y);
+          continue;
+        }
         if(n !== EMPTY){
           // painting fire onto fuel lights it
           if(t === FIRE && FLAM[n] && Math.random() < 0.3) ignite(j);
@@ -1394,6 +3244,19 @@
         if(sparse && Math.random() < 0.55) continue;
         spawn(j, t);
       }
+    }
+  }
+
+  // the mix brush: nudge things past each other, and let any recipe between them happen properly
+  function stirAt(j, x, y){
+    var k = neighbour(x, y);
+    if(k < 0 || k === j) return;
+    var a = grid[j], b = grid[k], key = a * E + b;
+    if(RX_P[key] && temp[j] >= RX_T[key]){
+      if(RX_OTHER[key] !== NONE) set(k, RX_OTHER[key]);
+      if(RX_TO[key] !== NONE) set(j, RX_TO[key]);
+    } else if((MOVES[a] || KIND[a] === POWDER) && (b === EMPTY || MOVES[b] || KIND[b] === POWDER) && Math.random() < 0.5){
+      swap(j, k);
     }
   }
 
@@ -1435,6 +3298,17 @@
   var TOOL_SWATCH = {};
   TOOL_SWATCH[HEAT] = 'linear-gradient(135deg, #ffcf5a, #ff5a2a)';
   TOOL_SWATCH[COOL] = 'linear-gradient(135deg, #e6fbff, #4fa8ff)';
+  TOOL_SWATCH[GRIND] = 'linear-gradient(135deg, #b0b4ba, #4a4e54)';
+  TOOL_SWATCH[COMPACT] = 'linear-gradient(135deg, #e8d8b0, #8a6a3a)';
+  TOOL_SWATCH[MIX] = 'linear-gradient(135deg, #3ac8e0, #9a4ad8)';
+
+  // every pickable element once, in section order, for the search box
+  var searchEl = document.getElementById('search');
+  var query = '', shown = [];
+  var ALL = [];
+  SECTIONS.forEach(function(s){ s[1].forEach(function(n){ if(ALL.indexOf(n) < 0) ALL.push(n); }); });
+  var elementCount = ALL.filter(function(n){ return TOOL_IDS[n] === undefined; }).length;
+  searchEl.placeholder = window.innerWidth < 760 ? 'Search ' + elementCount : 'Search ' + elementCount + ' elements';
 
   function renderSections(){
     catsEl.innerHTML = '';
@@ -1443,17 +3317,30 @@
       b.type = 'button';
       b.className = 'cat';
       b.setAttribute('role', 'tab');
-      b.setAttribute('aria-pressed', idx === section ? 'true' : 'false');
+      b.setAttribute('aria-pressed', !query && idx === section ? 'true' : 'false');
       b.innerHTML = s[0] + '<span class="n">' + s[1].length + '</span>';
       b.addEventListener('click', function(){
         section = idx;
         save('powder.section', idx);
+        if(query){ query = ''; searchEl.value = ''; }
         renderSections();
         renderElements();
+        elsEl.scrollTop = 0;
       });
       catsEl.appendChild(b);
     });
   }
+
+  searchEl.addEventListener('input', function(){
+    query = searchEl.value.trim().toLowerCase();
+    renderSections();
+    renderElements();
+    elsEl.scrollTop = 0;
+  });
+  searchEl.addEventListener('keydown', function(e){
+    if(e.key === 'Enter' && shown.length){ select(idOf(shown[0])); searchEl.blur(); }
+    if(e.key === 'Escape'){ searchEl.value = ''; query = ''; renderSections(); renderElements(); searchEl.blur(); }
+  });
 
   function toolButton(id, text, swatch, extraClass){
     var b = document.createElement('button');
@@ -1473,7 +3360,17 @@
   function renderElements(){
     elsEl.innerHTML = '';
     elsEl.appendChild(toolButton(ERASE, 'Eraser', 'transparent', 'eraser'));
-    SECTIONS[section][1].forEach(function(name, k){
+    shown = query ? ALL.filter(function(name){
+      var id = idOf(name);
+      return (id >= ERASE ? name : labelOf(id)).toLowerCase().indexOf(query) >= 0;
+    }) : SECTIONS[section][1];
+    if(!shown.length){
+      var none = document.createElement('span');
+      none.className = 'none';
+      none.textContent = 'Nothing called that yet';
+      elsEl.appendChild(none);
+    }
+    shown.forEach(function(name, k){
       var id = idOf(name);
       var tool_ = id >= ERASE;
       var b = toolButton(id, tool_ ? name : labelOf(id), tool_ ? TOOL_SWATCH[id] : SWATCH[id]);
@@ -1485,7 +3382,7 @@
 
   function markTool(){
     Array.prototype.forEach.call(elsEl.children, function(b){
-      b.setAttribute('aria-pressed', +b.dataset.id === tool ? 'true' : 'false');
+      if(b.dataset.id) b.setAttribute('aria-pressed', +b.dataset.id === tool ? 'true' : 'false');
     });
   }
 
@@ -1558,8 +3455,8 @@
     if(e.key === '['){ setBrush(brush - 1); return; }
     if(e.key === ']'){ setBrush(brush + 1); return; }
     if(/^[0-9]$/.test(e.key)){
-      var list = SECTIONS[section][1], n = e.key === '0' ? 9 : +e.key - 1;
-      if(list[n]) select(idOf(list[n]));
+      var n = e.key === '0' ? 9 : +e.key - 1;
+      if(shown[n]) select(idOf(shown[n]));
     }
   });
 
