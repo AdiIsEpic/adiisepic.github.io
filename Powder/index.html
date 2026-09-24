@@ -79,6 +79,69 @@
   button:hover{ background:#34343b; }
   button:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
   #heatview[aria-pressed="true"]{ background:linear-gradient(90deg, #3a0ca3, #e53935 60%, #fdd835); border-color:transparent; }
+  #presview[aria-pressed="true"]{ background:linear-gradient(90deg, #2a6aff, #1a1a24 50%, #e0402a); border-color:transparent; }
+
+  /* the More menu */
+  .more{ position:relative; }
+  #more-btn[aria-expanded="true"]{ border-color:var(--accent); }
+  .more-pop{
+    position:absolute;
+    left:0;
+    top:calc(100% + 6px);
+    z-index:10;
+    width:min(270px, calc(100vw - 24px));
+    display:flex;
+    flex-direction:column;
+    gap:9px;
+    padding:12px;
+    border-radius:10px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    box-shadow:0 10px 30px rgba(0,0,0,0.45);
+    font-size:12px;
+    color:var(--dim);
+  }
+  .more-pop[hidden]{ display:none; }
+  .more-pop .kbd{ color:var(--dim); font-weight:600; margin-left:6px; }
+  .seg-row{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .seg{ display:flex; }
+  .seg button{ border-radius:0; padding:5px 10px; margin-left:-1px; }
+  .seg button:first-child{ border-radius:8px 0 0 8px; margin-left:0; }
+  .seg button:last-child{ border-radius:0 8px 8px 0; }
+  .seg button[aria-pressed="true"]{ background:#34302a; border-color:var(--accent); color:var(--ink); position:relative; }
+  .more-grid{ display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .more-note{ min-height:1.2em; color:var(--accent); }
+
+  /* room temperature and pressure, top right */
+  .room{ position:relative; margin-left:auto; }   /* always at the right-hand end, even when the bar wraps */
+  @media (max-width:1400px){ .keys{ display:none; } }
+  @media (max-width:900px){ .v{ display:none; } }
+  #room-btn{ font-weight:600; color:var(--dim); }
+  #room-btn b{ color:var(--ink); font-weight:700; font-variant-numeric:tabular-nums; margin-left:4px; }
+  #room-btn[aria-expanded="true"]{ border-color:var(--accent); }
+  .room-pop{
+    position:absolute;
+    right:0;
+    top:calc(100% + 6px);
+    z-index:10;
+    width:280px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    padding:12px;
+    border-radius:10px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    box-shadow:0 10px 30px rgba(0,0,0,0.45);
+    font-size:12px;
+    color:var(--dim);
+  }
+  .room-pop[hidden]{ display:none; }
+  .room-pop label{ display:grid; grid-template-columns:78px 1fr 64px; align-items:center; gap:8px; }
+  .room-pop input[type=range]{ width:100%; }
+  .room-pop .num{ color:var(--ink); font-weight:700; text-align:right; }
+  .room-note{ line-height:1.45; }
+  .legend .pscale{ background:linear-gradient(90deg, #2a6aff, #10204a 30%, #0c0c0e 50%, #5a140c 60%, #d0401a 78%, #ffa03a 90%, #ffffff); }
 
   /* ---- canvas ---- */
   .view{
@@ -177,6 +240,7 @@
     align-content:flex-start;
   }
   .none{ color:var(--dim); font-size:12px; padding:7px 4px; }
+  .tool.more{ color:var(--accent); background:transparent; border:1px dashed var(--line); }
 
   .cat{
     flex:none;
@@ -212,6 +276,7 @@
     .keys{ display:none; }
     input[type=range]{ width:80px; }
     .search{ width:112px; }
+    .room-pop{ width:min(280px, calc(100vw - 24px)); }
     .tool{ padding:5px 9px; font-size:12px; }
   }
 </style>
@@ -223,17 +288,43 @@
   <h1>Powder</h1>
   <button id="pause" type="button">Pause</button>
   <button id="clear" type="button">Clear</button>
-  <button id="heatview" type="button" aria-pressed="false" title="Colour everything by temperature (H)">Heat view</button>
+  <div class="more" id="more">
+    <button id="more-btn" type="button" aria-expanded="false" aria-controls="more-pop">More</button>
+    <div class="more-pop" id="more-pop" hidden>
+      <button id="undo" type="button">Undo last stroke <span class="kbd">Ctrl+Z</span></button>
+      <div class="seg-row"><span>Speed</span><div class="seg" id="speed-seg"><button type="button" data-v="0.5">&frac12;&times;</button><button type="button" data-v="1">1&times;</button><button type="button" data-v="2">2&times;</button><button type="button" data-v="4">4&times;</button></div></div>
+      <div class="seg-row"><span>Brush</span><div class="seg" id="shape-seg"><button type="button" data-v="round">Round</button><button type="button" data-v="square">Square</button></div></div>
+      <div class="more-grid">
+        <button id="save-scene" type="button">Save scene</button>
+        <button id="load-scene" type="button">Load scene</button>
+        <button id="snap" type="button">Screenshot</button>
+        <button id="surprise" type="button">Surprise me</button>
+      </div>
+      <div class="more-note" id="more-note" aria-live="polite"></div>
+    </div>
+  </div>
+  <button id="heatview" type="button" aria-pressed="false" title="Colour everything by temperature (H)">Heat<span class="v"> view</span></button>
+  <button id="presview" type="button" aria-pressed="false" title="Show air pressure: red is high, blue is a vacuum (P)">Pressure<span class="v"> view</span></button>
   <label class="ctl">Brush <input type="range" id="size" min="1" max="24" value="4"><span class="num" id="size-val">4</span></label>
   <div class="spacer"></div>
-  <div class="ctl keys">Right-click erases &middot; scroll resizes &middot; Space pauses &middot; H heat view</div>
+  <div class="ctl keys">Right-click erases &middot; scroll resizes &middot; Space pauses &middot; H heat &middot; P pressure</div>
   <div class="ctl info" id="info">0 particles</div>
+  <div class="room" id="room">
+    <button id="room-btn" type="button" aria-expanded="false" aria-controls="room-pop" title="Room temperature and air pressure">Room <b id="room-t">22&deg;C</b> <b id="room-p">1.0 atm</b></button>
+    <div class="room-pop" id="room-pop" hidden>
+      <label>Temperature <input type="range" id="room-temp" min="-100" max="200" step="1" value="22"><span class="num" id="room-temp-val">22&deg;C</span></label>
+      <label>Pressure <input type="range" id="room-pres" min="0" max="50" step="1" value="10"><span class="num" id="room-pres-val">1.0 atm</span></label>
+      <div class="room-note">Things drift toward the room's temperature. Lower pressure makes water boil sooner; a vacuum puts fires out.</div>
+      <button id="room-reset" type="button">Reset to 22&deg;C, 1 atm</button>
+    </div>
+  </div>
 </div>
 
 <div class="view" id="view">
   <canvas id="c"></canvas>
-  <div class="start-hint" id="hint">Pick a section (or search), then an element, and <b>draw</b>.<br>Hover to read temperatures. Try the Crush tool on stone, Mentos in soda, or an acorn on dirt.</div>
+  <div class="start-hint" id="hint">Pick a section (or search), then an element, and <b>draw</b>.<br>Hover to read temperatures. Try <b>More &rsaquo; Surprise me</b>, or the Crush tool on stone.</div>
   <div class="legend" id="legend" hidden><span>&minus;273&deg;</span><span class="scale"></span><span>6000&deg;C</span></div>
+  <div class="legend" id="plegend" hidden><span>Vacuum</span><span class="scale pscale"></span><span>High</span></div>
 </div>
 
 <div class="tools">
@@ -282,7 +373,7 @@
     ['Explosives',    ['Gunpowder','TNT','C-4','Nitro','Thermite','Firework','Bomb','Fuse','Dynamite','Napalm']],
     ['Life',          ['Plant','Seed','Flower','Grass','Vine','Moss','Mushroom','Virus','Leaves','Coral','Algae','Cactus','Bacteria']],
     ['Special',       ['Clone','Void','Antimatter','Heater','Cooler']],
-    ['Tools',         ['Heat','Cool','Crush','Compact','Mix']]
+    ['Tools',         ['Heat','Cool','Ignite','Boom','Crush','Compact','Mix','Push','Wind','Pressure','Vacuum']]
   ];
 
   // hot-path ids
@@ -294,10 +385,17 @@
       ACID = ID.Acid, WOOD = ID.Wood;
 
   // tools, not elements
-  var ERASE = 65000, HEAT = 65001, COOL = 65002, GRIND = 65003, COMPACT = 65004, MIX = 65005;
-  var TOOL_IDS = { 'Heat': HEAT, 'Cool': COOL, 'Crush': GRIND, 'Compact': COMPACT, 'Mix': MIX };
+  var ERASE = 65000, HEAT = 65001, COOL = 65002, GRIND = 65003, COMPACT = 65004, MIX = 65005, PUMP = 65006, SUCK = 65007,
+      IGNITE_T = 65008, WIND_T = 65012, BOOM_T = 65013, PUSH_T = 65014;
+  var TOOL_IDS = { 'Heat': HEAT, 'Cool': COOL, 'Crush': GRIND, 'Compact': COMPACT, 'Mix': MIX, 'Pressure': PUMP, 'Vacuum': SUCK,
+                   'Ignite': IGNITE_T, 'Wind': WIND_T, 'Boom': BOOM_T, 'Push': PUSH_T };
   var NONE = 65535;     // "no change" in the property tables
-  var AMBIENT = 22;     // room temperature, °C
+  var AMBIENT = 22;     // the default room temperature, °C
+  // the room: its temperature (°C) and air pressure (atm), set from the Room menu top right
+  var room = AMBIENT, roomAtm = 1;
+  var PUNIT = 20;       // pressure-map units per atmosphere
+  var pmin = -PUNIT;    // the pressure map can't go below an empty vacuum
+  var roomBoil = 0;     // how far the room's pressure moves boiling points, °C
 
   // ---------- property tables, one slot per element ----------
   // Elements are collected first (def and react below just queue them), then buildTables()
@@ -315,11 +413,15 @@
       DECAY_TO, DECAY_P, LIFE_MIN, LIFE_MAX, DEATH_A, DEATH_AP, DEATH_B, DEATH_BP,
       VISC, SPREAD, HEAVY, JUMP, EXPLODE, IGNITE_P, RESIST, BLAST_TO, ACIDPROOF,
       STATIC, RMODE, HAS_REACT, NOWATER, WET, CRUSH, PRESS, PAL,
+      TEMP_SET, HI_GAS, LO_GAS, BREAK_P, BREAK_TO,   // made hot or cold; boils or condenses; shatters under pressure
       ARG1, ARG2, ARGP, ARGN;   // spare per-element settings for the special behaviours
   var FPAL = [], SWATCH = [], CUSTOM = [], CRIT = [];
 
   // pairwise contact reactions: [self][neighbour] -> what each becomes, how often, and how hot self must be
-  var RX_TO, RX_OTHER, RX_P, RX_T;
+  // stored sparsely: RXMAP maps self * 65536 + neighbour to a slot in the arrays below, so ten thousand
+  // elements cost nothing for all the pairs that never react
+  var RXMAP, RX_TO, RX_OTHER, RX_P, RX_T, NRX = 0;
+  function rx(a, b){ return HAS_REACT[a] ? RXMAP.get(a * 65536 + b) : undefined; }
 
   // render modes
   var R_FLAT = 0, R_FLAME = 1, R_FLICKER = 2, R_GLITTER = 3, R_SPARKLE = 4;
@@ -420,6 +522,7 @@
     MOVES[id] = (id === EMPTY || kind === LIQUID || kind === GAS || kind === FLAME) ? 1 : 0;
 
     TEMP0[id] = o.temp != null ? o.temp : AMBIENT;
+    TEMP_SET[id] = o.temp != null ? 1 : 0;   // everything else is made at room temperature
     COND[id] = o.cond != null ? o.cond
              : kind === SOLID ? 0.3 : kind === POWDER ? 0.2 : kind === LIQUID ? 0.35 : kind === GAS ? 0.1 : 0.4;
     AIRLOSS[id] = o.airloss != null ? o.airloss
@@ -471,7 +574,8 @@
   function applyReact(r){
     var a = idn(r[0]), b = idn(r[1]);
     if(a === NONE || b === NONE) return;
-    var k = a * E + b;
+    var key = a * 65536 + b, k = RXMAP.get(key);   // a later recipe for the same pair replaces the earlier one
+    if(k === undefined){ k = NRX++; RXMAP.set(key, k); }
     RX_TO[k] = r[2] ? idn(r[2]) : NONE;
     RX_OTHER[k] = r[3] ? idn(r[3]) : NONE;
     RX_P[k] = r[4];
@@ -492,13 +596,20 @@
     EXPLODE = u8(); IGNITE_P = f32(); RESIST = f32(); BLAST_TO = u16(NONE); ACIDPROOF = u8();
     STATIC = u8(); RMODE = u8(); HAS_REACT = u8(); NOWATER = u8(); WET = u8();
     CRUSH = u16(NONE); PRESS = u16(NONE);
+    TEMP_SET = u8(); HI_GAS = u8(); LO_GAS = u8(); BREAK_P = f32(); BREAK_TO = u16(NONE);
     ARG1 = u16(NONE); ARG2 = u16(NONE); ARGP = f32(); ARGN = f32();
     PAL = new Uint32Array(E * 4);
-    RX_TO = new Uint16Array(E * E).fill(NONE);
-    RX_OTHER = new Uint16Array(E * E).fill(NONE);
-    RX_P = new Float32Array(E * E);
-    RX_T = new Float32Array(E * E);
+    RXMAP = new Map(); NRX = 0;
+    RX_TO = new Uint16Array(RXS.length).fill(NONE);
+    RX_OTHER = new Uint16Array(RXS.length).fill(NONE);
+    RX_P = new Float32Array(RXS.length);
+    RX_T = new Float32Array(RXS.length);
     DEFS.forEach(function(d){ applyDef(d[0], d[1]); });
+    // boiling and condensing are the changes air pressure shifts
+    for(var id = 0; id < E; id++){
+      if(HI_TO[id] !== NONE && KIND[HI_TO[id]] === GAS && KIND[id] !== GAS) HI_GAS[id] = 1;
+      if(LO_TO[id] !== NONE && KIND[id] === GAS && KIND[LO_TO[id]] !== GAS) LO_GAS[id] = 1;
+    }
     NAMES.forEach(function(n){ if(!DEFINED[n]) console.error('Powder: ' + n + ' was never defined'); });
     RXS.forEach(applyReact);
   }
@@ -841,7 +952,7 @@
 
   // things to set up once every element has an id
   var AFTER = [];
-  var SOIL, FERRO, POOL = [], RAINBOW = [], MUTATE = {};
+  var SOIL, FERRO, POOL = [], MUTATE = {};
 
   // ---------- new behaviours ----------
   function isOpen(n){ return n === EMPTY || KIND[n] === GAS; }
@@ -862,13 +973,6 @@
     return true;
   }
 
-  function rainbowUpdate(i, x, y){
-    if(Math.random() < 0.3){
-      var j = neighbour(x, y);
-      if(j >= 0 && grid[j] === EMPTY) spawn(j, RAINBOW[Math.random() * RAINBOW.length | 0]);
-    }
-    return true;
-  }
 
   // drains swallow liquids, vents swallow gases (ARGN says which)
   function drainUpdate(i, x, y, t){
@@ -1165,9 +1269,17 @@
     return true;
   }
 
-  // fans push loose things along a line in front of them (ARGN: -1 left, 1 right, 2 up)
+  // fans push loose things along a line in front of them (ARGN: -1 left, 1 right, 2 up),
+  // and blow real wind into the air
   function fanUpdate(i, x, y, t){
     var d = ARGN[t], dx = d === 2 ? 0 : d, dy = d === 2 ? -1 : 0;
+    if(Math.random() < 0.25){
+      var fx = x + dx * 4, fy = y + dy * 4;
+      if(fx >= 0 && fx < W && fy >= 0 && fy < H){
+        var fc = (fy >> 2) * PW + (fx >> 2);
+        if(!airBlock[fc]){ airWake(); airVX[fc] += dx * 0.08; airVY[fc] += dy * 0.08; }
+      }
+    }
     for(var s = 1; s <= 16; s++){
       var px = x + dx * s, py = y + dy * s;
       if(px < 0 || px >= W || py < 0 || py >= H) break;
@@ -1231,10 +1343,10 @@
       if(k < 0 || k === i) continue;
       var b = grid[k];
       if(b === t) continue;
-      var key = a * E + b;
-      if(RX_P[key] && temp[j] >= RX_T[key]){
-        if(RX_OTHER[key] !== NONE) set(k, RX_OTHER[key]);
-        if(RX_TO[key] !== NONE) set(j, RX_TO[key]);
+      var r = rx(a, b);
+      if(r !== undefined && temp[j] >= RX_T[r]){
+        if(RX_OTHER[r] !== NONE) set(k, RX_OTHER[r]);
+        if(RX_TO[r] !== NONE) set(j, RX_TO[r]);
       } else if(b === EMPTY || MOVES[b] || KIND[b] === POWDER){
         swap(j, k);   // stir, so things actually meet
       }
@@ -1373,6 +1485,7 @@
   // a lit candle keeps a little flame on top and slowly burns down into the candle (ARG2) below it;
   // water puts it back out
   function candleUpdate(i, x, y, t){
+    if(atmAt(x, y) < 0.5 && Math.random() < 0.05){ set(i, ARG2[t]); return true; }   // no air, no flame
     if(y > 0){
       var up = i - W, n = grid[up];
       if(n === EMPTY && Math.random() < 0.3){ spawn(up, ARG1[t]); life[up] = 3 + (Math.random() * 5 | 0); }
@@ -1602,24 +1715,6 @@
     dustNames.push(Pw(dust, tint(g[1], '#ffffff', 0.25), { dens: 2.5, render: R_GLITTER, hi: [g[2] - 250, name, 0.02] }));
   });
 
-  // ---------- colours: sand, stained glass, smoke, wool, plastic and dye in sixteen shades ----------
-  var COLOURS = [['Red', '#e0413a'], ['Orange', '#f08a2a'], ['Yellow', '#f2d33c'], ['Lime', '#9ad83a'], ['Green', '#3aa655'],
-                 ['Teal', '#1f9e8f'], ['Cyan', '#3ac8e0'], ['Blue', '#3a6fe0'], ['Indigo', '#4a3fb8'], ['Purple', '#9a4ad8'],
-                 ['Magenta', '#d83ab8'], ['Pink', '#f28ab8'], ['Brown', '#8a5a3a'], ['Black', '#26262a'], ['White', '#f2f2f0'], ['Grey', '#8a8a90']];
-  var colourNames = [];
-  each(COLOURS, function(c){
-    var n = c[0], h = c[1];
-    colourNames.push(
-      Pw(n + ' Sand', h, { dens: 3, hi: [1700, n + ' Glass', 0.05] }),
-      So(n + ' Glass', mixHex(h, '#ffffff', 0.2), { cond: 0.3, hi: [1400, 'Molten Glass', 0.05], acidproof: true, blast: 'Glass Shards' }),
-      Gs(n + ' Smoke', h, { dens: 0.12, life: [60, 140] }),
-      So(n + ' Wool', h, { cond: 0.04, flam: 0.5, ign: 250, burnLife: [10, 20] }),
-      So(n + ' Plastic', h, { cond: 0.08, hi: [180, 'Molten Plastic', 0.06], flam: 0.2, ign: 400, resist: 0.3 }),
-      Lq(n + ' Dye', mixHex(h, '#000000', 0.1), { dens: 1.02, spread: 4, noglow: true })
-    );
-    RAINBOW.push(n + ' Sand');
-  });
-  colourNames.push(Pw('Rainbow Sand', ['#ff5a5a', '#ffd35a', '#5ad8ff', '#b05aff'], { dens: 3, render: R_GLITTER, hi: [1700, 'Molten Glass', 0.05] }));
 
   // ---------- food: most of it cooks, bakes or melts when heated ----------
   var cooked = function(o){ return merge({ flam: 0.15, ign: 300 }, o || {}); };
@@ -1828,7 +1923,7 @@
   var BUGFOOD = ['Sugar', 'Bread', 'Candy', 'Cake', 'Cookie', 'Jam', 'Honey', 'Brown Sugar', 'Cotton Candy', 'Donut'];
   function eats(list, result){ var o = {}; list.forEach(function(n){ o[n] = result; }); return o; }
   var FLOWERY = ['Flower', 'Rose', 'Tulip', 'Sunflower', 'Daisy', 'Lily', 'Lavender', 'Orchid', 'Poppy', 'Bluebell', 'Marigold', 'Hibiscus', 'Dandelion', 'Clover', 'Cherry Blossom'];
-  var WOOLS = COLOURS.map(function(c){ return c[0] + ' Wool'; }).concat(['Cloth', 'Silk', 'Cotton']);
+  var WOOLS = ['Wool', 'Cloth', 'Silk', 'Cotton'];
   var WOODS = ['Wood', 'Oak Wood', 'Pine Wood', 'Birch Wood', 'Maple Wood', 'Cherry Wood', 'Ebony', 'Mahogany', 'Redwood', 'Balsa', 'Driftwood', 'Paper', 'Cardboard', 'Newspaper'];
   var FLIES = ['Fly', 'Mosquito', 'Moth', 'Firefly'];
   var creatureNames = [
@@ -1845,7 +1940,7 @@
     crit('Lizard', ['#6a9a3a', '#5a8a2a', '#7aaa4a', '#4a7a1a'], walkerUpdate, { speed: 0.6, climb: 1, eat: eats(FLIES.concat(['Ant', 'Spider']), 'Empty'), eatP: 0.3 }),
     crit('Chicken', ['#fbfbf6', '#f0f0e8', '#e02a1a', '#f8f8f0'], walkerUpdate, { speed: 0.3, eat: eats(['Seed', 'Corn', 'Wheat', 'Rice', 'Worm', 'Barley'], 'Empty'), eatP: 0.3, make: 'Egg', makeP: 0.0015 }),
     crit('Cow', ['#fbfbf6', '#1a1a1a', '#fbfbf6', '#2a2a2a'], walkerUpdate, { speed: 0.15, eat: merge(eats(['Grass'], 'Dirt'), eats(['Hay', 'Wheat'], 'Empty')), eatP: 0.1, make: 'Milk', makeP: 0.002 }),
-    crit('Sheep', ['#f4f2ea', '#e8e4d8', '#fbfaf4', '#3a3a3a'], walkerUpdate, { speed: 0.15, eat: merge(eats(['Grass'], 'Dirt'), eats(['Hay'], 'Empty')), eatP: 0.1, make: 'White Wool', makeP: 0.0015 }),
+    crit('Sheep', ['#f4f2ea', '#e8e4d8', '#fbfaf4', '#3a3a3a'], walkerUpdate, { speed: 0.15, eat: merge(eats(['Grass'], 'Dirt'), eats(['Hay'], 'Empty')), eatP: 0.1, make: 'Wool', makeP: 0.0015 }),
     crit('Penguin', ['#1a1a1e', '#fbfbf6', '#1a1a1e', '#f0a020'], walkerUpdate, { speed: 0.2, swims: 1, eat: eats(['Fish', 'Raw Fish', 'Shrimp'], 'Empty'), eatP: 0.3 }, { hi: [40, 'Ash', 0.1], lo: [-80, 'Ice', 0.02] }),
     crit('Bird', ['#3a6ae0', '#e8c040', '#5a8af0', '#2a4ab0'], flyerUpdate, { speed: 0.7, eat: eats(['Seed', 'Worm', 'Fly', 'Corn', 'Wheat', 'Blueberry', 'Cherry'], 'Empty'), eatP: 0.2, make: 'Feather', makeP: 0.0008 }),
     crit('Bee', ['#f0c020', '#1a1a1a', '#f0c020', '#f8d030'], flyerUpdate, { speed: 0.6, make: 'Honey', makeP: 0.01, near: FLOWERY }),
@@ -1960,14 +2055,7 @@
   // ---------- fire and energy ----------
   var fire = function(o){ return merge({ fixed: true, life: [20, 40], death: ['Smoke', 0.2] }, o); };
   var fireNames = [
-    Fl('Red Fire', firePal('#ff3a2a'), fire({ temp: 1000 })),
-    Fl('Orange Fire', firePal('#ff8a1a'), fire({ temp: 1000 })),
-    Fl('Yellow Fire', firePal('#ffd21a'), fire({ temp: 1000 })),
-    Fl('Purple Fire', firePal('#b04aff'), fire({ temp: 1100 })),
-    Fl('Pink Fire', firePal('#ff5ab8'), fire({ temp: 1000 })),
-    Fl('Cyan Fire', firePal('#2ae0ff'), fire({ temp: 1300 })),
     Fl('White Fire', firePal('#e8f0ff'), fire({ temp: 2200 })),
-    Fl('Rainbow Fire', ['#ff3a3a', '#ff8a1a', '#ffd21a', '#5ad83a', '#2ae0ff', '#3a6aff', '#b04aff', '#ffffff'], fire({ temp: 1000 })),
     Fl('Shadow Fire', ['#0a0010', '#140022', '#1e0034', '#2a0048', '#3a0a60', '#4a1a78', '#5a2a90', '#7a4ab0'], fire({ temp: 800 })),
     Fl('Hellfire', ['#1a0000', '#3a0000', '#6a0a00', '#9a1a00', '#c83a00', '#e86a1a', '#ff9a3a', '#ffd08a'], fire({ temp: 2500, life: [30, 60] })),
     Fl('Soul Fire', firePal('#3ad8ff'), fire({ temp: 600, death: ['Smoke', 0.05] })),
@@ -1985,8 +2073,14 @@
     So('Tesla Coil', ['#b87333', '#8a8e94', '#c8854a', '#6a6e74'], { custom: emitUpdate, arg1: 'Static', argp: 0.15, resist: 0.8, cond: 0.6 })
   ];
 
+  // coloured flames that metals and salts burn with (not in the picker: you get them by burning things)
+  Fl('Red Fire', firePal('#ff3a2a'), fire({ temp: 1000 }));
+  Fl('Orange Fire', firePal('#ff8a1a'), fire({ temp: 1000 }));
+  Fl('Yellow Fire', firePal('#ffd21a'), fire({ temp: 1000 }));
+  Fl('Purple Fire', firePal('#b04aff'), fire({ temp: 1100 }));
+  Fl('Cyan Fire', firePal('#2ae0ff'), fire({ temp: 1300 }));
+
   // ---------- explosives ----------
-  var FIREWORK_COLOURS = [['Red', 1], ['Gold', 2], ['Green', 3], ['Blue', 4], ['Purple', 5], ['Pink', 6], ['Rainbow', 7]];
   var boomNames = [
     So('Semtex', '#e89a4a', { explode: 11, ignite: 0.4, ign: 350 }),
     Pw('RDX', '#f4f4f0', { dens: 1.8, explode: 10, ignite: 0.5, ign: 230 }),
@@ -2015,11 +2109,6 @@
   So('Lit Sparkler', '#fff2b0', { flame: SPARK_PAL, render: R_FLICKER, temp: 900, fixed: true, life: [240, 255], death: ['Ash', 1], custom: emitUpdate, arg1: 'Spark', argp: 0.5, noglow: true });
   Pw('Burning Smoke Bomb', '#6a6a70', { dens: 2, temp: 300, fixed: true, life: [200, 255], death: ['Ash', 1], custom: emitUpdate, arg1: 'Smoke', argp: 0.6, noglow: true });
   So('Lit Flare', '#ff3a2a', { flame: firePal('#ff3a2a').slice(3), render: R_FLICKER, temp: 1500, fixed: true, life: [250, 255], death: ['Ash', 1], custom: emitUpdate, arg1: 'Red Fire', argp: 0.3, noglow: true });
-  each(FIREWORK_COLOURS, function(f){
-    Fl(f[0] + ' Rocket', SPARK_PAL, { temp: 1000, fixed: true, life: [18, 34], custom: rocketUpdate, argn: f[1] });
-    boomNames.push(Pw(f[0] + ' Firework', f[1] === 7 ? ['#ff5a5a', '#ffd166', '#6ee06e', '#b794f6'] : SPARKLE_COLORS[f[1] - 1],
-                      { dens: 2, flam: 0.4, ign: 200, burnTo: f[0] + ' Rocket', burnLife: [18, 34] }));
-  });
 
   // ---------- nature and weather ----------
   var cloud = function(o){ return merge({ dens: 0.08, temp: 10, airloss: 0, custom: cloudUpdate }, o); };
@@ -2081,6 +2170,7 @@
     So('Rope', ['#b8985a', '#a8884a', '#c8a86a', '#98783a'], { cond: 0.05, flam: 0.4, ign: 250 }),
     So('Leather', '#8a5a3a', { cond: 0.08, flam: 0.1, ign: 350 }),
     So('Silk', ['#f8f0f8', '#f0e0f0', '#fbf8fb', '#e8d8e8'], { cond: 0.05, flam: 0.6, ign: 230 }),
+    So('Wool', ['#f4f2ea', '#e8e4d8', '#fbfaf4', '#ece8dc'], { cond: 0.04, flam: 0.5, ign: 250, burnLife: [10, 20] }),
     So('Denim', ['#3a5a8a', '#2a4a7a', '#4a6a9a', '#3a5a8a'], { cond: 0.05, flam: 0.4, ign: 250 }),
     So('Nylon', '#f0f0e8', { cond: 0.05, hi: [220, 'Molten Plastic', 0.05], flam: 0.2, ign: 400 }),
     So('Candle', '#f4ecd8', { cond: 0.1, flam: 0.9, ign: 150, burnTo: 'Lit Candle', hi: [70, 'Liquid Wax', 0.1] }),
@@ -2105,7 +2195,6 @@
     So('Oil Well', '#2a2420', tap('Oil', 0.15)),
     So('Gas Leak', '#6a7a6a', tap('Methane', 0.2)),
     So('Confetti Cannon', ['#ff5a8a', '#ffd166', '#6ee7f9', '#9b6bff'], tap('Confetti', 0.3)),
-    So('Rainbow Spout', ['#ff5a5a', '#ffd35a', '#5ad8ff', '#b05aff'], machine({ custom: rainbowUpdate })),
     So('Drain', '#2a2a30', machine({ custom: drainUpdate, argn: LIQUID })),
     So('Vent', '#3a3a44', machine({ custom: drainUpdate, argn: GAS })),
     So('Black Hole', '#000000', machine({ custom: blackHoleUpdate, swatch: '#2a0a3a' })),
@@ -2158,7 +2247,6 @@
   react('Copper', 'Silver Nitrate', null, 'Silver', 0.02);                // silver crystals grow on copper
   react('Copper Sulfate', 'Metal', 'Empty', 'Copper', 0.02);              // iron gets copper-plated
   react('Copper Sulfate', 'Iron Filings', 'Empty', 'Copper', 0.05);
-  react('Copper Sulfate', 'Water', 'Empty', 'Blue Dye', 0.05);
   react('Aluminium Powder', 'Rust', 'Thermite', 'Thermite', 0.05);
 
   // acids and bases
@@ -2168,7 +2256,7 @@
     if(a !== 'Vinegar') react('Baking Soda', a, 'CO2', 'Water', 0.3);   // (vinegar has its own volcano)
     react('Slaked Lime', a, 'Water', 'Water', 0.2);
   });
-  var GLASSY = ['Glass', 'Glass Shards', 'Bulletproof Glass', 'Mirror'].concat(COLOURS.map(function(c){ return c[0] + ' Glass'; }));
+  var GLASSY = ['Glass', 'Glass Shards', 'Bulletproof Glass', 'Mirror'];
   GLASSY.forEach(function(g){
     react('Hydrofluoric Acid', g, null, 'Empty', 0.05);                   // the one acid that eats glass
     react('Fluoroantimonic Acid', g, null, 'Empty', 0.1);
@@ -2188,7 +2276,6 @@
   react('Hydrogen Peroxide', 'Elephant Toothpaste', 'Elephant Toothpaste', null, 0.1);
   react('Hydrogen Peroxide', 'Blood', 'Foam', null, 0.1);
   react('Potassium Permanganate', 'Glycerin', 'Fire', 'Fire', 0.01);     // slowly, then all at once
-  react('Potassium Permanganate', 'Water', null, 'Purple Dye', 0.03);
   react('Potassium Chlorate', 'Sugar', 'Purple Fire', 'Purple Fire', 0.05);
   react('Potassium Chlorate', 'Gummy Bears', 'Purple Fire', 'Purple Fire', 0.2);
   react('Saltpeter', 'Charcoal', 'Gunpowder', 'Gunpowder', 0.05);
@@ -2321,18 +2408,6 @@
     react(c, 'Pepper Spray', 'Ash', null, 0.03);
   });
 
-  // colours: dye spreads through water and colours sand, glass and wool
-  each(COLOURS, function(c){
-    var n = c[0];
-    react(n + ' Dye', 'Water', null, n + ' Dye', 0.02);
-    react(n + ' Dye', 'White Wool', 'Empty', n + ' Wool', 0.2);
-    react(n + ' Dye', 'Cloth', 'Empty', n + ' Wool', 0.2);
-    react(n + ' Dye', 'Sand', 'Empty', n + ' Sand', 0.2);
-    react(n + ' Dye', 'Glass', 'Empty', n + ' Glass', 0.1);
-    react('Bleach', n + ' Dye', null, 'Water', 0.2);
-    react('Acetone', n + ' Plastic', null, 'Empty', 0.05);
-  });
-
   // nature and building
   react('Frost', 'Water', null, 'Ice', 0.02);
   react('Frost', 'Steam', null, 'Frost', 0.05);
@@ -2352,7 +2427,6 @@
   sec('Molten', moltenNames, ['Molten Metal', 'Molten Gold', 'Molten Copper', 'Molten Lead', 'Molten Glass', 'Molten Plastic']);
   sec('Rocks', rockNames);
   sec('Gems', gemNames, dustNames, ['Diamond', 'Crystal', 'Amber', 'Obsidian']);
-  sec('Colours', colourNames);
   sec('Food', foodNames, produceNames);
   sec('Drinks', drinkNames, popsicle);
   sec('Plants', flowerNames, plantNames);
@@ -2374,7 +2448,6 @@
     ['Iron Filings', 'Magnetite', 'Ferrofluid', 'Steel Wool'].forEach(function(n){ FERRO[idn(n)] = 1; });
     ['Steel', 'Metal', 'Stainless Steel', 'Iron Filings'].forEach(function(n){ FLINTY[idn(n)] = 1; });
     GLASSY.concat(['Wall', 'Metal', 'Steel', 'Stainless Steel', 'Plastic', 'Insulator', 'Heater', 'Cooler', 'Porcelain', 'Tile']).forEach(function(n){ SMOOTH[idn(n)] = 1; });
-    RAINBOW = RAINBOW.map(idn);
     ['Plant', 'Grass', 'Vine', 'Flower', 'Leaves', 'Moss', 'Stem', 'Fern', 'Ivy', 'Clover'].forEach(function(n){ MUTATE[idn(n)] = idn('Mutant Plant'); });
     // what the white hole and randomizer pick from: everything in the picker bar the machines and bombs
     var seen = {};
@@ -2434,7 +2507,6 @@
   crushTo('Dust', 'Pumice', 'Silt', 'Chalk', 'Coal', 'Charcoal', 'Lignite', 'Anthracite', 'Peat', 'Ash');
   crushTo('Sand', 'Seashells', 'Coral', 'Glass Shards');
   crushTo('Glass Shards', 'Glass', 'Mirror', 'Bulletproof Glass', 'Crystal');
-  COLOURS.forEach(function(c){ crushTo('Glass Shards', c[0] + ' Glass'); });
   crushTo('Snow', 'Ice', 'Packed Snow', 'Glacier Ice', 'Hail');
   crushTo('Salt', 'Rock Salt');
   crushTo('Plaster Powder', 'Gypsum');
@@ -2491,16 +2563,6 @@
     So('Mixer', ['#3a7a8a', '#4a8a9a', '#2a6a7a', '#5a9aaa'], machine({ custom: mixerUpdate, resist: 0.9, cond: 0.3 }))
   );
 
-  // ---------- mixing colours ----------
-  // mixes worth making; nothing turns a mixed colour into another one, so purple stays purple
-  var DYE_MIX = [['Red', 'Blue', 'Purple'], ['Red', 'Yellow', 'Orange'], ['Blue', 'Yellow', 'Green'], ['Cyan', 'Yellow', 'Green'],
-                 ['Green', 'White', 'Lime'], ['Green', 'Cyan', 'Teal'], ['Blue', 'Black', 'Indigo'], ['Purple', 'Pink', 'Magenta'],
-                 ['Red', 'White', 'Pink'], ['Black', 'White', 'Grey'], ['Red', 'Green', 'Brown'], ['Red', 'Black', 'Brown']];
-  each(DYE_MIX, function(m){
-    react(m[0] + ' Dye', m[1] + ' Dye', m[2] + ' Dye', m[2] + ' Dye', 0.08);
-    react(m[1] + ' Dye', m[0] + ' Dye', m[2] + ' Dye', m[2] + ' Dye', 0.08);
-  });
-
   // bone meal feeds a garden, same as fertiliser
   react('Bone Meal', 'Dirt', 'Empty', 'Grass', 0.06);
   react('Bone Meal', 'Mud', 'Empty', 'Plant', 0.05);
@@ -2513,13 +2575,156 @@
     PRESSES.forEach(function(c){ PRESS[idn(c[0])] = idn(c[1]); });
   });
 
+  // ---------- pressure ----------
+  // pumps push air in or pull it out of the space around them
+  function pumpUpdate(i, x, y, t){
+    var k = Math.random() * 4 | 0;
+    pushAir(x + NX[k] * 4, y + NY[k] * 4, ARGP[t]);
+    return true;
+  }
+  sec('Special',
+    So('Pressure Pump', ['#c84a3a', '#8a8e94', '#d85a4a', '#7a7e84'], machine({ custom: pumpUpdate, argp: 1.5, resist: 0.9 })),
+    So('Vacuum Pump', ['#3a6ac8', '#8a8e94', '#4a7ad8', '#7a7e84'], machine({ custom: pumpUpdate, argp: -1.5, resist: 0.9 }))
+  );
+  // what shatters when the pressure on one side gets too much (difference from the room, in atm)
+  var SHATTER = [['Glass Shards', 0.8, ['Glass', 'Mirror', 'Crystal']],
+                 ['Glass Shards', 5, ['Bulletproof Glass']],
+                 ['Snow', 1.5, ['Ice', 'Packed Snow', 'Glacier Ice']],
+                 ['Gravel', 2, ['Porcelain', 'Tile', 'Terracotta']],
+                 ['Confetti', 1.2, ['Paper', 'Newspaper', 'Tissue']],
+                 ['Dust', 0.5, ['Aerogel']]];
+  AFTER.push(function(){
+    SHATTER.forEach(function(s){
+      s[2].forEach(function(n){ BREAK_P[idn(n)] = s[1] * PUNIT; BREAK_TO[idn(n)] = idn(s[0]); });
+    });
+  });
+
+
+  // =====================================================================
+  // ---------- salts, fruit, and frozen and crushed forms, built from a few rules ----------
+  // =====================================================================
+  // recipes already written by hand win; the generated ones only fill the gaps
+  var PAIRS = {};
+  RXS.forEach(function(r){ PAIRS[r[0] + '|' + r[1]] = 1; });
+  function reactNew(a, b, toA, toB, p, minT){
+    var k = a + '|' + b;
+    if(PAIRS[k]) return;
+    PAIRS[k] = 1;
+    react(a, b, toA, toB, p, minT);
+  }
+  // defines it only if nothing has that name yet, and hands the name back if it did
+  function mkNew(fn, name, col, o){ if(DEFINED[name]) return null; fn(name, col, o); return name; }
+  function around(hex){ return [hex, mixHex(hex, '#ffffff', 0.18), mixHex(hex, '#000000', 0.12), mixHex(hex, '#ffffff', 0.08)]; }
+  function pushAll(list, v){ if(v) list.push(v); }
+
+  // ---------- salts: acid on a metal makes its salt, which dissolves, dries back out, and colours a flame ----------
+  var SALT_METALS = [
+    // metal, the elements that react, the salt's colour, the colour it burns (the flame test)
+    ['Lithium', ['Lithium'], '#f4f4f0', 'Red Fire'], ['Sodium', ['Sodium'], '#f8f8f4', 'Yellow Fire'],
+    ['Potassium', ['Potassium'], '#f4f4f4', 'Purple Fire'], ['Magnesium', ['Magnesium'], '#fafafa', 'White Fire'],
+    ['Calcium', ['Calcium'], '#f4f2ec', 'Orange Fire'], ['Strontium', ['Strontium'], '#f2f0ec', 'Red Fire'],
+    ['Barium', ['Barium'], '#f4f4f0', 'Green Fire'], ['Aluminium', ['Aluminium', 'Aluminium Powder'], '#f4f4f8', null],
+    ['Iron', ['Metal', 'Iron Filings'], '#c8a040', 'Orange Fire'], ['Copper', ['Copper', 'Copper Dust'], '#3a8ad8', 'Cyan Fire'],
+    ['Zinc', ['Zinc', 'Zinc Dust'], '#f4f4f4', 'Cyan Fire'], ['Silver', ['Silver', 'Silver Dust'], '#f0f0f0', null],
+    ['Nickel', ['Nickel', 'Nickel Dust'], '#5ab05a', null], ['Cobalt', ['Cobalt', 'Cobalt Dust'], '#d8709a', null],
+    ['Lead', ['Lead', 'Lead Dust'], '#f4f4f4', 'Blue Fire'], ['Manganese', ['Manganese'], '#e8b8c4', 'Green Fire']
+  ];
+  var ANIONS = [['Chloride', ['Hydrochloric Acid', 'Acid']], ['Sulfate', ['Sulfuric Acid']], ['Nitrate', ['Nitric Acid']], ['Acetate', ['Vinegar']]];
+  var saltNames = [];
+  SALT_METALS.forEach(function(m){
+    ANIONS.forEach(function(an){
+      var salt = m[0] + ' ' + an[0], sol = salt + ' Solution';
+      pushAll(saltNames, mkNew(Pw, salt, around(m[2]), { dens: 2.2 }));
+      pushAll(saltNames, mkNew(Lq, sol, mixHex('#3a86c8', m[2], 0.35), { dens: 1.05, spread: 4, cond: 0.5, hi: [102, 'Steam', 0.5, salt, 0.3], lo: [-10, 'Ice', 0.2], noglow: true }));
+      an[1].forEach(function(acid){ m[1].forEach(function(metal){ reactNew(acid, metal, 'Hydrogen', salt, 0.08); }); });
+      reactNew(salt, 'Water', 'Empty', sol, 0.08);
+      if(m[3]){                                                   // the flame test
+        reactNew('Fire', salt, m[3], null, 0.3);
+        reactNew('Fire', sol, m[3], null, 0.2);
+      }
+    });
+  });
+  sec('Chemicals', saltNames);
+
+  // ---------- fruit: juice, jam, pie, smoothies and more for every one ----------
+  var FRUITS = [
+    // fruit, juice colour, new fruit colour (null: the fruit already exists)
+    ['Apple', '#e8c040'], ['Banana', '#f4e08a'], ['Orange', '#f8a020'], ['Lemon', '#f8f080'], ['Strawberry', '#e8304a'],
+    ['Blueberry', '#4a3a9a'], ['Grapes', '#6a1a5a'], ['Watermelon', '#f0606a'], ['Cherry', '#b01a2a'], ['Pineapple', '#f8e070'],
+    ['Mango', '#f8b030'], ['Peach', '#f8b088'], ['Pear', '#e0e090'], ['Kiwi', '#9ad04a'], ['Coconut', '#f4f0e8'],
+    ['Plum', '#8a2a5a'], ['Raspberry', '#d8204a'],
+    ['Apricot', '#f8a850', '#f89a40'], ['Fig', '#8a4a6a', '#6a3a5a'], ['Lime', '#b8e05a', '#7ac83a'], ['Grapefruit', '#f89080', '#f08070'],
+    ['Pomegranate', '#c01a3a', '#b01a3a'], ['Papaya', '#f8a060', '#f89a4a'], ['Passion Fruit', '#f8c030', '#6a2a5a'],
+    ['Dragon Fruit', '#f04a9a', '#e83a8a'], ['Lychee', '#f4e8e0', '#e05a6a'], ['Guava', '#f8a0a0', '#b8d06a'],
+    ['Blackberry', '#3a1a3a', '#2a1a3a'], ['Cranberry', '#b01a3a', '#a0102a']
+  ];
+  var DEFO = {};
+  DEFS.forEach(function(d){ DEFO[d[0]] = d; });
+  var fruitFood = [], fruitDrinks = [];
+  FRUITS.forEach(function(f){
+    var fruit = f[0], stem = fruit === 'Grapes' ? 'Grape' : fruit, J = f[1];
+    var juice = stem + ' Juice', dried = 'Dried ' + stem;
+    if(f[2]) pushAll(fruitFood, mkNew(Pw, fruit, around(f[2]), { dens: 1.1, flam: 0.05, ign: 320, hi: [90, dried, 0.02] }));
+    else if(DEFO[fruit] && !DEFO[fruit][1].hi) DEFO[fruit][1] = merge(DEFO[fruit][1], { hi: [90, dried, 0.02] });   // fruit dries out when warmed
+    pushAll(fruitDrinks, mkNew(Lq, juice, J, { dens: 1.04, spread: 4, hi: [100, 'Steam', 0.3], lo: [-3, stem + ' Popsicle', 0.1], noglow: true }));
+    CRUSHES.push([fruit, juice]);
+    pushAll(fruitFood, mkNew(Pw, dried, around(mixHex(J, '#5a2a0a', 0.35)), { dens: 0.8, flam: 0.2, ign: 280 }));
+    pushAll(fruitFood, mkNew(So, stem + ' Popsicle', [J, mixHex(J, '#ffffff', 0.3), J, mixHex(J, '#ffffff', 0.15)], { temp: -8, cond: 0.2, hi: [4, juice, 0.1], noglow: true }));
+    pushAll(fruitFood, mkNew(Lq, stem + ' Jam', mixHex(J, '#3a0a0a', 0.2), { dens: 1.3, visc: 0.9, spread: 1 }));
+    pushAll(fruitFood, mkNew(So, 'Raw ' + stem + ' Pie', ['#f0dfc0', J, '#e8d0a8', J], { cond: 0.1, hi: [180, stem + ' Pie', 0.04] }));
+    pushAll(fruitFood, mkNew(So, stem + ' Pie', ['#d8a060', mixHex(J, '#000000', 0.2), '#c89050', '#e0b070'], cooked({ cond: 0.08 })));
+    pushAll(fruitDrinks, mkNew(Lq, stem + ' Smoothie', mixHex(J, '#ffffff', 0.35), { dens: 1.1, visc: 0.6, spread: 2, temp: 6, hi: [100, 'Steam', 0.3], noglow: true }));
+    // the recipes
+    reactNew(juice, 'Sugar', stem + ' Jam', 'Empty', 0.05, 60);
+    reactNew(juice, 'Yogurt', stem + ' Smoothie', stem + ' Smoothie', 0.1);
+    reactNew('Dough', fruit, 'Raw ' + stem + ' Pie', 'Empty', 0.1);
+  });
+  sec('Food', fruitFood);
+  sec('Drinks', fruitDrinks);
+
+  // ---------- crushed: anything solid the crusher couldn't break yet gets a crushed form, and packs back ----------
+  // (not in the picker: the Crush tool and the Crusher make them)
+  var canCrush = {};
+  CRUSHES.forEach(function(c){ canCrush[c[0]] = 1; });
+  var NO_CRUSH = { 'Wall': 1, 'Insulator': 1, 'Clone': 1, 'Void': 1, 'Heater': 1, 'Cooler': 1, 'Diamond': 1, 'Web': 1 };
+  DEFS.slice().forEach(function(d){
+    var nm = d[0], o = d[1];
+    if(o.kind !== SOLID || canCrush[nm] || NO_CRUSH[nm] || o.custom || o.fixed || o.explode || (o.resist || 0) >= 1) return;
+    var col = o.colors ? o.colors[0] : o.color;
+    if(!col) return;
+    var cn = 'Crushed ' + nm;
+    if(mkNew(Pw, cn, around(mixHex(col, '#000000', 0.12)), { dens: 2, flam: o.flam, ign: o.ign, burnLife: o.burnLife })){
+      CRUSHES.push([nm, cn]);
+      PRESSES.push([cn, nm]);
+    }
+  });
+
+  // ---------- frozen: every liquid that could freeze now does, and thaws again ----------
+  // (not in the picker either: a cold room, the Cool brush or liquid nitrogen makes them)
+  DEFS.slice().forEach(function(d){
+    var nm = d[0], o = d[1];
+    if(o.kind !== LIQUID || o.lo || o.explode || o.custom || (o.temp != null && (o.temp > 60 || o.temp < -50))) return;
+    var fp = nm === 'Mercury' ? -39 : o.flam > 0.5 ? -60 : o.flam > 0.15 ? -20 : -5;
+    var fn = 'Frozen ' + nm, cols = o.colors || (o.color ? [o.color] : null);
+    if(!cols || DEFINED[fn]) return;
+    var ice = cols.map(function(c){ return mixHex(c, '#e8f4ff', 0.35); });
+    while(ice.length < 4) ice.push(mixHex(ice[0], '#ffffff', 0.1 * ice.length));
+    So(fn, ice, { temp: fp - 10, cond: 0.3, hi: [fp + 3, nm, 0.2], noglow: true });
+    d[1] = merge(o, { lo: [fp, fn, 0.1] });
+  });
+
+  // ---------- section order ----------
+  var ORDER2 = ['Powders', 'Liquids', 'Gases', 'Solids', 'Metals', 'Molten', 'Rocks', 'Gems', 'Food', 'Drinks', 'Plants', 'Creatures',
+                'Chemicals', 'Nature', 'Building', 'Fire & Energy', 'Explosives', 'Special', 'Tools'];
+  SECTIONS.sort(function(a, b){ return ORDER2.indexOf(a[0]) - ORDER2.indexOf(b[0]); });
+
   buildTables();
   AFTER.forEach(function(f){ f(); });
 
   // things that never change and don't carry heat can skip their update entirely
   for(var sid = 0; sid < NAMES.length; sid++){
     if(KIND[sid] === SOLID && !COND[sid] && !LIFE_MAX[sid] && DECAY_TO[sid] === NONE && !CUSTOM[sid] && !FLAM[sid] &&
-       HI_TO[sid] === NONE && LO_TO[sid] === NONE && !EXPLODE[sid] && !HAS_REACT[sid]){
+       HI_TO[sid] === NONE && LO_TO[sid] === NONE && !EXPLODE[sid] && !HAS_REACT[sid] && !BREAK_P[sid]){
       STATIC[sid] = 1;
     }
   }
@@ -2531,6 +2736,8 @@
 
   var W = 0, H = 0, N = 0, built = false;
   var grid, life, shade, stamp, temp, img, buf;   // stamp: which tick last moved a cell, so nothing moves twice
+  // the air: a coarser grid, one cell per 4×4 particles, of pressure and wind
+  var PW = 0, PH = 0, PN = 0, pres, pres2, airVX, airVY, airBlock, airCount, BOIL, airOn = false;
   var tick = 1;
 
   // returns false while the view has no real size yet (background tab, hidden frame)
@@ -2548,7 +2755,13 @@
     life  = new Uint16Array(N);
     shade = new Uint8Array(N);
     stamp = new Uint8Array(N);
-    temp  = new Float32Array(N).fill(AMBIENT);
+    temp  = new Float32Array(N).fill(room);
+    PW = Math.ceil(W / 4); PH = Math.ceil(H / 4); PN = PW * PH;
+    pres = new Float32Array(PN); pres2 = new Float32Array(PN);
+    airVX = new Float32Array(PN); airVY = new Float32Array(PN);
+    airBlock = new Uint8Array(PN); airCount = new Uint8Array(PN);
+    BOIL = new Float32Array(PN).fill(roomBoil);
+    airOn = false;
     img = ctx.createImageData(W, H);
     buf = new Uint32Array(img.data.buffer);
     built = true;
@@ -2587,10 +2800,10 @@
     if(LO_TO[t] !== NONE && temp[i] <= LO_T[t]) temp[i] = LO_T[t] + 5;
   }
 
-  // brand-new material, at its usual temperature
+  // brand-new material: at its own temperature if it has one (lava, ice), otherwise the room's
   function spawn(i, t){
     set(i, t);
-    if(!FIXED[t]) temp[i] = TEMP0[t];
+    if(!FIXED[t]) temp[i] = TEMP_SET[t] ? TEMP0[t] : room;
   }
 
   function swap(i, j){
@@ -2649,6 +2862,7 @@
   function explode(cx, cy, r){
     // nuclear-sized blasts have a far bigger core and hit hard enough to melt rock
     var r2 = r * r, core = r2 * (r >= 20 ? 0.5 : 0.2), hot = r >= 20 ? 4000 : 500;
+    blastAir(cx, cy, r * 6);   // and every blast sends out a wave of pressure
     for(var dy = -r; dy <= r; dy++){
       var y = cy + dy;
       if(y < 0 || y >= H) continue;
@@ -2677,6 +2891,167 @@
     }
   }
 
+  // ---------- air pressure ----------
+  // A coarse grid of pressure (0 = the room's pressure) and wind. Air piles up where wind converges and
+  // blows from high pressure to low; walls and solids stop it. Explosions, boiling, pumps and the
+  // pressure brush push it around, and it sleeps (costing nothing) whenever everything has settled.
+  var airQuiet = 0;
+  function airWake(){
+    if(!airOn){ airOn = true; airQuiet = 0; airBlocks(); }
+  }
+
+  function clampP(v){ return v > 400 ? 400 : v < pmin ? pmin : v; }
+
+  // a line of solid through a cell is enough to stop air getting through it
+  function airBlocks(){
+    airCount.fill(0);
+    for(var y = 0; y < H; y++){
+      var row = y * W, crow = (y >> 2) * PW;
+      for(var x = 0; x < W; x++) if(KIND[grid[row + x]] === SOLID) airCount[crow + (x >> 2)]++;
+    }
+    for(var c = 0; c < PN; c++) airBlock[c] = airCount[c] >= 4 ? 1 : 0;
+  }
+
+  function pushAir(x, y, amount){
+    if(!built || x < 0 || x >= W || y < 0 || y >= H) return;
+    var c = (y >> 2) * PW + (x >> 2);
+    if(airBlock[c]) return;
+    airWake();
+    pres[c] = clampP(pres[c] + amount);
+  }
+
+  // an explosion's blast of pressure, spread over the cells around it
+  function blastAir(x, y, amount){
+    if(!built) return;
+    airWake();
+    var cx = x >> 2, cy = y >> 2;
+    for(var dy = -1; dy <= 1; dy++){
+      for(var dx = -1; dx <= 1; dx++){
+        var px = cx + dx, py = cy + dy;
+        if(px < 0 || px >= PW || py < 0 || py >= PH) continue;
+        var c = py * PW + px;
+        if(!airBlock[c]) pres[c] = clampP(pres[c] + amount * (dx || dy ? 0.5 : 1));
+      }
+    }
+  }
+
+  function airStep(){
+    if(!airOn) return;
+    if((tick & 3) === 0) airBlocks();
+    var x, y, c, p;
+    // pressure rises where more air flows in than out
+    for(y = 0; y < PH; y++){
+      for(x = 0; x < PW; x++){
+        c = y * PW + x;
+        if(airBlock[c]){ pres[c] = 0; continue; }
+        var dp = -airVX[c] - airVY[c];
+        if(x > 0) dp += airVX[c - 1];
+        if(y > 0) dp += airVY[c - PW];
+        p = pres[c] * 0.9995 + dp * 0.3;
+        if(x === 0 || y === 0 || x === PW - 1 || y === PH - 1) p *= 0.97;   // the edges leak, like open air
+        pres[c] = p;
+      }
+    }
+    // wind blows from high pressure toward low, and stops dead at walls
+    for(y = 0; y < PH; y++){
+      for(x = 0; x < PW; x++){
+        c = y * PW + x;
+        if(airBlock[c]){ airVX[c] = 0; airVY[c] = 0; continue; }
+        airVX[c] = x + 1 < PW && !airBlock[c + 1] ? airVX[c] * 0.97 + (pres[c] - pres[c + 1]) * 0.4 : 0;
+        airVY[c] = y + 1 < PH && !airBlock[c + PW] ? airVY[c] * 0.97 + (pres[c] - pres[c + PW]) * 0.4 : 0;
+      }
+    }
+    // a little smoothing, so it travels as a wave instead of a checkerboard
+    var biggest = 0;
+    for(y = 0; y < PH; y++){
+      for(x = 0; x < PW; x++){
+        c = y * PW + x;
+        if(airBlock[c]){ pres2[c] = 0; continue; }
+        var sum = 0, n = 0;
+        if(x > 0 && !airBlock[c - 1]){ sum += pres[c - 1]; n++; }
+        if(x + 1 < PW && !airBlock[c + 1]){ sum += pres[c + 1]; n++; }
+        if(y > 0 && !airBlock[c - PW]){ sum += pres[c - PW]; n++; }
+        if(y + 1 < PH && !airBlock[c + PW]){ sum += pres[c + PW]; n++; }
+        p = clampP(n ? pres[c] * 0.8 + sum / n * 0.2 : pres[c]);
+        pres2[c] = p;
+        var e = (p < 0 ? -p : p) + 4 * ((airVX[c] < 0 ? -airVX[c] : airVX[c]) + (airVY[c] < 0 ? -airVY[c] : airVY[c]));
+        if(e > biggest) biggest = e;
+      }
+    }
+    var tmp = pres; pres = pres2; pres2 = tmp;
+    // how far the local pressure moves boiling points: about 20 °C per doubling
+    for(c = 0; c < PN; c++){
+      var atm = roomAtm + pres[c] / PUNIT;
+      BOIL[c] = 23 * Math.log(atm > 0.01 ? atm : 0.01);
+    }
+    // settled for a good while (under a fiftieth of an atmosphere anywhere): go back to sleep
+    if(biggest < 0.4){
+      if(++airQuiet > 90){
+        pres.fill(0); airVX.fill(0); airVY.fill(0); BOIL.fill(roomBoil);
+        airOn = false;
+      }
+    } else airQuiet = 0;
+  }
+
+  function atmAt(x, y){ return airOn ? roomAtm + pres[(y >> 2) * PW + (x >> 2)] / PUNIT : roomAtm; }
+  function boilAt(x, y){ return airOn ? BOIL[(y >> 2) * PW + (x >> 2)] : roomBoil; }
+
+  // wind carries loose things with it: gases and flames easily, powders and liquids only in a gale
+  var AIR_MIN  = [0, 1.2, 1.6, 0.15, 99, 0.2];   // by kind: -, powder, liquid, gas, solid, flame
+  var AIR_RESP = [0, 0.1, 0.08, 0.5, 0, 0.4];
+  function blow(i, x, y, t){
+    var k = KIND[t], c = (y >> 2) * PW + (x >> 2), ax = airVX[c], ay = airVY[c];
+    var s = (ax < 0 ? -ax : ax) + (ay < 0 ? -ay : ay);
+    if(s < AIR_MIN[k] || Math.random() > s * AIR_RESP[k]) return false;
+    var dx = 0, dy = 0;
+    if(Math.random() * s < (ax < 0 ? -ax : ax)) dx = ax > 0 ? 1 : -1; else dy = ay > 0 ? 1 : -1;
+    // a gale carries things several cells a tick
+    var steps = s > 6 ? 3 : s > 3 ? 2 : 1, ci = i, cx = x, cy = y, moved = false;
+    for(var q = 0; q < steps; q++){
+      var nx = cx + dx, ny = cy + dy;
+      if(nx < 0 || nx >= W || ny < 0 || ny >= H) break;
+      var j = ny * W + nx, n = grid[j];
+      if(!(n === EMPTY || (KIND[n] === GAS && k !== GAS))) break;
+      swap(ci, j);
+      ci = j; cx = nx; cy = ny; moved = true;
+    }
+    return moved;
+  }
+
+  // the difference in pressure across a spot: what pushes on a pane of glass is the air on either side
+  function pressDiff(x, y){
+    var cx = x >> 2, cy = y >> 2, c = cy * PW + cx, hi = -1e9, lo = 1e9, v;
+    if(!airBlock[c]){ hi = lo = pres[c]; }
+    if(cx > 0 && !airBlock[c - 1]){ v = pres[c - 1]; if(v > hi) hi = v; if(v < lo) lo = v; }
+    if(cx + 1 < PW && !airBlock[c + 1]){ v = pres[c + 1]; if(v > hi) hi = v; if(v < lo) lo = v; }
+    if(cy > 0 && !airBlock[c - PW]){ v = pres[c - PW]; if(v > hi) hi = v; if(v < lo) lo = v; }
+    if(cy + 1 < PH && !airBlock[c + PW]){ v = pres[c + PW]; if(v > hi) hi = v; if(v < lo) lo = v; }
+    return hi > lo ? hi - lo : 0;
+  }
+
+  // what a big enough difference in pressure does to things
+  function pressureChange(i, x, y, t){
+    if(BREAK_P[t] && Math.random() < 0.2 && pressDiff(x, y) > BREAK_P[t]){
+      // it gives way with a bang: the crack runs into the pane around it
+      var to = BREAK_TO[t];
+      set(i, to);
+      for(var r = 1; r <= 3; r++){
+        for(var k = 0; k < 8; k++){
+          var nx = x + NX[k] * r, ny = y + NY[k] * r;
+          if(nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+          var j = ny * W + nx;
+          if(grid[j] === t && Math.random() < 0.7 - r * 0.15) set(j, to);
+        }
+      }
+      return true;
+    }
+    if(KIND[t] === POWDER && PRESS[t] !== NONE && Math.random() < 0.01 && pres[(y >> 2) * PW + (x >> 2)] > 80){   // crushed together
+      set(i, PRESS[t]);
+      return true;
+    }
+    return false;
+  }
+
   // ---------- heat and change: each particle looks at one random neighbour per tick ----------
   function interact(i, x, y, t){
     var j = neighbour(x, y);
@@ -2685,13 +3060,15 @@
 
     // out in the open, things drift back toward room temperature (conduction between
     // touching particles happens in its own pass, see conduct())
-    if(n === EMPTY && AIRLOSS[t]) temp[i] += (AMBIENT - temp[i]) * AIRLOSS[t];
+    if(n === EMPTY && AIRLOSS[t]) temp[i] += (room - temp[i]) * AIRLOSS[t];
 
-    var key = t * E + n, p = RX_P[key];
-    if(p && Math.random() < p && temp[i] >= RX_T[key]){
-      var a = RX_TO[key], b = RX_OTHER[key];
-      if(b !== NONE) set(j, b);
-      if(a !== NONE){ set(i, a); return true; }
+    if(HAS_REACT[t]){
+      var r = RXMAP.get(t * 65536 + n);
+      if(r !== undefined && Math.random() < RX_P[r] && temp[i] >= RX_T[r]){
+        var a = RX_TO[r], b = RX_OTHER[r];
+        if(b !== NONE) set(j, b);
+        if(a !== NONE){ set(i, a); return true; }
+      }
     }
     return checkTemp(i, x, y, t);
   }
@@ -2703,13 +3080,25 @@
         if(Math.random() < IGNITE_P[t]){ explode(x, y, EXPLODE[t]); return true; }
       } else if(FLAM[t] && Math.random() < FLAM[t]){ ignite(i); return true; }
     }
-    if(HI_TO[t] !== NONE && T >= HI_T[t] && Math.random() < HI_P[t]){
+    // boiling points move with the air pressure: water boils sooner up a mountain, later in a pressure cooker
+    if(HI_TO[t] !== NONE && T >= HI_T[t] + (HI_GAS[t] ? boilAt(x, y) : 0) && Math.random() < HI_P[t]){
       var to = HI_ALT[t] !== NONE && Math.random() < HI_ALT_P[t] ? HI_ALT[t] : HI_TO[t];
       set(i, to);
       if(JUMP[to]) hop(i, x, y);
+      if(HI_GAS[t]) pushAir(x, y, 2.5);   // turning to gas takes up room, so pressure builds in a closed pot
       return true;
     }
-    if(LO_TO[t] !== NONE && T <= LO_T[t] && Math.random() < LO_P[t]){ set(i, LO_TO[t]); return true; }
+    if(LO_TO[t] !== NONE && T <= LO_T[t] + (LO_GAS[t] ? boilAt(x, y) : 0) && Math.random() < LO_P[t]){
+      set(i, LO_TO[t]);
+      if(LO_GAS[t]) pushAir(x, y, -2.5);
+      return true;
+    }
+    if(airOn && pressureChange(i, x, y, t)) return true;
+    // fire needs air: as it thins, ordinary flames sputter, and in a vacuum they go straight out
+    if(KIND[t] === FLAME && !CUSTOM[t] && TEMP0[t] > 0 && TEMP0[t] < 3000){
+      var thin = 0.7 - atmAt(x, y);
+      if(thin > 0 && Math.random() < thin){ grid[i] = EMPTY; return true; }
+    }
     return false;
   }
 
@@ -2749,6 +3138,8 @@
   // ---------- special behaviours ----------
   // burning wood glows in place, spreads to what it touches and sends flames up; water puts it out
   function burningUpdate(i, x, y){
+    var thin = 0.6 - atmAt(x, y);   // starved of air, it goes out
+    if(thin > 0 && Math.random() < thin * 0.1){ set(i, WOOD); temp[i] = 150; return true; }
     for(var k = 0; k < 2; k++){
       var j = neighbour(x, y);
       if(j < 0) continue;
@@ -2861,8 +3252,11 @@
         if(x < 0 || x >= W || y < 0 || y >= H) continue;
         var j = y * W + x, n = grid[j];
         if(n !== EMPTY && KIND[n] !== GAS && n !== ROCKET && n !== SPARK) continue;
-        set(j, SPARKLE);
-        shade[j] = rainbow ? Math.random() * SPARKLE_COLORS.length | 0 : fam;
+        if(ARG2[t] !== NONE) set(j, ARG2[t]);   // a rocket with its own coloured sparkle
+        else {
+          set(j, SPARKLE);
+          shade[j] = rainbow ? Math.random() * SPARKLE_COLORS.length | 0 : fam;
+        }
         life[j] = 18 + (Math.random() * 26 | 0);
       }
     }
@@ -3108,6 +3502,7 @@
   function step(){
     tick = tick === 255 ? 1 : tick + 1;
     conduct();
+    airStep();
     var ltr = (tick & 1) === 1;                // alternate scan direction so nothing drifts one way
     for(var y = H - 1; y >= 0; y--){
       var row = y * W;
@@ -3127,6 +3522,7 @@
         if(interact(i, x, y, t)) continue;
         var c = CUSTOM[t];
         if(c && c(i, x, y, t)) continue;
+        if(airOn && KIND[t] !== SOLID && blow(i, x, y, t)) continue;
 
         switch(KIND[t]){
           case POWDER: updPowder(i, x, y); break;
@@ -3139,10 +3535,20 @@
   }
 
   // ---------- drawing ----------
-  var tool = ID.Sand, brush = 4, paused = false, section = 0, heatView = false;
+  var tool = ID.Sand, brush = 4, paused = false, section = 0, heatView = false, presView = false;
   var pointer = { x: -1, y: -1, down: false, erase: false, inside: false };
   var lastPaint = null;
   var BG = PAL[0], HEAT_BG = abgr('#050507'), FROST = hexRGB('#e2f5ff');
+
+  // pressure view: blue for a vacuum, dark at the room's own pressure, then red, orange and white
+  var PRES_LUT = ramp([[0, '#2a6aff'], [0.3, '#10204a'], [0.5, '#0c0c0e'], [0.6, '#5a140c'], [0.78, '#d0401a'], [0.9, '#ffa03a'], [1, '#ffffff']], 256);
+  var PCOL;   // one colour per air cell, worked out once a frame
+  function presIndex(p){
+    // square roots, so a small difference still shows; a full vacuum and +10 atm are the two ends
+    var d = p / PUNIT;
+    if(d >= 0) return 128 + Math.min(127, Math.round(Math.sqrt(d / 10) * 127));
+    return 128 - Math.min(128, Math.round(Math.sqrt(-d / roomAtm) * 128));
+  }
 
   function mix(c, r2, g2, b2, a){
     var r = c & 255, g = (c >> 8) & 255, b = (c >> 16) & 255;
@@ -3150,10 +3556,22 @@
   }
 
   function render(){
-    var count = 0;
+    var count = 0, pv = presView && airOn;
+    if(pv){
+      if(!PCOL || PCOL.length !== PN) PCOL = new Int32Array(PN);
+      for(var pc = 0; pc < PN; pc++){
+        var p0 = pres[pc];
+        PCOL[pc] = airBlock[pc] || (p0 < 0.4 && p0 > -0.4) ? -1 : presIndex(p0);   // -1: at room pressure
+      }
+    }
     for(var i = 0; i < N; i++){
       var t = grid[i];
-      if(t === EMPTY){ buf[i] = heatView ? HEAT_BG : BG; continue; }
+      // (the air itself is never coloured by temperature: the room's temperature is shown top right)
+      if(t === EMPTY){
+        if(pv){ var ec = PCOL[(((i / W) | 0) >> 2) * PW + ((i % W) >> 2)]; buf[i] = ec < 0 ? BG : PRES_LUT[ec]; }
+        else buf[i] = heatView ? HEAT_BG : BG;
+        continue;
+      }
       count++;
       if(heatView){ buf[i] = HEAT_LUT[heatIndex(temp[i])]; continue; }
 
@@ -3190,16 +3608,22 @@
           c = mix(c, FROST[0], FROST[1], FROST[2], Math.min(0.5, (-40 - T) / 300));
         }
       }
+      if(pv){   // in pressure view, things take on a tint of the pressure around them
+        var pk = PCOL[(((i / W) | 0) >> 2) * PW + ((i % W) >> 2)];
+        if(pk >= 0){ var pcol = PRES_LUT[pk]; c = mix(c, pcol & 255, (pcol >> 8) & 255, (pcol >> 16) & 255, 0.45); }
+      }
       buf[i] = c;
     }
     ctx.putImageData(img, 0, 0);
 
     if(pointer.inside){
       ctx.strokeStyle = tool === HEAT ? 'rgba(255,120,60,0.8)' : tool === COOL ? 'rgba(110,200,255,0.8)'
-      : tool === GRIND ? 'rgba(200,205,212,0.8)' : tool === COMPACT ? 'rgba(232,216,176,0.8)' : tool === MIX ? 'rgba(150,120,240,0.85)' : 'rgba(255,255,255,0.45)';
+      : tool === GRIND ? 'rgba(200,205,212,0.8)' : tool === COMPACT ? 'rgba(232,216,176,0.8)' : tool === MIX ? 'rgba(150,120,240,0.85)'
+      : tool === PUMP ? 'rgba(240,90,50,0.85)' : tool === SUCK ? 'rgba(90,140,255,0.85)' : 'rgba(255,255,255,0.45)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(pointer.x + 0.5, pointer.y + 0.5, Math.max(0.5, brush - 0.5), 0, Math.PI * 2);
+      if(squareBrush) ctx.rect(pointer.x - brush + 1, pointer.y - brush + 1, brush * 2 - 1, brush * 2 - 1);
+      else ctx.arc(pointer.x + 0.5, pointer.y + 0.5, Math.max(0.5, brush - 0.5), 0, Math.PI * 2);
       ctx.stroke();
     }
     return count;
@@ -3207,16 +3631,48 @@
 
   // ---------- painting ----------
   function paint(cx, cy, t){
+    if(t === PUMP || t === SUCK){   // the pressure and vacuum brushes work on the air itself
+      var R = Math.max(1, brush - 1);
+      for(var py = Math.max(0, (cy - R) >> 2); py <= Math.min(PH - 1, (cy + R) >> 2); py++){
+        for(var px = Math.max(0, (cx - R) >> 2); px <= Math.min(PW - 1, (cx + R) >> 2); px++){
+          var pc = py * PW + px;
+          if(airBlock[pc]) continue;
+          airWake();
+          pres[pc] = clampP(pres[pc] + (t === PUMP ? 3 : -3));
+        }
+      }
+      return;
+    }
     if(t === LIGHTNING){   // one bolt per stroke, from the cursor down
       if(cx >= 0 && cx < W && cy >= 0 && cy < H && grid[cy * W + cx] === EMPTY) spawn(cy * W + cx, LIGHTNING);
       return;
     }
+    if(t === BOOM_T){      // a blast the size of the brush, a few a second while held
+      if(boomWait > 0 || cx < 0 || cx >= W || cy < 0 || cy >= H) return;
+      explode(cx, cy, 3 + (brush >> 1));
+      boomWait = 12;
+      return;
+    }
+    if(t === WIND_T){      // blows the air the way you drag
+      if(!dragDX && !dragDY) return;
+      var len = Math.sqrt(dragDX * dragDX + dragDY * dragDY), wx = dragDX / len * 1.2, wy = dragDY / len * 1.2, WR = Math.max(1, brush);
+      for(var wyc = Math.max(0, (cy - WR) >> 2); wyc <= Math.min(PH - 1, (cy + WR) >> 2); wyc++){
+        for(var wxc = Math.max(0, (cx - WR) >> 2); wxc <= Math.min(PW - 1, (cx + WR) >> 2); wxc++){
+          var wc = wyc * PW + wxc;
+          if(airBlock[wc]) continue;
+          airWake();
+          airVX[wc] += wx; airVY[wc] += wy;
+        }
+      }
+      return;
+    }
+    if(t === PUSH_T){ pushArea(cx, cy); return; }
     var r = brush - 1;
     var k = KIND[t];
     var sparse = t < ERASE && (k === POWDER || k === LIQUID || k === GAS || k === FLAME);
     for(var dy = -r; dy <= r; dy++){
       for(var dx = -r; dx <= r; dx++){
-        if(dx * dx + dy * dy > r * r + r) continue;
+        if(!squareBrush && dx * dx + dy * dy > r * r + r) continue;
         var x = cx + dx, y = cy + dy;
         if(x < 0 || x >= W || y < 0 || y >= H) continue;
         var j = y * W + x, n = grid[j];
@@ -3236,6 +3692,7 @@
           if(n !== EMPTY) stirAt(j, x, y);
           continue;
         }
+        if(t > ERASE){ if(n !== EMPTY) toolAt(t, j, n); continue; }
         if(n !== EMPTY){
           // painting fire onto fuel lights it
           if(t === FIRE && FLAM[n] && Math.random() < 0.3) ignite(j);
@@ -3247,14 +3704,41 @@
     }
   }
 
+  // the simpler brushes, one cell at a time
+  var dragDX = 0, dragDY = 0, boomWait = 0, squareBrush = false;
+  function toolAt(t, j, n){
+    if(t === IGNITE_T){   // lights anything that burns, sets off anything that explodes, warms the rest
+      if(EXPLODE[n] || FLAM[n]){ if(Math.random() < 0.3) ignite(j); }
+      else if(!FIXED[n]) temp[j] = Math.min(9999, temp[j] + 30);
+    }
+  }
+
+  // the push brush shoves loose things along the way you drag, the far side first so nothing moves twice
+  function pushArea(cx, cy){
+    var sx = dragDX > 0 ? 1 : dragDX < 0 ? -1 : 0, sy = dragDY > 0 ? 1 : dragDY < 0 ? -1 : 0;
+    if(!sx && !sy) return;
+    var r = brush;
+    for(var a = r; a >= -r; a--){        // along the push, far side first
+      for(var b = -r; b <= r; b++){      // and across it
+        var dx = sx ? a * sx : b, dy = sy ? (sx ? b * sy : a * sy) : b;
+        if(!squareBrush && dx * dx + dy * dy > r * r + r) continue;
+        var x = cx + dx, y = cy + dy, nx = x + sx, ny = y + sy;
+        if(x < 0 || x >= W || y < 0 || y >= H || nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+        var j = y * W + x, n = grid[j], k = ny * W + nx, m = grid[k];
+        if(n === EMPTY || KIND[n] === SOLID) continue;
+        if(m === EMPTY || (KIND[m] === GAS && KIND[n] !== GAS)) swap(j, k);
+      }
+    }
+  }
+
   // the mix brush: nudge things past each other, and let any recipe between them happen properly
   function stirAt(j, x, y){
     var k = neighbour(x, y);
     if(k < 0 || k === j) return;
-    var a = grid[j], b = grid[k], key = a * E + b;
-    if(RX_P[key] && temp[j] >= RX_T[key]){
-      if(RX_OTHER[key] !== NONE) set(k, RX_OTHER[key]);
-      if(RX_TO[key] !== NONE) set(j, RX_TO[key]);
+    var a = grid[j], b = grid[k], r = rx(a, b);
+    if(r !== undefined && temp[j] >= RX_T[r]){
+      if(RX_OTHER[r] !== NONE) set(k, RX_OTHER[r]);
+      if(RX_TO[r] !== NONE) set(j, RX_TO[r]);
     } else if((MOVES[a] || KIND[a] === POWDER) && (b === EMPTY || MOVES[b] || KIND[b] === POWDER) && Math.random() < 0.5){
       swap(j, k);
     }
@@ -3301,38 +3785,58 @@
   TOOL_SWATCH[GRIND] = 'linear-gradient(135deg, #b0b4ba, #4a4e54)';
   TOOL_SWATCH[COMPACT] = 'linear-gradient(135deg, #e8d8b0, #8a6a3a)';
   TOOL_SWATCH[MIX] = 'linear-gradient(135deg, #3ac8e0, #9a4ad8)';
+  TOOL_SWATCH[PUMP] = 'linear-gradient(135deg, #ffa03a, #d0301a)';
+  TOOL_SWATCH[SUCK] = 'linear-gradient(135deg, #7ab0ff, #1a3a9a)';
+  TOOL_SWATCH[IGNITE_T] = 'linear-gradient(135deg, #ffe07a, #ff5a1a)';
+  TOOL_SWATCH[WIND_T] = 'linear-gradient(135deg, #e8f4ff, #9ab8d8)';
+  TOOL_SWATCH[BOOM_T] = 'radial-gradient(circle, #ffffff, #ff8a1a 45%, #8a1a0a)';
+  TOOL_SWATCH[PUSH_T] = 'linear-gradient(135deg, #d8c8a8, #8a7a5a)';
 
   // every pickable element once, in section order, for the search box
   var searchEl = document.getElementById('search');
   var query = '', shown = [];
-  var ALL = [];
-  SECTIONS.forEach(function(s){ s[1].forEach(function(n){ if(ALL.indexOf(n) < 0) ALL.push(n); }); });
+  var ALL = [], ALL_LC = [], inAll = {};
+  SECTIONS.forEach(function(s){
+    s[1].forEach(function(n){
+      if(inAll[n]) return;
+      inAll[n] = 1;
+      ALL.push(n);
+      ALL_LC.push((TOOL_IDS[n] !== undefined ? n : LABEL[n] || n).toLowerCase());
+    });
+  });
   var elementCount = ALL.filter(function(n){ return TOOL_IDS[n] === undefined; }).length;
-  searchEl.placeholder = window.innerWidth < 760 ? 'Search ' + elementCount : 'Search ' + elementCount + ' elements';
+  searchEl.placeholder = window.innerWidth < 760 ? 'Search ' + elementCount.toLocaleString() : 'Search ' + elementCount.toLocaleString() + ' elements';
+  // big sections and searches draw their buttons a page at a time
+  var PAGE = 240, limit = PAGE;
 
   function renderSections(){
     catsEl.innerHTML = '';
+    var active = null;
     SECTIONS.forEach(function(s, idx){
       var b = document.createElement('button');
       b.type = 'button';
       b.className = 'cat';
       b.setAttribute('role', 'tab');
       b.setAttribute('aria-pressed', !query && idx === section ? 'true' : 'false');
-      b.innerHTML = s[0] + '<span class="n">' + s[1].length + '</span>';
+      b.innerHTML = s[0] + '<span class="n">' + s[1].length.toLocaleString() + '</span>';
       b.addEventListener('click', function(){
         section = idx;
         save('powder.section', idx);
         if(query){ query = ''; searchEl.value = ''; }
+        limit = PAGE;
         renderSections();
         renderElements();
         elsEl.scrollTop = 0;
       });
       catsEl.appendChild(b);
+      if(!query && idx === section) active = b;
     });
+    if(active) catsEl.scrollLeft = Math.max(0, active.offsetLeft - catsEl.offsetLeft - 40);   // keep the open tab in view
   }
 
   searchEl.addEventListener('input', function(){
     query = searchEl.value.trim().toLowerCase();
+    limit = PAGE;
     renderSections();
     renderElements();
     elsEl.scrollTop = 0;
@@ -3360,23 +3864,43 @@
   function renderElements(){
     elsEl.innerHTML = '';
     elsEl.appendChild(toolButton(ERASE, 'Eraser', 'transparent', 'eraser'));
-    shown = query ? ALL.filter(function(name){
-      var id = idOf(name);
-      return (id >= ERASE ? name : labelOf(id)).toLowerCase().indexOf(query) >= 0;
-    }) : SECTIONS[section][1];
+    if(query){
+      // every word has to match somewhere, so "coral paint" finds Coral Paint and Dried Coral Paint
+      var words = query.split(/\s+/);
+      shown = [];
+      for(var a = 0; a < ALL.length; a++){
+        var lc = ALL_LC[a], ok = true;
+        for(var w = 0; w < words.length && ok; w++) if(lc.indexOf(words[w]) < 0) ok = false;
+        if(ok) shown.push(ALL[a]);
+      }
+    } else shown = SECTIONS[section][1];
     if(!shown.length){
       var none = document.createElement('span');
       none.className = 'none';
       none.textContent = 'Nothing called that yet';
       elsEl.appendChild(none);
     }
-    shown.forEach(function(name, k){
-      var id = idOf(name);
-      var tool_ = id >= ERASE;
+    var frag = document.createDocumentFragment();
+    for(var k = 0; k < shown.length && k < limit; k++){
+      var name = shown[k], id = idOf(name), tool_ = id >= ERASE;
       var b = toolButton(id, tool_ ? name : labelOf(id), tool_ ? TOOL_SWATCH[id] : SWATCH[id]);
       if(k < 10) b.title = (tool_ ? name : labelOf(id)) + ' (' + ((k + 1) % 10) + ')';
-      elsEl.appendChild(b);
-    });
+      frag.appendChild(b);
+    }
+    if(shown.length > limit){
+      var more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'tool more';
+      more.textContent = 'Show more (' + (shown.length - limit).toLocaleString() + ' left)';
+      more.addEventListener('click', function(){
+        limit += PAGE * 2;
+        var keep = elsEl.scrollTop;
+        renderElements();
+        elsEl.scrollTop = keep;
+      });
+      frag.appendChild(more);
+    }
+    elsEl.appendChild(frag);
     markTool();
   }
 
@@ -3399,18 +3923,224 @@
     pauseBtn.textContent = p ? 'Play' : 'Pause';
   }
 
+  // heat view and pressure view take turns
   function setHeatView(on){
     heatView = on;
     heatBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
     legendEl.hidden = !on;
+    if(on && presView) setPresView(false);
   }
+  function setPresView(on){
+    presView = on;
+    presBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    plegendEl.hidden = !on;
+    if(on && heatView) setHeatView(false);
+  }
+  var presBtn = document.getElementById('presview');
+  var plegendEl = document.getElementById('plegend');
+  presBtn.addEventListener('click', function(){ setPresView(!presView); presBtn.blur(); });
+
+  // ---------- the room: its temperature and air pressure, set top right ----------
+  var roomBtn = document.getElementById('room-btn'), roomPop = document.getElementById('room-pop');
+  var roomTempEl = document.getElementById('room-temp'), roomPresEl = document.getElementById('room-pres');
+
+  function setRoom(tC, atm){
+    room = Math.max(-100, Math.min(200, Math.round(tC)));
+    roomAtm = Math.max(0, Math.min(5, Math.round(atm * 10) / 10));
+    roomBoil = 23 * Math.log(roomAtm > 0.01 ? roomAtm : 0.01);
+    pmin = -PUNIT * roomAtm;
+    if(built && !airOn) BOIL.fill(roomBoil);
+    var tText = room + '°C', pText = roomAtm.toFixed(1) + ' atm';
+    document.getElementById('room-t').textContent = tText;
+    document.getElementById('room-p').textContent = pText;
+    document.getElementById('room-temp-val').textContent = tText;
+    document.getElementById('room-pres-val').textContent = pText;
+    roomTempEl.value = room;
+    roomPresEl.value = Math.round(roomAtm * 10);
+    save('powder.roomT', room);
+    save('powder.roomP', roomAtm);
+  }
+  function openRoom(open){
+    roomPop.hidden = !open;
+    roomBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  roomBtn.addEventListener('click', function(){ openRoom(roomPop.hidden); });
+  roomTempEl.addEventListener('input', function(){ setRoom(+roomTempEl.value, roomAtm); });
+  roomPresEl.addEventListener('input', function(){ setRoom(room, +roomPresEl.value / 10); });
+  document.getElementById('room-reset').addEventListener('click', function(){ setRoom(AMBIENT, 1); });
+  document.addEventListener('pointerdown', function(e){
+    if(!roomPop.hidden && !document.getElementById('room').contains(e.target)) openRoom(false);
+  });
+  var savedT = parseFloat(load('powder.roomT')), savedP = parseFloat(load('powder.roomP'));
+  setRoom(isNaN(savedT) ? AMBIENT : savedT, isNaN(savedP) ? 1 : savedP);
 
   sizeEl.addEventListener('input', function(){ setBrush(+sizeEl.value); });
   pauseBtn.addEventListener('click', function(){ setPaused(!paused); pauseBtn.blur(); });
   heatBtn.addEventListener('click', function(){ setHeatView(!heatView); heatBtn.blur(); });
+  function clearAll(){
+    grid.fill(0); life.fill(0); temp.fill(room);
+    pres.fill(0); airVX.fill(0); airVY.fill(0); BOIL.fill(roomBoil); airOn = false;
+  }
   document.getElementById('clear').addEventListener('click', function(e){
-    if(built){ grid.fill(0); life.fill(0); temp.fill(AMBIENT); }
+    if(built){ snapshot(); clearAll(); }
     e.currentTarget.blur();
+  });
+
+  // ---------- the More menu: undo, speed, brush shape, saving, screenshots, surprise scenes ----------
+  var moreBtn = document.getElementById('more-btn'), morePop = document.getElementById('more-pop'), moreNote = document.getElementById('more-note');
+  function openMore(open){
+    morePop.hidden = !open;
+    moreBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if(open) moreNote.textContent = '';
+  }
+  function note(s){ moreNote.textContent = s; }
+  moreBtn.addEventListener('click', function(){ openMore(morePop.hidden); });
+  document.addEventListener('pointerdown', function(e){
+    if(!morePop.hidden && !document.getElementById('more').contains(e.target)) openMore(false);
+  });
+
+  // undo: a copy of the world before each stroke, clear, load or surprise, ten deep
+  var undoStack = [];
+  function snapshot(){
+    if(!built) return;
+    undoStack.push({ w: W, h: H, grid: grid.slice(), life: life.slice(), shade: shade.slice(), temp: temp.slice() });
+    if(undoStack.length > 10) undoStack.shift();
+  }
+  function undo(){
+    var s = undoStack.pop();
+    if(!s || s.w !== W || s.h !== H) return false;
+    grid.set(s.grid); life.set(s.life); shade.set(s.shade); temp.set(s.temp);
+    return true;
+  }
+  document.getElementById('undo').addEventListener('click', function(){ note(undo() ? 'Undone.' : 'Nothing left to undo.'); });
+
+  // speed and brush shape
+  var speed = 1;
+  function segment(id, value, onPick){
+    var el = document.getElementById(id);
+    function mark(v){ Array.prototype.forEach.call(el.children, function(b){ b.setAttribute('aria-pressed', b.dataset.v === String(v) ? 'true' : 'false'); }); }
+    Array.prototype.forEach.call(el.children, function(b){ b.addEventListener('click', function(){ mark(b.dataset.v); onPick(b.dataset.v); }); });
+    mark(value);
+    onPick(String(value));
+  }
+  segment('speed-seg', load('powder.speed') || '1', function(v){ speed = +v || 1; save('powder.speed', v); });
+  segment('shape-seg', load('powder.shape') || 'round', function(v){ squareBrush = v === 'square'; save('powder.shape', v); });
+
+  // one saved scene, kept in this browser: element names plus run-length coded cells and temperatures
+  function saveScene(){
+    var map = {}, names = [], cells = [], temps = [], prev = -1, run = 0, pt, tr = 0;
+    for(var i = 0; i < N; i++){
+      var t = grid[i], p = map[t];
+      if(p === undefined){ p = map[t] = names.length; names.push(NAMES[t]); }
+      if(p === prev) run++; else { if(run) cells.push(prev, run); prev = p; run = 1; }
+      var T = t === EMPTY ? null : Math.round(temp[i]);
+      if(tr && T === pt) tr++; else { if(tr) temps.push(pt, tr); pt = T; tr = 1; }
+    }
+    cells.push(prev, run); temps.push(pt, tr);
+    try {
+      localStorage.setItem('powder.scene', JSON.stringify({ v: 1, w: W, h: H, names: names, cells: cells, temps: temps, room: room, atm: roomAtm }));
+      return true;
+    } catch(e){ return false; }
+  }
+  function loadScene(){
+    var d;
+    try { d = JSON.parse(localStorage.getItem('powder.scene')); } catch(e){ d = null; }
+    if(!d || !d.names) return false;
+    snapshot();
+    clearAll();
+    setRoom(d.room, d.atm);
+    var ids = d.names.map(function(n){ return DEFINED[n] ? ID[n] : EMPTY; });
+    var oy = H - d.h;   // a scene saved on a different screen size sits on the ground
+    function place(runs, each){
+      var k = 0;
+      for(var c = 0; c < runs.length; c += 2){
+        for(var r = 0; r < runs[c + 1]; r++, k++){
+          var x = k % d.w, y = ((k / d.w) | 0) + oy;
+          if(x < W && y >= 0 && y < H) each(y * W + x, runs[c]);
+        }
+      }
+    }
+    place(d.cells, function(i, p){ if(ids[p] !== EMPTY) set(i, ids[p]); });
+    place(d.temps, function(i, T){ if(T !== null && grid[i] !== EMPTY && !FIXED[grid[i]]) temp[i] = T; });
+    return true;
+  }
+  document.getElementById('save-scene').addEventListener('click', function(){
+    note(built && saveScene() ? 'Saved. Load it any time on this browser.' : 'Couldn’t save here (storage is full or blocked).');
+  });
+  document.getElementById('load-scene').addEventListener('click', function(){
+    note(built && loadScene() ? 'Loaded. Ctrl+Z to go back.' : 'No saved scene yet.');
+  });
+
+  // a crisp, scaled-up picture of the canvas
+  document.getElementById('snap').addEventListener('click', function(){
+    if(!built) return;
+    render();
+    var s = Math.max(1, Math.round(1400 / W)), c2 = document.createElement('canvas');
+    c2.width = W * s; c2.height = H * s;
+    var g = c2.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.drawImage(canvas, 0, 0, W * s, H * s);
+    c2.toBlob(function(blob){
+      if(!blob){ note('Couldn’t make the picture.'); return; }
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'powder.png';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      note('Saved powder.png.');
+    });
+  });
+
+  // surprise me: rolling ground, a lake in the dip, and some life to go with it
+  var SCENES = [
+    ['a meadow', 'Grass', 'Dirt', 'Water', ['Seed', 'Acorn', 'Frog', 'Bee', 'Rose', 'Butterfly', 'Worm', 'Fish']],
+    ['a beach', 'Sand', 'Sandstone', 'Saltwater', ['Crab', 'Seashells', 'Coral', 'Fish', 'Cactus', 'Shark', 'Kelp']],
+    ['a swamp', 'Mud', 'Dirt', 'Swamp Water', ['Frog', 'Mosquito', 'Mushroom', 'Moss', 'Lily Pad', 'Tadpole', 'Dragonfly']],
+    ['a volcano', 'Basalt', 'Stone', 'Lava', ['Volcanic Ash', 'Meteor', 'Obsidian', 'Ash Cloud', 'Sulfur']],
+    ['a winter pond', 'Snow', 'Packed Snow', 'Slush', ['Penguin', 'Pine Cone', 'Snow Cloud', 'Ice', 'Fish']],
+    ['candy land', 'Cotton Candy', 'Cake', 'Melted Chocolate', ['Gummy Bears', 'Candy', 'Sprinkles', 'Ant', 'Marshmallow']],
+    ['Mars', 'Mars Dust', 'Mars Rock', null, ['Meteor', 'Comet', 'Moon Rock', 'Dry Ice']],
+    ['a night garden', 'Grass', 'Dirt', 'Water', ['Firefly', 'Glowing Mushroom', 'Moth', 'Bat', 'Glowing Water', 'Seed']],
+    ['a coral reef', 'Sand', 'Gravel', 'Saltwater', ['Coral', 'Fish', 'Goldfish', 'Jellyfish', 'Octopus', 'Seaweed', 'Pufferfish', 'Seahorse']]
+  ];
+  function surprise(){
+    var s = SCENES[Math.random() * SCENES.length | 0], ph = Math.random() * 10, f = 0.015 + Math.random() * 0.025, ground = [], x, y;
+    snapshot();
+    clearAll();
+    var top = idn(s[1]), under = idn(s[2]), bed = idn('Stone');
+    for(x = 0; x < W; x++){
+      var h = Math.round(H * 0.7 + Math.sin(x * f + ph) * H * 0.1 + Math.sin(x * f * 2.7 + ph * 2) * H * 0.04);
+      ground[x] = Math.max(6, Math.min(H - 3, h));
+      for(y = ground[x]; y < H; y++) spawn(y * W + x, y - ground[x] < 3 ? top : y > H - 4 ? bed : under);
+    }
+    var deepest = 0;
+    for(x = 1; x < W; x++) if(ground[x] > ground[deepest]) deepest = x;
+    if(s[3]){   // fill the dips up to a waterline
+      var level = ground[deepest] - Math.round(H * 0.07), liq = idn(s[3]);
+      for(x = 0; x < W; x++) for(y = level; y < ground[x]; y++) if(grid[y * W + x] === EMPTY) spawn(y * W + x, liq);
+    }
+    s[4].forEach(function(n){
+      var id = idn(n), swims = CUSTOM[id] === swimmerUpdate, cloud = KIND[id] === GAS;
+      for(var tries = 0, placed = 0; tries < 60 && placed < 3; tries++){
+        var px = 2 + (Math.random() * (W - 4) | 0);
+        var py = cloud ? 2 + (Math.random() * 8 | 0) : ground[px] - 2 - (Math.random() * (swims ? 4 : 20) | 0);
+        if(py < 1) continue;
+        var i0 = py * W + px, here = grid[i0];
+        if(swims ? !WET[here] && here !== ID['Saltwater'] : here !== EMPTY) continue;
+        for(var dy = 0; dy < (cloud ? 4 : 2); dy++) for(var dx = 0; dx < (cloud ? 14 : 2); dx++){
+          var qx = px + dx, qy = py - dy;
+          if(qx < W && qy >= 0){ var q = qy * W + qx; if(swims ? WET[grid[q]] : grid[q] === EMPTY) spawn(q, id); }
+        }
+        placed++;
+      }
+    });
+    return s[0];
+  }
+  document.getElementById('surprise').addEventListener('click', function(){
+    if(!built) return;
+    note('Here’s ' + surprise() + '. Ctrl+Z to go back.');
+    hint.classList.add('gone');
   });
 
   // ---------- pointer ----------
@@ -3423,6 +4153,8 @@
     pointer.erase = e.button === 2;
     pointer.x = c.x; pointer.y = c.y; pointer.inside = true;
     lastPaint = c;
+    snapshot();   // every stroke can be undone
+    boomWait = 0;
     paint(c.x, c.y, activeTool());
     hint.classList.add('gone');
   });
@@ -3432,6 +4164,7 @@
     var c = toCell(e);
     pointer.x = c.x; pointer.y = c.y; pointer.inside = true;
     if(pointer.down && lastPaint){
+      dragDX = c.x - lastPaint.x; dragDY = c.y - lastPaint.y;   // which way the wind and push brushes go
       paintLine(lastPaint.x, lastPaint.y, c.x, c.y, activeTool());
       lastPaint = c;
     }
@@ -3450,8 +4183,12 @@
 
   window.addEventListener('keydown', function(e){
     if(e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'A')) return;
+    if((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')){ e.preventDefault(); undo(); return; }
     if(e.key === ' '){ e.preventDefault(); setPaused(!paused); return; }
+    if(e.key === 'Escape' && !roomPop.hidden){ openRoom(false); return; }
+    if(e.key === 'Escape' && !morePop.hidden){ openMore(false); return; }
     if(e.key === 'h' || e.key === 'H'){ setHeatView(!heatView); return; }
+    if(e.key === 'p' || e.key === 'P'){ setPresView(!presView); return; }
     if(e.key === '['){ setBrush(brush - 1); return; }
     if(e.key === ']'){ setBrush(brush + 1); return; }
     if(/^[0-9]$/.test(e.key)){
@@ -3472,22 +4209,28 @@
       if(!build()) return;   // keep waiting until the view has a real size
       fit();
     }
-    acc += Math.min(100, now - last);
+    acc += Math.min(100, now - last) * speed;
     last = now;
-    var n = 0;
-    while(acc >= STEP_MS && n < 3){
+    var n = 0, most = speed > 1 ? 3 * speed : 3;
+    while(acc >= STEP_MS && n < most){
       if(pointer.down) paint(pointer.x, pointer.y, activeTool());   // hold still to keep pouring
+      dragDX = dragDY = 0;
+      if(boomWait > 0) boomWait--;
       if(!paused) step();
       acc -= STEP_MS;
       n++;
     }
-    if(n === 3) acc = 0;   // falling behind: drop the backlog rather than spiral
+    if(n === most) acc = 0;   // falling behind: drop the backlog rather than spiral
     var count = render();
     if((++frames & 7) === 0){
       var under = '';
       if(pointer.inside && pointer.x >= 0 && pointer.x < W && pointer.y >= 0 && pointer.y < H){
         var j = pointer.y * W + pointer.x, t = grid[j];
-        if(t !== EMPTY) under = '<b>' + labelOf(t) + '</b> <span class="t">' + Math.round(temp[j]) + '&nbsp;&deg;C</span> &middot; ';
+        // pressure only shows when it's different from the room's
+        var atm = atmAt(pointer.x, pointer.y);
+        var ps = Math.abs(atm - roomAtm) >= 0.05 ? ' <span class="t">' + Math.max(0, atm).toFixed(1) + '&nbsp;atm</span>' : '';
+        if(t !== EMPTY) under = '<b>' + labelOf(t) + '</b> <span class="t">' + Math.round(temp[j]) + '&nbsp;&deg;C</span>' + ps + ' &middot; ';
+        else if(ps) under = '<b>Air</b>' + ps + ' &middot; ';
       }
       infoEl.innerHTML = under + count.toLocaleString() + ' particles';
     }
