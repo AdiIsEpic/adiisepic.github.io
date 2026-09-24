@@ -61,7 +61,8 @@
   .ctl{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--dim); }
   .num{ font-variant-numeric:tabular-nums; min-width:1.6em; }
   .info{ font-variant-numeric:tabular-nums; }
-  .info b{ color:var(--ink); font-weight:700; }
+  .info b{ color:var(--ink); font-weight:700; display:inline-block; max-width:min(18em, 30vw); overflow:hidden;
+           text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom; }   /* mixture names get long */
   .info .t{ color:var(--accent); font-weight:700; }
   input[type=range]{ width:110px; accent-color:var(--accent); }
 
@@ -272,7 +273,59 @@
   .tool[aria-pressed="true"]{ border-color:var(--accent); background:#34302a; }
   .tool.eraser{ margin-right:6px; }
 
+  /* the random element dice, and Surprise, which gets a little colour */
+  .dice{ flex:none; display:grid; place-items:center; width:32px; height:30px; padding:0; border-radius:999px; color:var(--accent); }
+  .dice.roll svg{ animation:roll .45s ease; }
+  @keyframes roll{ from{ transform:rotate(-200deg) scale(.7); } to{ transform:none; } }
+  #surprise{ background:linear-gradient(135deg, #3a2f6a, #2a4a6a); border-color:rgba(160,140,255,0.35); }
+  #surprise:hover{ background:linear-gradient(135deg, #4a3f8a, #3a5a8a); }
+
+  /* messages that pop up over the canvas for a moment */
+  .toast{
+    position:absolute; left:50%; top:14px; transform:translateX(-50%);
+    max-width:calc(100% - 32px); padding:8px 14px; border-radius:10px;
+    background:rgba(28,28,34,0.94); border:1px solid var(--line); box-shadow:0 8px 24px rgba(0,0,0,0.4);
+    color:var(--ink); font-size:13px; font-weight:600; text-align:center; pointer-events:none;
+    animation:toastIn .2s ease;
+  }
+  .toast[hidden]{ display:none; }
+  @keyframes toastIn{ from{ opacity:0; transform:translate(-50%, -6px); } to{ opacity:1; transform:translateX(-50%); } }
+
+  /* the save slots */
+  .dlg{ position:fixed; inset:0; z-index:40; display:grid; place-items:center; padding:16px; background:rgba(8,8,10,0.6); }
+  .dlg[hidden]{ display:none; }
+  .dlg-box{
+    width:min(720px, 100%); max-height:calc(100dvh - 32px); overflow-y:auto;
+    display:flex; flex-direction:column; gap:12px; padding:16px;
+    border-radius:14px; background:var(--panel); border:1px solid var(--line); box-shadow:0 20px 50px rgba(0,0,0,0.5);
+  }
+  .dlg-head{ display:flex; align-items:center; justify-content:space-between; font-size:16px; }
+  .dlg-head button{ font-size:18px; line-height:1; padding:4px 10px; }
+  .dlg-name{ display:flex; align-items:center; gap:10px; font-size:12px; color:var(--dim); }
+  .dlg-name input{
+    flex:1; min-width:0; font:inherit; font-size:13px; color:var(--ink); background:#26262b;
+    border:1px solid var(--line); border-radius:8px; padding:7px 10px; outline:none; -webkit-user-select:text; user-select:text;
+  }
+  .dlg-name input:focus{ border-color:var(--accent); }
+  .slots{ display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; }
+  .slot{ display:flex; flex-direction:column; gap:4px; padding:8px; border-radius:10px; background:#232328; border:1px solid var(--line); min-width:0; }
+  .slot .pic{
+    aspect-ratio:2 / 1; display:grid; place-items:center; overflow:hidden; border-radius:6px;
+    background:#0c0c0e; color:var(--dim); font-size:11px;
+  }
+  .slot .pic img{ width:100%; height:100%; object-fit:cover; image-rendering:pixelated; }
+  .slot.empty .pic{ border:1px dashed var(--line); background:transparent; }
+  .slot .nm{ font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .slot .tm{ font-size:11px; color:var(--dim); }
+  .slot-btns{ display:flex; flex-wrap:wrap; gap:4px; }
+  .slot-btns button{ flex:1; padding:4px 6px; font-size:11px; white-space:nowrap; }
+  .slot-btns .primary{ border-color:rgba(240,172,83,0.45); }
+  .slot-btns .warn{ background:#5a2a22; border-color:#d0603a; }
+  .dlg-foot{ display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:12px; color:var(--dim); }
+  .dlg-foot span{ margin-right:auto; }
+
   @media (max-width:760px){
+    .slots{ grid-template-columns:repeat(2, 1fr); }
     .keys{ display:none; }
     input[type=range]{ width:80px; }
     .search{ width:112px; }
@@ -288,6 +341,7 @@
   <h1>Powder</h1>
   <button id="pause" type="button">Pause</button>
   <button id="clear" type="button">Clear</button>
+  <button id="surprise" type="button" title="Build a random little world (S)">Surprise</button>
   <div class="more" id="more">
     <button id="more-btn" type="button" aria-expanded="false" aria-controls="more-pop">More</button>
     <div class="more-pop" id="more-pop" hidden>
@@ -295,10 +349,8 @@
       <div class="seg-row"><span>Speed</span><div class="seg" id="speed-seg"><button type="button" data-v="0.5">&frac12;&times;</button><button type="button" data-v="1">1&times;</button><button type="button" data-v="2">2&times;</button><button type="button" data-v="4">4&times;</button></div></div>
       <div class="seg-row"><span>Brush</span><div class="seg" id="shape-seg"><button type="button" data-v="round">Round</button><button type="button" data-v="square">Square</button></div></div>
       <div class="more-grid">
-        <button id="save-scene" type="button">Save scene</button>
-        <button id="load-scene" type="button">Load scene</button>
+        <button id="saves-btn" type="button">Save slots</button>
         <button id="snap" type="button">Screenshot</button>
-        <button id="surprise" type="button">Surprise me</button>
       </div>
       <div class="more-note" id="more-note" aria-live="polite"></div>
     </div>
@@ -307,7 +359,7 @@
   <button id="presview" type="button" aria-pressed="false" title="Show air pressure: red is high, blue is a vacuum (P)">Pressure<span class="v"> view</span></button>
   <label class="ctl">Brush <input type="range" id="size" min="1" max="24" value="4"><span class="num" id="size-val">4</span></label>
   <div class="spacer"></div>
-  <div class="ctl keys">Right-click erases &middot; scroll resizes &middot; Space pauses &middot; H heat &middot; P pressure</div>
+  <div class="ctl keys">Right-click erases &middot; scroll resizes &middot; Space pauses &middot; S surprise &middot; R random</div>
   <div class="ctl info" id="info">0 particles</div>
   <div class="room" id="room">
     <button id="room-btn" type="button" aria-expanded="false" aria-controls="room-pop" title="Room temperature and air pressure">Room <b id="room-t">22&deg;C</b> <b id="room-p">1.0 atm</b></button>
@@ -322,17 +374,36 @@
 
 <div class="view" id="view">
   <canvas id="c"></canvas>
-  <div class="start-hint" id="hint">Pick a section (or search), then an element, and <b>draw</b>.<br>Hover to read temperatures. Try <b>More &rsaquo; Surprise me</b>, or the Crush tool on stone.</div>
+  <div class="start-hint" id="hint">Pick an element (or roll the dice) and <b>draw</b>.<br>Press <b>Surprise</b> for a whole little world, drop in <b>People</b>,<br><b>Build</b> a town, or Mix any two things together.</div>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <div class="legend" id="legend" hidden><span>&minus;273&deg;</span><span class="scale"></span><span>6000&deg;C</span></div>
   <div class="legend" id="plegend" hidden><span>Vacuum</span><span class="scale pscale"></span><span>High</span></div>
 </div>
 
 <div class="tools">
   <div class="toprow">
+    <button class="dice" id="dice" type="button" title="Pick a random element (R)" aria-label="Pick a random element">
+      <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><rect x="2" y="2" width="16" height="16" rx="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="6.5" cy="6.5" r="1.5" fill="currentColor"/><circle cx="13.5" cy="6.5" r="1.5" fill="currentColor"/><circle cx="10" cy="10" r="1.5" fill="currentColor"/><circle cx="6.5" cy="13.5" r="1.5" fill="currentColor"/><circle cx="13.5" cy="13.5" r="1.5" fill="currentColor"/></svg>
+    </button>
     <input class="search" id="search" type="search" placeholder="Search elements" aria-label="Search elements" autocomplete="off" spellcheck="false">
     <div class="row" id="cats" role="tablist" aria-label="Sections"></div>
   </div>
   <div class="row" id="els"></div>
+</div>
+
+<div class="dlg" id="saves" role="dialog" aria-modal="true" aria-labelledby="saves-title" hidden>
+  <div class="dlg-box">
+    <div class="dlg-head"><b id="saves-title">Save slots</b><button id="saves-close" type="button" aria-label="Close">&times;</button></div>
+    <label class="dlg-name">Name <input id="save-name" type="text" maxlength="32" placeholder="My world" autocomplete="off" spellcheck="false"></label>
+    <div class="slots" id="slots"></div>
+    <div class="dlg-foot">
+      <span>Keep it as a file, or open one:</span>
+      <button id="export" type="button">Download</button>
+      <button id="import" type="button">Open file&hellip;</button>
+      <input id="import-file" type="file" accept=".json,application/json" hidden>
+    </div>
+    <div class="more-note" id="saves-note" aria-live="polite"></div>
+  </div>
 </div>
 
 <script>
@@ -401,30 +472,44 @@
   // Elements are collected first (def and react below just queue them), then buildTables()
   // sizes every table to the final element count and fills it in.
   var POWDER = 1, LIQUID = 2, GAS = 3, SOLID = 4, FLAME = 5;
-  var E = 0;
-  function u8(){ return new Uint8Array(E); }
-  function u16(fill){ var a = new Uint16Array(E); if(fill) a.fill(fill); return a; }
-  function f32(){ return new Float32Array(E); }
+  // E: how many elements there are to start with. The tables have room for DYN_MAX more
+  // (up to CAP), which get made while playing: every new mixture is its own element, from DYN0 on.
+  var E = 0, DYN_MAX = 20000, CAP = 0, DYN0 = 65535;
+  function u8(){ return new Uint8Array(CAP); }
+  function u16(fill){ var a = new Uint16Array(CAP); if(fill) a.fill(fill); return a; }
+  function f32(){ return new Float32Array(CAP); }
 
   var KIND, DENS, MOVES,
       TEMP0, COND, AIRLOSS, FIXED, GLOWS,
-      HI_T, HI_TO, HI_P, HI_ALT, HI_ALT_P, LO_T, LO_TO, LO_P,
+      HI_T, HI_TO, HI_P, HI_ALT, HI_ALT_P, LO_T, LO_TO, LO_P, LO_ALT, LO_ALT_P,
       IGN_T, FLAM, BURN_TO, BURN_MIN, BURN_MAX,
       DECAY_TO, DECAY_P, LIFE_MIN, LIFE_MAX, DEATH_A, DEATH_AP, DEATH_B, DEATH_BP,
       VISC, SPREAD, HEAVY, JUMP, EXPLODE, IGNITE_P, RESIST, BLAST_TO, ACIDPROOF,
       STATIC, RMODE, HAS_REACT, NOWATER, WET, CRUSH, PRESS, PAL,
       TEMP_SET, HI_GAS, LO_GAS, BREAK_P, BREAK_TO,   // made hot or cold; boils or condenses; shatters under pressure
-      ARG1, ARG2, ARGP, ARGN;   // spare per-element settings for the special behaviours
+      ARG1, ARG2, ARGP, ARGN,   // spare per-element settings for the special behaviours
+      MIXED, NOMIX, PASTY;      // a mixture (carries its own colour); can't be mixed; a paste (stays thick)
   var FPAL = [], SWATCH = [], CUSTOM = [], CRIT = [];
 
   // pairwise contact reactions: [self][neighbour] -> what each becomes, how often, and how hot self must be
   // stored sparsely: RXMAP maps self * 65536 + neighbour to a slot in the arrays below, so ten thousand
   // elements cost nothing for all the pairs that never react
   var RXMAP, RX_TO, RX_OTHER, RX_P, RX_T, NRX = 0;
-  function rx(a, b){ return HAS_REACT[a] ? RXMAP.get(a * 65536 + b) : undefined; }
+  function rx(a, b){
+    if(a >= DYN0 || b >= DYN0) return HAS_REACT[a] ? rxMix(a, b) : undefined;
+    return HAS_REACT[a] ? RXMAP.get(a * 65536 + b) : undefined;
+  }
+  // a mixture reacts the way the things in it do: each time, one of its ingredients gets a go
+  // (so the less of something there is in it, the less often its recipes happen)
+  var MIX_INGS = [];
+  function rxMix(a, b){
+    var ia = MIX_INGS[a], ib = MIX_INGS[b];
+    var x = ia ? ia[Math.random() * ia.length | 0] : a, y = ib ? ib[Math.random() * ib.length | 0] : b;
+    return HAS_REACT[x] ? RXMAP.get(x * 65536 + y) : undefined;
+  }
 
   // render modes
-  var R_FLAT = 0, R_FLAME = 1, R_FLICKER = 2, R_GLITTER = 3, R_SPARKLE = 4;
+  var R_FLAT = 0, R_FLAME = 1, R_FLICKER = 2, R_GLITTER = 3, R_SPARKLE = 4, R_MIXED = 5;
 
   // ---------- colour helpers ----------
   function hexRGB(h){ var n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
@@ -533,7 +618,10 @@
       HI_T[id] = o.hi[0]; HI_TO[id] = idn(o.hi[1]); HI_P[id] = o.hi[2] || 1;
       if(o.hi[3]){ HI_ALT[id] = idn(o.hi[3]); HI_ALT_P[id] = o.hi[4]; }
     }
-    if(o.lo){ LO_T[id] = o.lo[0]; LO_TO[id] = idn(o.lo[1]); LO_P[id] = o.lo[2] || 1; }
+    if(o.lo){
+      LO_T[id] = o.lo[0]; LO_TO[id] = idn(o.lo[1]); LO_P[id] = o.lo[2] || 1;
+      if(o.lo[3]){ LO_ALT[id] = idn(o.lo[3]); LO_ALT_P[id] = o.lo[4]; }
+    }
 
     FLAM[id] = o.flam || 0;
     IGN_T[id] = o.ign || (o.flam || o.explode ? 300 : 0);
@@ -584,11 +672,11 @@
   }
 
   function buildTables(){
-    E = NAMES.length;
+    E = NAMES.length; CAP = E + DYN_MAX; DYN0 = E;
     KIND = u8(); DENS = f32(); MOVES = u8();
     TEMP0 = f32(); COND = f32(); AIRLOSS = f32(); FIXED = u8(); GLOWS = u8();
     HI_T = f32(); HI_TO = u16(NONE); HI_P = f32(); HI_ALT = u16(NONE); HI_ALT_P = f32();
-    LO_T = f32(); LO_TO = u16(NONE); LO_P = f32();
+    LO_T = f32(); LO_TO = u16(NONE); LO_P = f32(); LO_ALT = u16(NONE); LO_ALT_P = f32();
     IGN_T = f32(); FLAM = f32(); BURN_TO = u16(NONE); BURN_MIN = u16(); BURN_MAX = u16();
     DECAY_TO = u16(NONE); DECAY_P = f32(); LIFE_MIN = u16(); LIFE_MAX = u16();
     DEATH_A = u16(NONE); DEATH_AP = f32(); DEATH_B = u16(NONE); DEATH_BP = f32();
@@ -598,7 +686,7 @@
     CRUSH = u16(NONE); PRESS = u16(NONE);
     TEMP_SET = u8(); HI_GAS = u8(); LO_GAS = u8(); BREAK_P = f32(); BREAK_TO = u16(NONE);
     ARG1 = u16(NONE); ARG2 = u16(NONE); ARGP = f32(); ARGN = f32();
-    PAL = new Uint32Array(E * 4);
+    PAL = new Uint32Array(CAP * 4);
     RXMAP = new Map(); NRX = 0;
     RX_TO = new Uint16Array(RXS.length).fill(NONE);
     RX_OTHER = new Uint16Array(RXS.length).fill(NONE);
@@ -1329,8 +1417,8 @@
     return true;
   }
 
-  // a mixer stirs the loose stuff around it, and makes any recipe between two things
-  // touching it happen properly instead of by luck
+  // a mixer stirs the loose stuff around it, makes any recipe between two things touching
+  // it happen properly instead of by luck, and blends together anything that has no recipe
   function mixerUpdate(i, x, y, t){
     for(var s = 0; s < 4; s++){
       // churns everything sitting on it, not just the cells it touches
@@ -1343,11 +1431,8 @@
       if(k < 0 || k === i) continue;
       var b = grid[k];
       if(b === t) continue;
-      var r = rx(a, b);
-      if(r !== undefined && temp[j] >= RX_T[r]){
-        if(RX_OTHER[r] !== NONE) set(k, RX_OTHER[r]);
-        if(RX_TO[r] !== NONE) set(j, RX_TO[r]);
-      } else if(b === EMPTY || MOVES[b] || KIND[b] === POWDER){
+      if(forceReact(j, k) || (Math.random() < 0.3 && mixCells(j, k))) continue;
+      if(b === EMPTY || MOVES[b] || KIND[b] === POWDER){
         swap(j, k);   // stir, so things actually meet
       }
     }
@@ -2442,9 +2527,9 @@
   SECTIONS.sort(function(a, b){ return ORDER.indexOf(a[0]) - ORDER.indexOf(b[0]); });
 
   AFTER.push(function(){
-    SOIL = new Uint8Array(E);
+    SOIL = u8();
     ['Dirt', 'Mud', 'Grass', 'Compost', 'Peat', 'Fertilizer'].forEach(function(n){ SOIL[idn(n)] = 1; });
-    FERRO = new Uint8Array(E);
+    FERRO = u8();
     ['Iron Filings', 'Magnetite', 'Ferrofluid', 'Steel Wool'].forEach(function(n){ FERRO[idn(n)] = 1; });
     ['Steel', 'Metal', 'Stainless Steel', 'Iron Filings'].forEach(function(n){ FLINTY[idn(n)] = 1; });
     GLASSY.concat(['Wall', 'Metal', 'Steel', 'Stainless Steel', 'Plastic', 'Insulator', 'Heater', 'Cooler', 'Porcelain', 'Tile']).forEach(function(n){ SMOOTH[idn(n)] = 1; });
@@ -2713,8 +2798,114 @@
     d[1] = merge(o, { lo: [fp, fn, 0.1] });
   });
 
+  // ---------- people ----------
+  // A person is two cells, a body with a head on top. They walk about, step up ledges, float, swim
+  // up for air, eat food, and run from fire, lava, acid and zombies. Most have a job. Too hot, too
+  // cold, drowned, dropped from a height or losing their head, and they float off as a ghost.
+  var JOB_NONE = 0, JOB_FIRE = 1, JOB_BUILD = 2, JOB_MINE = 3, JOB_FARM = 4, JOB_ZOMBIE = 5;
+  function headO(){ return { dens: 1.1, cond: 0.1, flam: 0.3, ign: 150, noglow: true, custom: headUpdate, hi: [75, 'Ghost', 0.2], lo: [-30, 'Ice', 0.05] }; }
+  Pw('Head', ['#f1c27d', '#e0ac69', '#c68642', '#8d5524'], headO());
+  Pw('Zombie Head', ['#8ab06a', '#7aa05a', '#9ac07a', '#6a9050'], headO());
+  Gs('Ghost', '#dfe8ff', { dens: 0.02, life: [70, 140], flame: glowPal('#dfe8ff'), render: R_FLICKER, noglow: true });
+  function person(name, shirts, job, o){
+    return Pw(name, shirts, merge({ dens: 1.1, cond: 0.1, flam: 0.3, ign: 150, noglow: true, custom: humanUpdate, argn: job,
+                                    hi: [75, 'Ash', 0.2], lo: [-30, 'Ice', 0.05] }, o || {}));
+  }
+  var PEOPLE = [
+    person('Human', ['#3a7ad8', '#d8403a', '#3aa85a', '#e8c040'], JOB_NONE),
+    person('Firefighter', ['#d8301a', '#e8c020', '#c8201a', '#f0d030'], JOB_FIRE, { hi: [140, 'Ash', 0.2] }),   // their gear takes the heat
+    person('Builder', ['#f08a1a', '#f8a030', '#e07a10', '#f0c020'], JOB_BUILD),
+    person('Miner', ['#5a5a6a', '#4a4a5a', '#6a6a7a', '#3a3a4a'], JOB_MINE),
+    person('Farmer', ['#3a6ab0', '#2a5aa0', '#4a7ac0', '#8a6a3a'], JOB_FARM),
+    person('Zombie', ['#5a7a4a', '#4a6a3a', '#6a5a4a', '#3a5a3a'], JOB_ZOMBIE)
+  ];
+  sec('People', PEOPLE);
+  var HEAD_OF, IS_PERSON, FOODY, DIGGABLE, HEAD, ZHEAD, ZOMBIE, GHOST, SEED, BRICK;
+  AFTER.push(function(){
+    HEAD = idn('Head'); ZHEAD = idn('Zombie Head'); ZOMBIE = idn('Zombie'); GHOST = idn('Ghost');
+    SEED = idn('Seed'); BRICK = idn('Brick');
+    HEAD_OF = u16(NONE); IS_PERSON = u8();
+    PEOPLE.forEach(function(n){ var id = idn(n); IS_PERSON[id] = 1; HEAD_OF[id] = id === ZOMBIE ? ZHEAD : HEAD; });
+    // people eat anything solid from the Food section; miners dig through rocks and earth
+    FOODY = u8(); DIGGABLE = u8();
+    SECTIONS.forEach(function(s){
+      s[1].forEach(function(n){
+        var id = ID[n];
+        if(id === undefined) return;
+        if(s[0] === 'Food' && (KIND[id] === POWDER || KIND[id] === SOLID)) FOODY[id] = 1;
+        if(s[0] === 'Rocks') DIGGABLE[id] = 1;
+      });
+    });
+    ['Stone', 'Dirt', 'Sand', 'Gravel', 'Clay', 'Coal', 'Mud', 'Sandstone', 'Snow', 'Packed Snow', 'Ice', 'Grass', 'Silt', 'Peat',
+     'Chalk', 'Salt', 'Rock Salt', 'Mars Dust', 'Mars Rock', 'Moon Rock', 'Moon Dust'].forEach(function(n){ if(DEFINED[n]) DIGGABLE[ID[n]] = 1; });
+  });
+
+  // a volcano's heart: it holds its heat and wells up lava, so the crater keeps overflowing
+  sec('Nature', So('Magma Vent', ['#ff5a14', '#e0401a', '#ff7a2a', '#c8300a'],
+                   { fixed: true, temp: 1500, cond: 0.6, resist: 1, acidproof: true, airloss: 0, custom: emitUpdate, arg1: 'Lava', argp: 0.2 }));
+
+  // ---------- the Build tools: click to put down a whole structure ----------
+  var STAMP0 = 65100;
+  var STAMPS = [
+    // name, what builds it, two colours for its swatch
+    ['House', 'house', 'Brick', 'Terracotta'], ['Cabin', 'cabin', 'Pine Wood', 'Wood'], ['Hut', 'hut', 'Wood', 'Oak Wood'],
+    ['Barn', 'barn', 'Brick', 'Hay'], ['Skyscraper', 'skyscraper', 'Steel', 'Glass'], ['Tower', 'tower', 'Stone Brick', 'Cobblestone'],
+    ['Castle', 'castle', 'Stone Brick', 'Cloth'], ['Lighthouse', 'lighthouse', 'Brick', 'Plaster'], ['Pyramid', 'pyramid', 'Sandstone', 'Gold'],
+    ['Igloo', 'igloo', 'Ice', 'Snow'], ['Tent', 'tent', 'Cloth', 'Wood'], ['Glass Dome', 'dome', 'Glass', 'Grass'],
+    ['Oak Tree', 'oak', 'Oak Wood', 'Leaves'], ['Pine Tree', 'pine', 'Pine Wood', 'Pine Needles'], ['Cherry Tree', 'cherry', 'Wood', 'Cherry Blossom'],
+    ['Autumn Tree', 'autumn', 'Oak Wood', 'Autumn Leaves'], ['Palm Tree', 'palm', 'Wood', 'Leaves'], ['Cactus Plant', 'cactus', 'Cactus', 'Sand'],
+    ['Bridge', 'bridge', 'Wood', 'Rope'], ['Campfire', 'campfire', 'Burning Wood', 'Cobblestone'], ['Boat', 'boat', 'Wood', 'Cloth'],
+    ['Aquarium', 'aquarium', 'Glass', 'Water'], ['Pool', 'pool', 'Tile', 'Water'], ['Rocket', 'rocket', 'Steel', 'Rocket Fuel'],
+    ['TNT Tower', 'tnttower', 'TNT', 'Fuse'], ['Volcano', 'volcano', 'Basalt', 'Magma']
+  ];
+  STAMPS.forEach(function(s, k){ TOOL_IDS[s[0]] = STAMP0 + k; });
+  sec('Build', STAMPS.map(function(s){ return s[0]; }));
+
+  // ---------- mixtures ----------
+  // Every mixture is its own element, made the first time it's mixed (see makeMix). These five are
+  // only for when there's no room left for new ones. None of them are in the picker.
+  var MIX_NAMES = [
+    Lq('Mixture', '#8a7a9a', { dens: 1.1, spread: 3, render: R_MIXED, hi: [100, 'Steam', 0.3, 'Blend', 0.35] }),
+    Lq('Paste', '#9a8a70', { dens: 1.6, visc: 0.9, spread: 1, render: R_MIXED, hi: [100, 'Steam', 0.05, 'Blend', 0.5] }),
+    Pw('Blend', '#8a8078', { dens: 1.8, render: R_MIXED }),
+    Gs('Gas Mix', '#b8b0c8', { dens: 0.08, render: R_MIXED }),
+    So('Composite', '#7a7470', { cond: 0.25, render: R_MIXED })
+  ];
+  CRUSHES.push(['Composite', 'Blend']);
+  PRESSES.push(['Blend', 'Composite']);
+  var FALLBACK_MIX = {};
+  // special behaviours a mixture keeps (the first one in this list that any ingredient has), and
+  // ones that just don't stop something being mixed
+  var PASS_ON = [sinkUpdate, uraniumUpdate, acidUpdate, virusUpdate];
+  var MIX_OK = PASS_ON.concat([slowUpdate]);
+  AFTER.push(function(){
+    MIXED = u8(); PASTY = u8();
+    MIX_NAMES.forEach(function(n){ MIXED[idn(n)] = 1; FALLBACK_MIX[n] = idn(n); });
+    PASTY[idn('Paste')] = 1;
+    // walls, machines, creatures, bombs and flames stay what they are; acids, radioactive stuff and
+    // the like mix fine, and pass what they do on to the mixture
+    NOMIX = u8();
+    NOMIX[EMPTY] = 1; NOMIX[WALL] = 1;
+    for(var m = 0; m < E; m++){
+      if(FIXED[m] || (CUSTOM[m] && MIX_OK.indexOf(CUSTOM[m]) < 0) || KIND[m] === FLAME || RESIST[m] >= 1) NOMIX[m] = 1;
+    }
+    SECTIONS.forEach(function(s){ if(s[0] === 'Special') s[1].forEach(function(n){ if(ID[n] !== undefined) NOMIX[ID[n]] = 1; }); });
+  });
+
+  // a few proper recipes for mixing drinks
+  var JUICES = NAMES.filter(function(n){ return / Juice$/.test(n) && DEFINED[n] && n !== 'Glow Stick Juice'; });
+  JUICES.forEach(function(a){
+    var stem = a.replace(/ Juice$/, '');
+    if(DEFINED[stem + ' Smoothie']){
+      reactNew(a, 'Milk', stem + ' Smoothie', stem + ' Smoothie', 0.05);
+      reactNew(a, 'Ice Cream', stem + ' Smoothie', stem + ' Smoothie', 0.08);
+    }
+    reactNew(a, 'Sparkling Water', 'Soda', 'Soda', 0.05);
+    JUICES.forEach(function(b){ if(a !== b && a !== 'Tomato Juice' && b !== 'Tomato Juice' && a !== 'Carrot Juice' && b !== 'Carrot Juice') reactNew(a, b, 'Fruit Punch', 'Fruit Punch', 0.02); });
+  });
+
   // ---------- section order ----------
-  var ORDER2 = ['Powders', 'Liquids', 'Gases', 'Solids', 'Metals', 'Molten', 'Rocks', 'Gems', 'Food', 'Drinks', 'Plants', 'Creatures',
+  var ORDER2 = ['Powders', 'Liquids', 'Gases', 'Solids', 'People', 'Build', 'Metals', 'Molten', 'Rocks', 'Gems', 'Food', 'Drinks', 'Plants', 'Creatures',
                 'Chemicals', 'Nature', 'Building', 'Fire & Energy', 'Explosives', 'Special', 'Tools'];
   SECTIONS.sort(function(a, b){ return ORDER2.indexOf(a[0]) - ORDER2.indexOf(b[0]); });
 
@@ -2729,6 +2920,30 @@
     }
   }
 
+  // ---------- every element also sits in the tab for what it is ----------
+  // all the solids are under Solids, every liquid under Liquids and so on, as well as in their themed tab
+  (function(){
+    var STATE = {};
+    STATE[POWDER] = 'Powders'; STATE[LIQUID] = 'Liquids'; STATE[GAS] = 'Gases'; STATE[SOLID] = 'Solids'; STATE[FLAME] = 'Fire & Energy';
+    // (animals and people aren't powders, whatever the engine moves them as)
+    var MOVERS = [walkerUpdate, flyerUpdate, swimmerUpdate, burrowerUpdate, humanUpdate], living = {};
+    NAMES.forEach(function(n, id){ if(MOVERS.indexOf(CUSTOM[id]) >= 0) living[n] = 1; });
+    var tab = {}, order = [], has = {};
+    SECTIONS.forEach(function(s){
+      tab[s[0]] = s;
+      if(s[0] !== 'Tools' && s[0] !== 'Build') s[1].forEach(function(n){ if(ID[n] !== undefined && !living[n]) order.push(n); });
+    });
+    // the state tabs only hold things in that state (the fire tab keeps its sparks and lightning as well)
+    ['Powders', 'Liquids', 'Gases', 'Solids'].forEach(function(title){
+      tab[title][1] = tab[title][1].filter(function(n){ return STATE[KIND[ID[n]]] === title && !living[n]; });
+    });
+    SECTIONS.forEach(function(s){ s[1].forEach(function(n){ has[s[0] + '|' + n] = 1; }); });
+    order.forEach(function(n){
+      var title = STATE[KIND[ID[n]]];
+      if(title && !has[title + '|' + n]){ has[title + '|' + n] = 1; tab[title][1].push(n); }
+    });
+  })();
+
   // ---------- grid, sized from the space available ----------
   var view = document.getElementById('view');
   var canvas = document.getElementById('c');
@@ -2736,6 +2951,7 @@
 
   var W = 0, H = 0, N = 0, built = false;
   var grid, life, shade, stamp, temp, img, buf;   // stamp: which tick last moved a cell, so nothing moves twice
+  var mixc;   // the colour each mixture cell was mixed to (0: none)
   // the air: a coarser grid, one cell per 4×4 particles, of pressure and wind
   var PW = 0, PH = 0, PN = 0, pres, pres2, airVX, airVY, airBlock, airCount, BOIL, airOn = false;
   var tick = 1;
@@ -2756,6 +2972,7 @@
     shade = new Uint8Array(N);
     stamp = new Uint8Array(N);
     temp  = new Float32Array(N).fill(room);
+    mixc  = new Uint32Array(N);
     PW = Math.ceil(W / 4); PH = Math.ceil(H / 4); PN = PW * PH;
     pres = new Float32Array(PN); pres2 = new Float32Array(PN);
     airVX = new Float32Array(PN); airVY = new Float32Array(PN);
@@ -2795,6 +3012,7 @@
     life[i] = LIFE_MAX[t] ? LIFE_MIN[t] + (Math.random() * (LIFE_MAX[t] - LIFE_MIN[t] + 1) | 0) : 0;
     shade[i] = Math.random() * 4 | 0;
     stamp[i] = tick;
+    if(!MIXED[t]) mixc[i] = 0;   // (one mixture turning into another keeps its colour)
     if(FIXED[t]){ temp[i] = TEMP0[t]; return; }
     if(HI_TO[t] !== NONE && temp[i] >= HI_T[t]) temp[i] = HI_T[t] - 20;
     if(LO_TO[t] !== NONE && temp[i] <= LO_T[t]) temp[i] = LO_T[t] + 5;
@@ -2811,6 +3029,7 @@
     v = life[i]; life[i] = life[j]; life[j] = v;
     v = shade[i]; shade[i] = shade[j]; shade[j] = v;
     v = temp[i]; temp[i] = temp[j]; temp[j] = v;
+    v = mixc[i]; mixc[i] = mixc[j]; mixc[j] = v;
     stamp[i] = tick; stamp[j] = tick;
   }
 
@@ -3089,7 +3308,7 @@
       return true;
     }
     if(LO_TO[t] !== NONE && T <= LO_T[t] + (LO_GAS[t] ? boilAt(x, y) : 0) && Math.random() < LO_P[t]){
-      set(i, LO_TO[t]);
+      set(i, LO_ALT[t] !== NONE && Math.random() < LO_ALT_P[t] ? LO_ALT[t] : LO_TO[t]);
       if(LO_GAS[t]) pushAir(x, y, -2.5);
       return true;
     }
@@ -3592,6 +3811,9 @@
           var lv = life[i] >> 2;
           c = SPARKLE_PAL[(shade[i] % 6) * 8 + (lv > 7 ? 7 : lv)];
           break;
+        case R_MIXED:
+          c = mixc[i] || PAL[t * 4 + shade[i]];
+          break;
         default:
           c = PAL[t * 4 + shade[i]];
       }
@@ -3616,7 +3838,17 @@
     }
     ctx.putImageData(img, 0, 0);
 
-    if(pointer.inside){
+    if(pointer.inside && isStamp(tool)){
+      // a structure: show roughly where it'll stand
+      var st = STAMPS[tool - STAMP0][1], gx = Math.max(0, Math.min(W - 1, pointer.x));
+      var gy = st === 'bridge' ? pointer.y : groundBelow(gx, Math.max(0, pointer.y));
+      var bw = st === 'bridge' ? sz(36) : st === 'boat' ? 15 : sz(WIDTH[st] || 11), bh = st === 'bridge' ? 4 : Math.round(bw * 0.7);
+      ctx.strokeStyle = 'rgba(240,172,83,0.9)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 2]);
+      ctx.strokeRect(gx - (bw >> 1) + 0.5, gy - bh + 0.5, bw - 1, bh - 1);
+      ctx.setLineDash([]);
+    } else if(pointer.inside){
       ctx.strokeStyle = tool === HEAT ? 'rgba(255,120,60,0.8)' : tool === COOL ? 'rgba(110,200,255,0.8)'
       : tool === GRIND ? 'rgba(200,205,212,0.8)' : tool === COMPACT ? 'rgba(232,216,176,0.8)' : tool === MIX ? 'rgba(150,120,240,0.85)'
       : tool === PUMP ? 'rgba(240,90,50,0.85)' : tool === SUCK ? 'rgba(90,140,255,0.85)' : 'rgba(255,255,255,0.45)';
@@ -3630,7 +3862,13 @@
   }
 
   // ---------- painting ----------
+  var personWait = 0;
   function paint(cx, cy, t){
+    if(isStamp(t)) return;          // structures go down once per click (see pointerdown)
+    if(t < ERASE && IS_PERSON[t]){  // people arrive one at a time, not a brushful at once
+      if(!personWait && cx >= 0 && cx < W && cy >= 0 && cy < H){ placePerson(cx, cy, t); personWait = 8; }
+      return;
+    }
     if(t === PUMP || t === SUCK){   // the pressure and vacuum brushes work on the air itself
       var R = Math.max(1, brush - 1);
       for(var py = Math.max(0, (cy - R) >> 2); py <= Math.min(PH - 1, (cy + R) >> 2); py++){
@@ -3731,17 +3969,414 @@
     }
   }
 
-  // the mix brush: nudge things past each other, and let any recipe between them happen properly
+  // ---------- mixing ----------
+  // a recipe between two cells happens properly, whichever way round it's written
+  function forceReact(j, k){
+    var r = rx(grid[j], grid[k]);
+    if(r === undefined || temp[j] < RX_T[r]){
+      var s = j; j = k; k = s;
+      r = rx(grid[j], grid[k]);
+      if(r === undefined || temp[j] < RX_T[r]) return false;
+    }
+    if(RX_OTHER[r] !== NONE) set(k, RX_OTHER[r]);
+    if(RX_TO[r] !== NONE) set(j, RX_TO[r]);
+    return true;
+  }
+
+  // ---------- every mixture is its own element ----------
+  // The first time two things are mixed, a new element is made for that exact combination
+  // ("Paste of Sand and Water"), and everything about it comes from what's in it: how heavy,
+  // thick, runny, conductive, flammable or explosive it is, its colour, what heat does to it
+  // (whatever boils or melts first leaves, and the rest stays behind, so heating separates a
+  // mixture again), its freezing point (lowered by whatever's dissolved in it), the recipes
+  // its ingredients take part in, and behaviours like acid or radiation, watered down by how
+  // much of the mixture they make up. None of them go in the picker.
+  var MAX_INGS = 5;
+  var MIX_WORD = [], MIX_KEY = new Map(), MIX_PAIR = new Map();
+  var MIX_KIND = { 'Mixture': LIQUID, 'Paste': LIQUID, 'Blend': POWDER, 'Gas Mix': GAS, 'Composite': SOLID };
+
+  function ingsOf(t){ return MIX_INGS[t] || [t]; }
+  function byId(a, b){ return a - b; }
+  function listOf(names){
+    return names.length < 3 ? names.join(' and ') : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+  }
+  // liquids alone make a mixture, liquid with anything else a paste, and dry things a blend
+  function wordFor(ings, word){
+    if(word === 'Composite' || word === 'Gas Mix') return word;
+    var wet = 0;
+    for(var k = 0; k < ings.length; k++) if(KIND[ings[k]] === LIQUID) wet++;
+    return wet === ings.length ? 'Mixture' : wet ? 'Paste' : 'Blend';
+  }
+  function hex2(v){ v = Math.max(0, Math.min(255, v | 0)); return (v < 16 ? '0' : '') + v.toString(16); }
+  function avgColour(ings, s, toward, amt){
+    var r = 0, g = 0, b = 0, n = ings.length;
+    ings.forEach(function(q){ var c = PAL[q * 4 + s]; r += c & 255; g += (c >> 8) & 255; b += (c >> 16) & 255; });
+    r /= n; g /= n; b /= n;
+    if(toward){ r += (toward[0] - r) * amt; g += (toward[1] - g) * amt; b += (toward[2] - b) * amt; }
+    return '#' + hex2(r) + hex2(g) + hex2(b);
+  }
+  // the name of what's left when one ingredient leaves
+  function restOf(ings, gone, word){
+    var rest = ings.filter(function(q){ return q !== gone; });
+    if(rest.length === 1) return NAMES[rest[0]];
+    var id = makeMix(wordFor(rest, word), rest);
+    return id === NONE ? null : NAMES[id];
+  }
+
+  // registers a new element made while playing, before its properties are worked out, so
+  // mixtures that point at each other (a composite and its crushed blend) can both be named
+  function newElement(key, name, word, ings){
+    if(NAMES.length >= CAP || DEFINED[name]) return NONE;
+    DEFINED[name] = 1;
+    reg(name);
+    var id = ID[name];
+    MIX_KEY.set(key, id); MIX_INGS[id] = ings; MIX_WORD[id] = word;
+    return id;
+  }
+  function finishElement(id){
+    MIXED[id] = 1;
+    PASTY[id] = MIX_WORD[id] === 'Paste' ? 1 : 0;
+    if(HI_TO[id] !== NONE && KIND[HI_TO[id]] === GAS && KIND[id] !== GAS) HI_GAS[id] = 1;
+    if(LO_TO[id] !== NONE && KIND[id] === GAS && KIND[LO_TO[id]] !== GAS) LO_GAS[id] = 1;
+    MIX_INGS[id].forEach(function(g){ if(HAS_REACT[g]) HAS_REACT[id] = 1; });
+  }
+
+  function makeMix(word, ings){
+    var key = word + ':' + ings.join(','), id = MIX_KEY.get(key);
+    if(id !== undefined) return id;
+    var name = word + ' of ' + listOf(ings.map(function(g){ return NAMES[g]; }));
+    id = newElement(key, name, word, ings);
+    if(id === NONE) return NONE;
+    applyDef(name, mixProps(word, ings, name));
+    finishElement(id);
+    // a composite crushes (or blows up) into a blend of the same things, and the blend packs back
+    var pair = word === 'Composite' ? makeMix('Blend', ings) : word === 'Blend' ? makeMix('Composite', ings) : NONE;
+    if(pair !== NONE){
+      var solid = word === 'Composite' ? id : pair, loose = solid === id ? pair : id;
+      CRUSH[solid] = loose; BLAST_TO[solid] = loose; PRESS[loose] = solid;
+    }
+    return id;
+  }
+
+  // a liquid mixture freezes into its own frozen form, which thaws back into it
+  function makeFrozen(mixName, word, ings, at){
+    var key = 'Frozen ' + word + ':' + ings.join(','), id = MIX_KEY.get(key);
+    if(id !== undefined) return NAMES[id];
+    var name = 'Frozen ' + mixName;
+    id = newElement(key, name, 'Frozen ' + word, ings);
+    if(id === NONE) return null;
+    var ice = [233, 244, 255];
+    applyDef(name, { kind: SOLID, render: R_MIXED, cond: 0.3, noglow: true,
+                     colors: [0, 1, 2, 3].map(function(s){ return avgColour(ings, s, ice, 0.35); }),
+                     hi: [at + 3, mixName, 0.2] });
+    finishElement(id);
+    return name;
+  }
+
+  // everything about a mixture, from what's in it
+  function mixProps(word, ings, name){
+    var n = ings.length, kind = MIX_KIND[word];
+    var o = { kind: kind, render: R_MIXED, colors: [0, 1, 2, 3].map(function(s){ return avgColour(ings, s); }) };
+    var dens = 0, flam = 0, cond = 0, resist = 0, visc = 0, spread = 0, wet = 0, water = false, dud = false;
+    var fuel = -1, bomb = -1, proof = true, glow = true, hiG = -1, loG = -1;
+    ings.forEach(function(g){
+      dens += (KIND[g] === SOLID ? 3 : DENS[g]) / n;
+      flam += FLAM[g] / n; cond += COND[g] / n; resist += RESIST[g] / n;
+      if(KIND[g] === LIQUID){ wet++; visc += VISC[g]; spread += SPREAD[g]; if(WET[g]) water = true; if(!EXPLODE[g]) dud = true; }
+      if(FLAM[g] && (fuel < 0 || FLAM[g] > FLAM[fuel])) fuel = g;
+      if(EXPLODE[g] && (bomb < 0 || EXPLODE[g] > EXPLODE[bomb])) bomb = g;
+      if(!ACIDPROOF[g]) proof = false;
+      if(!GLOWS[g]) glow = false;
+      if(HI_TO[g] !== NONE && (hiG < 0 || HI_T[g] < HI_T[hiG])) hiG = g;
+      if(LO_TO[g] !== NONE && (loG < 0 || LO_T[g] > LO_T[loG])) loG = g;
+    });
+    o.cond = cond;
+    if(kind === LIQUID){
+      if(word === 'Paste'){ o.dens = dens * 1.15; o.visc = Math.min(0.97, Math.max(0.85, visc / wet + 0.4)); o.spread = 1; }
+      else { o.dens = dens; o.visc = visc / wet; o.spread = Math.max(1, Math.round(spread / wet)); }
+      if(water) o.wet = true;
+    } else if(kind !== SOLID) o.dens = dens;
+    else o.resist = resist;
+    if(proof) o.acidproof = true;
+    if(!glow) o.noglow = true;
+
+    // it burns if enough of it burns, lit a little harder than its fuel alone
+    if(fuel >= 0 && flam >= 0.02){
+      o.flam = flam;
+      o.ign = IGN_T[fuel] + 25 * (n - 1);
+      o.burnTo = NAMES[BURN_TO[fuel]];
+      o.burnLife = [BURN_MIN[fuel], BURN_MAX[fuel]];
+    }
+    // explosives stay explosive, just weaker; wet with anything that isn't, they're duds
+    if(bomb >= 0 && !(kind === LIQUID && dud)){
+      o.explode = Math.max(1, Math.round(EXPLODE[bomb] * 0.75));
+      o.ignite = IGNITE_P[bomb];
+      o.ign = IGN_T[bomb] + 30;
+    }
+
+    // heat: the first thing in it to boil or melt goes, and leaves the rest behind
+    if(hiG >= 0){
+      o.hi = [HI_T[hiG] + (HI_GAS[hiG] ? 2 * (n - 1) : 0), NAMES[HI_TO[hiG]], HI_P[hiG]];
+      var restH = restOf(ings, hiG, word);
+      if(restH){ o.hi[3] = restH; o.hi[4] = 0.5; }
+    }
+    // cold: liquid mixtures freeze whole (a little colder for everything dissolved in them);
+    // anything else, the first thing in it to freeze or condense drops out
+    if(loG >= 0){
+      var at = LO_T[loG] - 3 * (n - 1);
+      var frozen = kind === LIQUID && at < 30 ? makeFrozen(name, word, ings, at) : null;
+      if(frozen) o.lo = [at, frozen, 0.1];
+      else {
+        o.lo = [LO_T[loG], NAMES[LO_TO[loG]], LO_P[loG]];
+        var restL = restOf(ings, loG, word);
+        if(restL){ o.lo[3] = restL; o.lo[4] = 0.5; }
+      }
+    }
+
+    // special behaviours carry over, weaker the less of the mixture they are
+    for(var p = 0; p < PASS_ON.length; p++){
+      var fn = PASS_ON[p], src = -1, share = 0;
+      ings.forEach(function(g){ if(CUSTOM[g] === fn){ share += 1 / n; if(src < 0) src = g; } });
+      if(src < 0) continue;
+      o.custom = fn === virusUpdate ? spreadsVirus(share) : fn;
+      o.argp = (ARGP[src] || (fn === acidUpdate ? 0.08 : fn === uraniumUpdate ? 0.8 : 0.5)) * share;
+      o.argn = ARGN[src] * share;
+      if(ARG1[src] !== NONE) o.arg1 = NAMES[ARG1[src]];
+      if(ARG2[src] !== NONE) o.arg2 = NAMES[ARG2[src]];
+      break;
+    }
+    return o;
+  }
+  function spreadsVirus(share){ return function(i, x, y, t){ return Math.random() < share && virusUpdate(i, x, y, t); }; }
+
+  // what two things with no recipe become when they're mixed (remembered, as the brush asks a lot)
+  function mixResult(a, b){
+    var key = a * 65536 + b, r = MIX_PAIR.get(key);
+    if(r === undefined){ r = mixMake(a, b); MIX_PAIR.set(key, r); }
+    return r;
+  }
+  function mixMake(a, b){
+    if(NOMIX[a] || NOMIX[b]) return NONE;
+    if(a === b) return MIXED[a] ? a : NONE;   // more of the same mixture just evens out its colour
+    var ka = KIND[a], kb = KIND[b], word;
+    // solids only mix with solids, so stirring a drink doesn't dissolve its cup; gases only with gases
+    if(ka === SOLID || kb === SOLID){ if(ka !== kb) return NONE; word = 'Composite'; }
+    else if(ka === GAS || kb === GAS){ if(ka !== kb) return NONE; word = 'Gas Mix'; }
+    // everything that's in either, up to five things (past that, what's added just blends in)
+    var ings = [];
+    ingsOf(a).concat(ingsOf(b)).forEach(function(g){ if(ings.indexOf(g) < 0 && ings.length < MAX_INGS) ings.push(g); });
+    if(ings.length < 2) return NONE;
+    ings.sort(byId);
+    word = wordFor(ings, word);
+    var id = makeMix(word, ings);
+    return id !== NONE ? id : FALLBACK_MIX[word];
+  }
+
+  function colourOf(i){
+    var t = grid[i];
+    return MIXED[t] && mixc[i] ? mixc[i] : PAL[t * 4 + shade[i]];
+  }
+  // halfway between two colours, a touch lighter or darker so a mixture still has some grain
+  function blendColour(c1, c2){
+    var d = (Math.random() * 15 | 0) - 7;
+    var r = ((c1 & 255) + (c2 & 255) >> 1) + d;
+    var g = (((c1 >> 8) & 255) + ((c2 >> 8) & 255) >> 1) + d;
+    var b = (((c1 >> 16) & 255) + ((c2 >> 16) & 255) >> 1) + d;
+    return pack(r < 0 ? 0 : r > 255 ? 255 : r, g < 0 ? 0 : g > 255 ? 255 : g, b < 0 ? 0 : b > 255 ? 255 : b);
+  }
+
+  // mixes two cells into one mixture, sharing their colour and heat; false if they can't mix
+  function mixCells(j, k){
+    var to = mixResult(grid[j], grid[k]);
+    if(to === NONE) return false;
+    var c1 = colourOf(j), c2 = colourOf(k), T = (temp[j] + temp[k]) / 2;
+    if(grid[j] !== to) set(j, to);
+    if(grid[k] !== to) set(k, to);
+    temp[j] = T; temp[k] = T;
+    mixc[j] = blendColour(c1, c2);
+    mixc[k] = blendColour(c1, c2);
+    return true;
+  }
+
+  // the mix brush: nudge things past each other, make any recipe between them happen, and
+  // blend anything else together
   function stirAt(j, x, y){
     var k = neighbour(x, y);
     if(k < 0 || k === j) return;
-    var a = grid[j], b = grid[k], r = rx(a, b);
-    if(r !== undefined && temp[j] >= RX_T[r]){
-      if(RX_OTHER[r] !== NONE) set(k, RX_OTHER[r]);
-      if(RX_TO[r] !== NONE) set(j, RX_TO[r]);
-    } else if((MOVES[a] || KIND[a] === POWDER) && (b === EMPTY || MOVES[b] || KIND[b] === POWDER) && Math.random() < 0.5){
+    if(forceReact(j, k)) return;
+    if(Math.random() < 0.3 && mixCells(j, k)) return;
+    var a = grid[j], b = grid[k];
+    if((MOVES[a] || KIND[a] === POWDER) && (b === EMPTY || MOVES[b] || KIND[b] === POWDER) && Math.random() < 0.5){
       swap(j, k);
     }
+  }
+
+  // ---------- people ----------
+  // life slot of a body: bit 0 which way they face, bit 1 they've had a head,
+  // bits 2-7 how far they've been falling, bits 8-15 how long they've been under water
+  function movePair(i, j){   // moves a person so their body ends up at j (their head comes too)
+    if(j === i + W){ swap(i, j); swap(i - W, i); }
+    else { swap(i - W, j - W); swap(i, j); }
+  }
+  function personGone(i){    // both halves float off as a ghost
+    if(i >= W && HEAD_OF[grid[i]] === grid[i - W]) set(i - W, GHOST);
+    set(i, GHOST);
+  }
+  // a head just sits on its body; one with no body under it is a ghost
+  function headUpdate(i, x, y, t){
+    if(y + 1 >= H || HEAD_OF[grid[i + W]] !== t) set(i, GHOST);
+    return true;
+  }
+  function placePerson(x, y, t){
+    x = Math.max(0, Math.min(W - 1, x));
+    for(y = Math.min(H - 1, y); y > 0; y--){   // right where asked, or the first spot above it with room
+      var i = y * W + x;
+      if(isOpen(grid[i]) && isOpen(grid[i - W])){
+        spawn(i, t); life[i] = 2 | (Math.random() < 0.5 ? 1 : 0);
+        spawn(i - W, HEAD_OF[t]);
+        return true;
+      }
+    }
+    return false;
+  }
+  function wade(n){ return isOpen(n) || KIND[n] === LIQUID; }
+  function dropBelow(x, y){ var d = 0; for(var yy = y + 1; yy < H && d < 9 && isOpen(grid[yy * W + x]); yy++) d++; return d; }
+  // what makes someone turn and run: fire, anything scalding, acid, and (unless they are one) zombies
+  function scary(j, t){
+    var n = grid[j];
+    if(n === EMPTY) return false;
+    if(KIND[n] === FLAME) return ARGN[t] !== JOB_FIRE;
+    if(temp[j] > (ARGN[t] === JOB_FIRE ? 120 : 60)) return true;
+    if(CUSTOM[n] === acidUpdate) return true;
+    return ARGN[t] !== JOB_ZOMBIE && (n === ZOMBIE || n === ZHEAD);
+  }
+
+  function humanUpdate(i, x, y, t){
+    var hd = HEAD_OF[t], L = life[i];
+    if(y < 1 || grid[i - W] !== hd){
+      // no head: someone brand new (cloned, or dropped in by the white hole) grows one if there's room
+      if(!(L & 2) && y > 0 && isOpen(grid[i - W])){ spawn(i - W, hd); life[i] = 2 | (Math.random() < 0.5 ? 1 : 0); }
+      else personGone(i);
+      return true;
+    }
+    var h = i - W, fall = (L >> 2) & 63, air = L >> 8;
+    L &= 3;
+    // falling, and a long drop onto something hard is the end of them
+    var below = y + 1 < H ? grid[i + W] : WALL;
+    if(isOpen(below)){
+      life[i] = L | (Math.min(63, fall + 1) << 2);
+      movePair(i, i + W);
+      return true;
+    }
+    if(fall > 40 && KIND[below] !== LIQUID){ personGone(i); return true; }
+    // under water: swim up for air, and drown if it takes too long
+    if(y > 1 && KIND[grid[h - W]] === LIQUID){
+      if(++air > 220){ personGone(i); return true; }
+      life[i] = L | (air << 8);
+      if(Math.random() < 0.35) movePair(i, i - W);
+      return true;
+    }
+    life[i] = L;
+
+    var dir = L & 1 ? 1 : -1, nx = x + dir;
+    if(nx < 0 || nx >= W){ life[i] = L ^ 1; return true; }
+    var j = i + dir, nx2 = nx + dir;
+    var run = scary(j, t) || scary(h + dir, t) || (y + 1 < H && scary(j + W, t)) ||
+              (nx2 >= 0 && nx2 < W && (scary(j + dir, t) || scary(h + dir + dir, t)));
+    if(run){   // turn and run the other way
+      L ^= 1; life[i] = L; dir = -dir; nx = x + dir;
+      if(nx < 0 || nx >= W) return true;
+      j = i + dir;
+    }
+    var ahead = grid[j], aheadH = grid[h + dir];
+    if(!run && ARGN[t] && work(i, h, x, y, t, dir, j, ahead, aheadH)) return true;
+    if(FOODY[ahead] && Math.random() < 0.01){ set(j, EMPTY); return true; }   // a snack
+    if(!run){
+      if(Math.random() > (ARGN[t] === JOB_ZOMBIE ? 0.12 : 0.3)) return true;
+      if(Math.random() < 0.02){ life[i] = L ^ 1; return true; }
+    }
+    // walk (or wade), step up a ledge, or turn round; and don't walk off a cliff unless running for it
+    if(wade(ahead) && wade(aheadH)){
+      if(!run && isOpen(ahead) && dropBelow(nx, y) > 8){ life[i] = L ^ 1; return true; }
+      movePair(i, j);
+      return true;
+    }
+    if(y > 1 && isOpen(aheadH) && isOpen(grid[h - W + dir]) && isOpen(grid[h - W])){ movePair(i, h + dir); return true; }
+    life[i] = L ^ 1;
+    return true;
+  }
+
+  // jobs: true if they spent this turn working
+  function work(i, h, x, y, t, dir, j, ahead, aheadH){
+    var job = ARGN[t], k, n;
+    if(job === JOB_FIRE){
+      // firefighters hose down any fire they can see
+      if(Math.random() < 0.5){
+        var fx = x + (Math.random() * 21 | 0) - 10, fy = y + (Math.random() * 13 | 0) - 8;
+        if(fx < 0 || fx >= W || fy < 0 || fy >= H) return false;
+        var f = fy * W + fx;
+        n = grid[f];
+        if(KIND[n] !== FLAME && !(n !== EMPTY && KIND[n] !== GAS && temp[f] > 250)) return false;
+        var side = fx > x ? 1 : fx < x ? -1 : dir;
+        life[i] = (life[i] & ~1) | (side > 0 ? 1 : 0);
+        if(x + side >= 0 && x + side < W && grid[h + side] === EMPTY && Math.random() < 0.3) spawn(h + side, WATER);   // the hose
+        if(KIND[n] === FLAME) set(f, STEAM); else temp[f] = Math.max(room, temp[f] - 150);
+        return true;
+      }
+      return false;
+    }
+    if(job === JOB_BUILD){
+      // builders put up the odd hut, and otherwise lay bricks and planks in front of them (then climb them)
+      if(Math.random() < 0.0006 && y > 14){
+        var cx = x + dir * 7;
+        if(flatClear(cx, y + 1, 9, 8)){ hut(cx, y + 1); return true; }
+      }
+      if(Math.random() < 0.003 && isOpen(ahead) && y > 12 && y + 1 < H && !isOpen(grid[j + W])){
+        spawn(j, Math.random() < 0.7 ? BRICK : WOOD);
+        return true;
+      }
+      return false;
+    }
+    if(job === JOB_MINE){
+      // miners dig through rock and earth, and now and then dig down instead
+      if(DIGGABLE[ahead] || DIGGABLE[aheadH]){
+        if(Math.random() < 0.08){
+          if(DIGGABLE[ahead]) set(j, EMPTY);
+          if(DIGGABLE[aheadH]) set(h + dir, EMPTY);
+        }
+        return true;
+      }
+      if(y + 2 < H && DIGGABLE[grid[i + W]] && Math.random() < 0.002){ set(i + W, EMPTY); return true; }
+      return false;
+    }
+    if(job === JOB_FARM){
+      // farmers plant seeds in the soil behind them
+      var bx = x - dir, back = i - dir;
+      if(Math.random() < 0.004 && bx >= 0 && bx < W && grid[back] === EMPTY && y + 1 < H && SOIL[grid[back + W]]){ spawn(back, SEED); return true; }
+      return false;
+    }
+    if(job === JOB_ZOMBIE){
+      // zombies turn anyone they touch, and shamble towards anyone they can see
+      for(k = -1; k <= 1; k += 2){
+        if(x + k < 0 || x + k >= W) continue;
+        n = grid[i + k];
+        if(IS_PERSON[n] && n !== ZOMBIE && HEAD_OF[n] === grid[h + k] && Math.random() < 0.06){
+          set(i + k, ZOMBIE); set(h + k, ZHEAD); life[i + k] = 2 | (k > 0 ? 0 : 1);
+          return true;
+        }
+      }
+      if(Math.random() < 0.05){
+        for(var d = 1; d < 30; d++){
+          for(k = -1; k <= 1; k += 2){
+            var sx = x + k * d;
+            if(sx < 0 || sx >= W) continue;
+            n = grid[y * W + sx];
+            if(IS_PERSON[n] && n !== ZOMBIE){ life[i] = (life[i] & ~1) | (k > 0 ? 1 : 0); return false; }
+          }
+        }
+      }
+    }
+    return false;
   }
 
   function paintLine(x0, y0, x1, y1, t){
@@ -3791,6 +4426,7 @@
   TOOL_SWATCH[WIND_T] = 'linear-gradient(135deg, #e8f4ff, #9ab8d8)';
   TOOL_SWATCH[BOOM_T] = 'radial-gradient(circle, #ffffff, #ff8a1a 45%, #8a1a0a)';
   TOOL_SWATCH[PUSH_T] = 'linear-gradient(135deg, #d8c8a8, #8a7a5a)';
+  STAMPS.forEach(function(s, k){ TOOL_SWATCH[STAMP0 + k] = 'linear-gradient(135deg, ' + SWATCH[ID[s[2]]] + ' 50%, ' + SWATCH[ID[s[3]]] + ' 50%)'; });
 
   // every pickable element once, in section order, for the search box
   var searchEl = document.getElementById('search');
@@ -3910,7 +4546,13 @@
     });
   }
 
-  function select(id){ tool = id; markTool(); }
+  function select(id){
+    tool = id;
+    markTool();
+    var tap = window.matchMedia && matchMedia('(pointer: coarse)').matches ? 'Tap' : 'Click';
+    if(isStamp(id)) toast(tap + ' where you want the ' + STAMPS[id - STAMP0][0].toLowerCase() + '.');
+    else if(id < ERASE && IS_PERSON[id]) toast(tap + ' (or hold) to drop in people.');
+  }
 
   function setBrush(v){
     brush = Math.max(1, Math.min(24, v | 0));
@@ -3978,7 +4620,7 @@
   pauseBtn.addEventListener('click', function(){ setPaused(!paused); pauseBtn.blur(); });
   heatBtn.addEventListener('click', function(){ setHeatView(!heatView); heatBtn.blur(); });
   function clearAll(){
-    grid.fill(0); life.fill(0); temp.fill(room);
+    grid.fill(0); life.fill(0); temp.fill(room); mixc.fill(0);
     pres.fill(0); airVX.fill(0); airVY.fill(0); BOIL.fill(roomBoil); airOn = false;
   }
   document.getElementById('clear').addEventListener('click', function(e){
@@ -3994,6 +4636,32 @@
     if(open) moreNote.textContent = '';
   }
   function note(s){ moreNote.textContent = s; }
+  // a message over the canvas for a few seconds
+  var toastEl = document.getElementById('toast'), toastTimer = 0;
+  var UNDO_TIP = window.matchMedia && matchMedia('(pointer: coarse)').matches ? 'More › Undo takes it back.' : 'Ctrl+Z takes it back.';
+  function toast(s){
+    toastEl.textContent = s;
+    toastEl.hidden = false;
+    toastEl.style.animation = 'none'; void toastEl.offsetWidth; toastEl.style.animation = '';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.hidden = true; }, 3200);
+  }
+
+  // the dice: any element at all, picked at random, and shown in the list
+  var diceBtn = document.getElementById('dice');
+  function randomElement(){
+    var names = ALL.filter(function(n){ return TOOL_IDS[n] === undefined; }), n = pick(names);
+    select(ID[n]);
+    searchEl.value = labelOf(ID[n]);
+    query = searchEl.value.toLowerCase();
+    limit = PAGE;
+    renderSections();
+    renderElements();
+    elsEl.scrollTop = 0;
+    diceBtn.classList.remove('roll'); void diceBtn.offsetWidth; diceBtn.classList.add('roll');
+    toast('Random pick: ' + labelOf(ID[n]));
+  }
+  diceBtn.addEventListener('click', function(){ randomElement(); diceBtn.blur(); });
   moreBtn.addEventListener('click', function(){ openMore(morePop.hidden); });
   document.addEventListener('pointerdown', function(e){
     if(!morePop.hidden && !document.getElementById('more').contains(e.target)) openMore(false);
@@ -4003,13 +4671,13 @@
   var undoStack = [];
   function snapshot(){
     if(!built) return;
-    undoStack.push({ w: W, h: H, grid: grid.slice(), life: life.slice(), shade: shade.slice(), temp: temp.slice() });
+    undoStack.push({ w: W, h: H, grid: grid.slice(), life: life.slice(), shade: shade.slice(), temp: temp.slice(), mixc: mixc.slice() });
     if(undoStack.length > 10) undoStack.shift();
   }
   function undo(){
     var s = undoStack.pop();
     if(!s || s.w !== W || s.h !== H) return false;
-    grid.set(s.grid); life.set(s.life); shade.set(s.shade); temp.set(s.temp);
+    grid.set(s.grid); life.set(s.life); shade.set(s.shade); temp.set(s.temp); mixc.set(s.mixc);
     return true;
   }
   document.getElementById('undo').addEventListener('click', function(){ note(undo() ? 'Undone.' : 'Nothing left to undo.'); });
@@ -4026,35 +4694,43 @@
   segment('speed-seg', load('powder.speed') || '1', function(v){ speed = +v || 1; save('powder.speed', v); });
   segment('shape-seg', load('powder.shape') || 'round', function(v){ squareBrush = v === 'square'; save('powder.shape', v); });
 
-  // one saved scene, kept in this browser: element names plus run-length coded cells and temperatures
-  function saveScene(){
-    var map = {}, names = [], cells = [], temps = [], prev = -1, run = 0, pt, tr = 0;
+  // =====================================================================
+  // ---------- saving: eight slots in this browser, and files to keep or share ----------
+  // =====================================================================
+  // a scene is the element names plus run-length coded cells, temperatures and mixture colours
+  function sceneData(){
+    var map = {}, names = [], cells = [], temps = [], mixes = [], prev = -1, run = 0, pt, tr = 0, pm, mr = 0;
     for(var i = 0; i < N; i++){
       var t = grid[i], p = map[t];
       if(p === undefined){ p = map[t] = names.length; names.push(NAMES[t]); }
       if(p === prev) run++; else { if(run) cells.push(prev, run); prev = p; run = 1; }
       var T = t === EMPTY ? null : Math.round(temp[i]);
       if(tr && T === pt) tr++; else { if(tr) temps.push(pt, tr); pt = T; tr = 1; }
+      var M = MIXED[t] ? mixc[i] : 0;   // the colour of each mixture
+      if(mr && M === pm) mr++; else { if(mr) mixes.push(pm, mr); pm = M; mr = 1; }
     }
-    cells.push(prev, run); temps.push(pt, tr);
-    try {
-      localStorage.setItem('powder.scene', JSON.stringify({ v: 1, w: W, h: H, names: names, cells: cells, temps: temps, room: room, atm: roomAtm }));
-      return true;
-    } catch(e){ return false; }
+    cells.push(prev, run); temps.push(pt, tr); mixes.push(pm, mr);
+    // and what each mixture in it is made of, so it can be made again on a fresh page
+    var mixdefs = {};
+    names.forEach(function(nm){ var t = ID[nm]; if(MIX_INGS[t]) mixdefs[nm] = [MIX_WORD[t], MIX_INGS[t].map(function(g){ return NAMES[g]; })]; });
+    return { v: 1, w: W, h: H, names: names, cells: cells, temps: temps, mixes: mixes, mixdefs: mixdefs, room: room, atm: roomAtm };
   }
-  function loadScene(){
-    var d;
-    try { d = JSON.parse(localStorage.getItem('powder.scene')); } catch(e){ d = null; }
-    if(!d || !d.names) return false;
+  function applyScene(d){
+    if(!d || !d.names || !d.cells || !(d.w > 0) || !(d.h > 0) || d.w * d.h > 4e6) return false;
     snapshot();
     clearAll();
     setRoom(d.room, d.atm);
+    if(d.mixdefs) Object.keys(d.mixdefs).forEach(function(nm){
+      var m = d.mixdefs[nm], ings = m[1].map(function(q){ return DEFINED[q] ? ID[q] : NONE; });
+      if(ings.indexOf(NONE) < 0) makeMix(m[0].replace(/^Frozen /, ''), ings.sort(byId));   // (a frozen one comes with its mixture)
+    });
     var ids = d.names.map(function(n){ return DEFINED[n] ? ID[n] : EMPTY; });
     var oy = H - d.h;   // a scene saved on a different screen size sits on the ground
+    var total = d.w * d.h;
     function place(runs, each){
       var k = 0;
-      for(var c = 0; c < runs.length; c += 2){
-        for(var r = 0; r < runs[c + 1]; r++, k++){
+      for(var c = 0; c < runs.length && k < total; c += 2){
+        for(var r = 0; r < runs[c + 1] && k < total; r++, k++){
           var x = k % d.w, y = ((k / d.w) | 0) + oy;
           if(x < W && y >= 0 && y < H) each(y * W + x, runs[c]);
         }
@@ -4062,13 +4738,132 @@
     }
     place(d.cells, function(i, p){ if(ids[p] !== EMPTY) set(i, ids[p]); });
     place(d.temps, function(i, T){ if(T !== null && grid[i] !== EMPTY && !FIXED[grid[i]]) temp[i] = T; });
+    if(d.mixes) place(d.mixes, function(i, c){ if(c && MIXED[grid[i]]) mixc[i] = c; });
     return true;
   }
-  document.getElementById('save-scene').addEventListener('click', function(){
-    note(built && saveScene() ? 'Saved. Load it any time on this browser.' : 'Couldn’t save here (storage is full or blocked).');
+  var SLOT_N = 8, savesEl = document.getElementById('saves'), slotsEl = document.getElementById('slots');
+  var saveName = document.getElementById('save-name'), savesNote = document.getElementById('saves-note');
+  function slotKey(k){ return 'powder.slot.' + k; }
+  function readSlot(k){ try { var s = localStorage.getItem(slotKey(k)); return s ? JSON.parse(s) : null; } catch(e){ return null; } }
+  // (the one save from before slots becomes slot 1)
+  try {
+    var oldSave = localStorage.getItem('powder.scene');
+    if(oldSave && !localStorage.getItem(slotKey(1))){
+      localStorage.setItem(slotKey(1), JSON.stringify({ name: 'Saved scene', time: Date.now(), thumb: null, scene: JSON.parse(oldSave) }));
+      localStorage.removeItem('powder.scene');
+    }
+  } catch(e){}
+
+  function thumbnail(){
+    render();
+    var tw = 160, th = Math.max(1, Math.round(tw * H / W)), c = document.createElement('canvas');
+    c.width = tw; c.height = th;
+    var g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.drawImage(canvas, 0, 0, tw, th);
+    try { return c.toDataURL('image/png'); } catch(e){ return null; }
+  }
+  function when(t){
+    var d = new Date(t), now = new Date();
+    var time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return d.toDateString() === now.toDateString() ? 'Today ' + time : d.toLocaleDateString([], { day: 'numeric', month: 'short' }) + ' ' + time;
+  }
+  function savesSay(s){ savesNote.textContent = s; }
+
+  function slotCard(k){
+    var rec = readSlot(k), card = document.createElement('div');
+    card.className = 'slot' + (rec ? '' : ' empty');
+    var pic = document.createElement('div');
+    pic.className = 'pic';
+    if(rec && rec.thumb){ var im = new Image(); im.src = rec.thumb; im.alt = ''; pic.appendChild(im); }
+    else pic.textContent = rec ? 'Saved' : 'Empty';
+    var nm = document.createElement('div');
+    nm.className = 'nm';
+    nm.textContent = rec ? rec.name : 'Slot ' + k;
+    var tm = document.createElement('div');
+    tm.className = 'tm';
+    tm.textContent = rec ? when(rec.time) : ' ';
+    var row = document.createElement('div');
+    row.className = 'slot-btns';
+    function btn(text, fn, cls){
+      var b = document.createElement('button');
+      b.type = 'button'; b.textContent = text;
+      if(cls) b.className = cls;
+      b.addEventListener('click', fn);
+      row.appendChild(b);
+      return b;
+    }
+    // saving over something, and deleting, both ask twice
+    var saveB = btn(rec ? 'Save' : 'Save here', function(){
+      if(rec && !saveB.dataset.sure){ saveB.dataset.sure = 1; saveB.textContent = 'Sure?'; saveB.classList.add('warn'); return; }
+      if(!built) return;
+      var name = (saveName.value || '').trim() || lastWorld.replace(/^(a|an) /, '').replace(/^./, function(c){ return c.toUpperCase(); }) || 'My world';
+      try {
+        localStorage.setItem(slotKey(k), JSON.stringify({ name: name, time: Date.now(), thumb: thumbnail(), scene: sceneData() }));
+        savesSay('Saved to slot ' + k + '.');
+      } catch(e){ savesSay('Couldn’t save: this browser’s storage is full or blocked. Try deleting a slot, or Download it as a file.'); }
+      renderSlots();
+    }, 'primary');
+    if(rec){
+      btn('Load', function(){
+        if(applyScene(rec.scene)){ closeSaves(); toast('Loaded “' + rec.name + '”. ' + UNDO_TIP); hint.classList.add('gone'); }
+        else savesSay('That slot couldn’t be loaded.');
+      });
+      var delB = btn('Delete', function(){
+        if(!delB.dataset.sure){ delB.dataset.sure = 1; delB.textContent = 'Sure?'; delB.classList.add('warn'); return; }
+        try { localStorage.removeItem(slotKey(k)); } catch(e){}
+        savesSay('Slot ' + k + ' is empty again.');
+        renderSlots();
+      });
+    }
+    card.appendChild(pic); card.appendChild(nm); card.appendChild(tm); card.appendChild(row);
+    return card;
+  }
+  function renderSlots(){
+    slotsEl.innerHTML = '';
+    for(var k = 1; k <= SLOT_N; k++) slotsEl.appendChild(slotCard(k));
+  }
+  function openSaves(){
+    openMore(false);
+    savesSay('');
+    if(!saveName.value && lastWorld) saveName.value = lastWorld.replace(/^(a|an) /, '').replace(/^./, function(c){ return c.toUpperCase(); });
+    renderSlots();
+    savesEl.hidden = false;
+    document.getElementById('saves-close').focus();
+  }
+  function closeSaves(){ savesEl.hidden = true; }
+  document.getElementById('saves-btn').addEventListener('click', openSaves);
+  document.getElementById('saves-close').addEventListener('click', closeSaves);
+  savesEl.addEventListener('pointerdown', function(e){ if(e.target === savesEl) closeSaves(); });
+
+  // download the scene as a file, or open one
+  document.getElementById('export').addEventListener('click', function(){
+    if(!built) return;
+    var name = (saveName.value || '').trim() || 'My world';
+    var blob = new Blob([JSON.stringify({ powder: 1, name: name, scene: sceneData() })], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'powder-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.json';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    savesSay('Downloaded ' + a.download + '.');
   });
-  document.getElementById('load-scene').addEventListener('click', function(){
-    note(built && loadScene() ? 'Loaded. Ctrl+Z to go back.' : 'No saved scene yet.');
+  var importFile = document.getElementById('import-file');
+  document.getElementById('import').addEventListener('click', function(){ importFile.click(); });
+  importFile.addEventListener('change', function(){
+    var f = importFile.files && importFile.files[0];
+    if(!f) return;
+    var rd = new FileReader();
+    rd.onload = function(){
+      var d = null;
+      try { d = JSON.parse(rd.result); } catch(e){}
+      var scene = d && d.scene ? d.scene : d;
+      if(applyScene(scene)){ closeSaves(); toast('Opened “' + ((d && d.name) || f.name) + '”. ' + UNDO_TIP); hint.classList.add('gone'); }
+      else savesSay('That file isn’t a Powder scene.');
+      importFile.value = '';
+    };
+    rd.readAsText(f);
   });
 
   // a crisp, scaled-up picture of the canvas
@@ -4092,56 +4887,581 @@
     });
   });
 
-  // surprise me: rolling ground, a lake in the dip, and some life to go with it
-  var SCENES = [
-    ['a meadow', 'Grass', 'Dirt', 'Water', ['Seed', 'Acorn', 'Frog', 'Bee', 'Rose', 'Butterfly', 'Worm', 'Fish']],
-    ['a beach', 'Sand', 'Sandstone', 'Saltwater', ['Crab', 'Seashells', 'Coral', 'Fish', 'Cactus', 'Shark', 'Kelp']],
-    ['a swamp', 'Mud', 'Dirt', 'Swamp Water', ['Frog', 'Mosquito', 'Mushroom', 'Moss', 'Lily Pad', 'Tadpole', 'Dragonfly']],
-    ['a volcano', 'Basalt', 'Stone', 'Lava', ['Volcanic Ash', 'Meteor', 'Obsidian', 'Ash Cloud', 'Sulfur']],
-    ['a winter pond', 'Snow', 'Packed Snow', 'Slush', ['Penguin', 'Pine Cone', 'Snow Cloud', 'Ice', 'Fish']],
-    ['candy land', 'Cotton Candy', 'Cake', 'Melted Chocolate', ['Gummy Bears', 'Candy', 'Sprinkles', 'Ant', 'Marshmallow']],
-    ['Mars', 'Mars Dust', 'Mars Rock', null, ['Meteor', 'Comet', 'Moon Rock', 'Dry Ice']],
-    ['a night garden', 'Grass', 'Dirt', 'Water', ['Firefly', 'Glowing Mushroom', 'Moth', 'Bat', 'Glowing Water', 'Seed']],
-    ['a coral reef', 'Sand', 'Gravel', 'Saltwater', ['Coral', 'Fish', 'Goldfish', 'Jellyfish', 'Octopus', 'Seaweed', 'Pufferfish', 'Seahorse']]
+  // =====================================================================
+  // ---------- structures ----------
+  // =====================================================================
+  // Houses, towers, trees, boats and the rest, built block by block. Each stands on the ground
+  // at row gy (the top row of whatever it's standing on), centred on cx. Surprise me builds whole
+  // worlds out of them, and the Build tools put one down wherever you click.
+  function ri(a, b){ return a + (Math.random() * (b - a + 1) | 0); }
+  function pick(list){ return list[Math.random() * list.length | 0]; }
+  function sz(v){ return Math.max(3, Math.round(v * Math.max(0.55, Math.min(1.15, W / 300)))); }   // smaller on small screens
+  function put(x, y, n){
+    if(x < 0 || x >= W || y < 0 || y >= H) return;
+    var i = y * W + x, id = typeof n === 'number' ? n : (DEFINED[n] ? ID[n] : EMPTY);
+    if(id === EMPTY){ grid[i] = EMPTY; life[i] = 0; mixc[i] = 0; temp[i] = room; }
+    else spawn(i, id);
+  }
+  function fill(x0, y0, w, h, n){ for(var y = y0; y < y0 + h; y++) for(var x = x0; x < x0 + w; x++) put(x, y, n); }
+  function outline(x0, y0, w, h, n){
+    for(var x = x0; x < x0 + w; x++){ put(x, y0, n); put(x, y0 + h - 1, n); }
+    for(var y = y0; y < y0 + h; y++){ put(x0, y, n); put(x0 + w - 1, y, n); }
+  }
+  function blob(cx, cy, r, n, rough){   // a rough round clump: tree tops, islands, ore
+    for(var dy = -r; dy <= r; dy++) for(var dx = -r; dx <= r; dx++){
+      if(dx * dx + dy * dy <= r * r - Math.random() * (rough || 0) * r) put(cx + dx, cy + dy, n);
+    }
+  }
+  function door(x, gy){ for(var y = gy - 4; y <= gy - 2; y++) put(x, y, EMPTY); }   // room for a body, a head and a bit
+  function people(x0, x1, y, n, who){
+    for(var k = 0; k < n; k++) placePerson(ri(x0, Math.max(x0, x1)), y, idn(pick(who || ['Human'])));
+  }
+  // true if there's a clear w×h space standing on firm, level ground at row gy
+  function flatClear(cx, gy, w, h){
+    var x0 = cx - (w >> 1);
+    if(x0 < 0 || x0 + w > W || gy - h < 0 || gy >= H) return false;
+    for(var x = x0; x < x0 + w; x++){
+      var g = grid[gy * W + x];
+      if(isOpen(g) || KIND[g] === LIQUID) return false;
+      for(var y = gy - h; y < gy; y++) if(!isOpen(grid[y * W + x])) return false;
+    }
+    return true;
+  }
+  function groundBelow(x, y){
+    for(var yy = Math.max(0, y); yy < H; yy++) if(!isOpen(grid[yy * W + x])) return yy;
+    return H;
+  }
+
+  function house(cx, gy, o){
+    o = o || {};
+    var w = o.w || sz(ri(13, 19)), h = o.h || Math.max(7, sz(ri(8, 11))), x0 = cx - (w >> 1), top = gy - h;
+    var wall = o.wall || pick(['Brick', 'Wood', 'Stone Brick', 'Oak Wood', 'Birch Wood', 'Plaster']);
+    var roof = o.roof || pick(['Terracotta', 'Wood', 'Brick', 'Pine Wood', 'Slate']);
+    fill(x0, top, w, h, EMPTY);
+    outline(x0, top, w, h, wall);
+    fill(x0 + 1, gy - 1, w - 2, 1, o.floor || 'Wood');
+    var left = Math.random() < 0.5;
+    door(left ? x0 : x0 + w - 1, gy);
+    // windows: in the other wall, and high up either side on a tall house
+    var wy = top + Math.max(2, (h >> 1) - 1);
+    fill(left ? x0 + w - 1 : x0, wy, 1, 2, 'Glass');
+    if(h > 8) fill(left ? x0 : x0 + w - 1, top + 2, 1, 2, 'Glass');
+    // a pitched roof with an overhang, and a chimney
+    for(var r = 0; x0 - 1 + r <= x0 + w - r; r++) fill(x0 - 1 + r, top - 1 - r, w + 2 - 2 * r, 1, roof);
+    var chx = x0 + w - 4, chTop = top - 1 - Math.min(chx - x0 + 1, x0 + w - chx) - 2;
+    if(w > 10) fill(chx, chTop, 2, top - chTop, 'Brick');
+    if(o.fire){ for(var k = 0; k < 4; k++){ var fx = ri(x0, x0 + w - 1), fy = top - 1 - ri(0, 2); if(fx >= 0 && fx < W && fy >= 0 && FLAM[grid[fy * W + fx]]) ignite(fy * W + fx); } }
+    people(x0 + 2, x0 + w - 3, gy - 2, o.people != null ? o.people : ri(1, 2), o.who);
+  }
+  function cabin(cx, gy){ house(cx, gy, { wall: pick(['Pine Wood', 'Oak Wood', 'Wood']), roof: pick(['Pine Wood', 'Wood']), w: sz(ri(11, 15)) }); }
+  function hut(cx, gy){ house(cx, gy, { w: 9, h: 7, wall: pick(['Wood', 'Brick', 'Oak Wood']), roof: 'Wood', people: 0 }); }
+  function barn(cx, gy){
+    var w = sz(ri(19, 25)), h = Math.max(9, sz(ri(10, 12)));
+    house(cx, gy, { w: w, h: h, wall: 'Brick', roof: 'Wood', people: 0 });
+    var x0 = cx - (w >> 1);
+    fill(x0 + w - 6, gy - 3, 4, 2, 'Hay');
+    put(x0 + 3, gy - 2, 'Cow'); put(x0 + 6, gy - 2, 'Chicken');
+  }
+  function skyscraper(cx, gy){
+    var w = sz(ri(11, 17)) | 1, h = Math.max(14, Math.min(gy - 8, Math.round(H * (0.4 + Math.random() * 0.3)))), x0 = cx - (w >> 1), top = gy - h;
+    var skin = pick(['Glass', 'Glass', 'Concrete']);
+    fill(x0, top, w, h, EMPTY);
+    for(var y = top; y < gy; y++){
+      var floorRow = (gy - 1 - y) % 5 === 0;
+      put(x0, y, floorRow ? 'Steel' : skin); put(x0 + w - 1, y, floorRow ? 'Steel' : skin);
+      if(floorRow) fill(x0 + 1, y, w - 2, 1, 'Concrete');
+    }
+    fill(x0, top, w, 1, 'Steel');
+    fill(cx, top - 6, 1, 6, 'Steel');                     // the aerial
+    door(x0, gy); door(x0 + w - 1, gy);
+    for(var f = gy - 1; f > top + 4; f -= 5) if(Math.random() < 0.45) people(x0 + 2, x0 + w - 3, f - 1, 1);
+  }
+  function tower(cx, gy, o){
+    o = o || {};
+    var w = o.w || sz(ri(7, 9)), h = o.h || Math.max(12, Math.min(gy - 10, sz(ri(22, 32)))), x0 = cx - (w >> 1), top = gy - h, m = o.wall || 'Stone Brick';
+    fill(x0, top, w, h, EMPTY);
+    outline(x0, top, w, h, m);
+    for(var y = gy - 8; y > top + 3; y -= 7){
+      fill(x0 + 1, y, w - 2, 1, 'Wood');                  // floors
+      fill(x0, y - 4, 1, 2, 'Glass'); fill(x0 + w - 1, y - 4, 1, 2, 'Glass');   // and windows
+      if(Math.random() < 0.5) people(x0 + 1, x0 + w - 2, y - 1, 1, o.who);
+    }
+    for(var x = x0; x < x0 + w; x += 2) put(x, top - 1, m);   // battlements
+    if(o.flag !== false){ fill(cx, top - 7, 1, 6, 'Steel'); fill(cx + 1, top - 7, 3, 2, 'Cloth'); }
+    door(Math.random() < 0.5 ? x0 : x0 + w - 1, gy);
+  }
+  function castle(cx, gy){
+    var tw = sz(9), span = Math.min(W - 4, sz(ri(36, 46))), x0 = cx - (span >> 1);
+    var th = Math.max(16, Math.min(gy - 10, sz(ri(24, 30)))), wh = Math.round(th * 0.55);
+    fill(x0 + tw, gy - wh, span - 2 * tw, wh, 'Stone Brick');
+    for(var x = x0 + tw; x < x0 + span - tw; x += 2) put(x, gy - wh - 1, 'Stone Brick');
+    fill(cx - 2, gy - 6, 5, 6, EMPTY);                     // the gate
+    fill(cx - 2, gy - 7, 5, 1, 'Wood');
+    tower(x0 + (tw >> 1), gy, { w: tw, h: th, who: ['Human'] });
+    tower(x0 + span - 1 - (tw >> 1), gy, { w: tw, h: th, who: ['Human'] });
+    people(x0 + tw + 1, x0 + span - tw - 2, gy - wh - 2, 2);   // guards on the wall
+  }
+  function lighthouse(cx, gy){
+    var h = Math.max(12, Math.min(gy - 12, sz(ri(24, 32)))), x0 = cx - 2, top = gy - h;
+    for(var y = top; y < gy; y++) fill(x0, y, 5, 1, ((gy - y) / 4 | 0) % 2 ? 'Brick' : 'Plaster');
+    outline(x0, top - 5, 5, 5, 'Glass');
+    fill(x0 + 1, top - 4, 3, 3, 'Neon');                   // the light
+    fill(x0 - 1, top - 6, 7, 1, 'Steel'); fill(x0 + 1, top - 7, 3, 1, 'Steel');
+  }
+  function pyramid(cx, gy){
+    var w = Math.min(W - 4, sz(ri(25, 45))) | 1, x0 = cx - (w >> 1), rows = (w + 1) >> 1;
+    for(var r = 0; r < rows; r++) fill(x0 + r, gy - 1 - r, w - 2 * r, 1, 'Sandstone');
+    var ch = Math.max(2, rows >> 2);                        // the treasure room
+    fill(cx - 2, gy - 1 - ch, 5, ch, EMPTY);
+    fill(cx - 2, gy - 2, 5, 1, 'Gold');
+  }
+  function igloo(cx, gy){
+    var R = sz(ri(6, 8));
+    for(var dy = 0; dy <= R; dy++) for(var dx = -R; dx <= R; dx++){
+      var d = dx * dx + dy * dy;
+      if(d <= R * R) put(cx + dx, gy - 1 - dy, d >= (R - 1.6) * (R - 1.6) ? 'Packed Snow' : EMPTY);
+    }
+    var s = Math.random() < 0.5 ? -1 : 1;
+    for(var k = R - 2; k <= R; k++) for(var y = gy - 3; y < gy; y++) put(cx + s * k, y, EMPTY);
+    people(cx - 2, cx + 2, gy - 1, 1);
+  }
+  function tent(cx, gy){
+    var w = sz(ri(9, 13)) | 1, rows = (w + 1) >> 1;
+    for(var r = 0; r < rows; r++){ put(cx - (w >> 1) + r, gy - 1 - r, 'Cloth'); put(cx + (w >> 1) - r, gy - 1 - r, 'Cloth'); }
+    fill(cx - (w >> 1), gy - 3, 2, 3, EMPTY);             // the way in
+    put(cx, gy - rows - 1, 'Wood');
+    people(cx - 1, cx + 1, gy - 1, 1);
+  }
+  function dome(cx, gy){
+    var R = Math.min(gy - 3, sz(ri(10, 13)));
+    for(var dy = 0; dy <= R; dy++) for(var dx = -R; dx <= R; dx++){
+      var d = dx * dx + dy * dy;
+      if(d <= R * R) put(cx + dx, gy - 1 - dy, d >= (R - 1.2) * (R - 1.2) ? 'Glass' : EMPTY);
+    }
+    fill(cx - R + 1, gy - 1, 2 * R - 1, 1, 'Grass');
+    tree(cx + (R >> 1), gy - 1, 'oak', 0.6);
+    put(cx - 3, gy - 2, 'Seed'); put(cx - 5, gy - 2, 'Flower');
+    people(cx - (R >> 1), cx, gy - 2, ri(1, 2));
+  }
+  // trees: oak, birch, autumn, cherry (a round top), pine (a point) or palm
+  function tree(cx, gy, kind, scale){
+    var s = scale || 1;
+    var wood = { pine: 'Pine Wood', birch: 'Birch Wood', cherry: 'Cherry Wood', palm: 'Wood' }[kind] || 'Oak Wood';
+    var leaf = { autumn: 'Autumn Leaves', cherry: 'Cherry Blossom', pine: 'Pine Needles' }[kind] || 'Leaves';
+    var th = Math.max(3, Math.round(sz(ri(6, 11)) * s)), top = gy - th;
+    if(kind === 'palm'){
+      var x = cx;
+      for(var y = gy - 1; y >= top; y--){ put(x, y, wood); if((gy - y) % 4 === 3) x += 1; }
+      for(var a = 0; a < 5; a++){
+        var ang = Math.PI * (0.1 + a * 0.2);
+        for(var k = 1; k <= 5; k++) put(x + Math.round(Math.cos(ang) * k), top - 1 + Math.round(-Math.sin(ang) * k * 0.6 + k * k * 0.08), leaf);
+      }
+      put(x - 1, top, 'Coconut'); put(x + 1, top, 'Coconut');
+      return;
+    }
+    fill(cx, top, th > 8 ? 2 : 1, th, wood);
+    if(kind === 'pine'){
+      var rows = Math.round(sz(ri(9, 14)) * s);
+      for(var r = 0; r < rows; r++){ var half = Math.round(r * 0.45) + (r % 3 === 2 ? 1 : 0); fill(cx - half, top - rows + r + 3, 2 * half + 1, 1, leaf); }
+      return;
+    }
+    blob(cx, top - 1, Math.max(2, Math.round(sz(ri(4, 6)) * s)), leaf, 1.5);
+  }
+  function cactusPlant(cx, gy){
+    var h = sz(ri(5, 9)), top = gy - h;
+    fill(cx, top, 1, h, 'Cactus');
+    for(var s = -1; s <= 1; s += 2){
+      if(Math.random() < 0.7){ var ay = top + ri(1, h - 3); put(cx + s, ay, 'Cactus'); put(cx + 2 * s, ay, 'Cactus'); fill(cx + 2 * s, ay - 2, 1, 2, 'Cactus'); }
+    }
+  }
+  function bridge(xa, xb, y){
+    xa = Math.max(0, xa); xb = Math.min(W - 1, xb);
+    fill(xa, y, xb - xa + 1, 1, 'Wood');
+    fill(xa + 1, y - 3, xb - xa - 1, 1, 'Rope');
+    for(var x = xa + 4; x < xb - 2; x += 10){                // posts down to the bottom
+      for(var yy = y + 1; yy < H && (isOpen(grid[yy * W + x]) || KIND[grid[yy * W + x]] === LIQUID); yy++) put(x, yy, 'Wood');
+    }
+  }
+  function campfire(cx, gy){
+    put(cx - 2, gy - 1, 'Cobblestone'); put(cx + 2, gy - 1, 'Cobblestone');
+    fill(cx - 1, gy - 1, 3, 1, 'Wood'); put(cx, gy - 2, 'Wood');
+    if(gy - 2 >= 0) ignite((gy - 2) * W + cx);
+    if(gy - 1 >= 0) ignite((gy - 1) * W + cx);
+  }
+  function boat(cx, wl, wreck){   // wl: the row the water starts at
+    fill(cx - 4, wl + 1, 9, 1, 'Wood'); fill(cx - 6, wl, 13, 1, 'Wood'); fill(cx - 7, wl - 1, 15, 1, 'Wood');
+    fill(cx, wl - 10, 1, 9, 'Wood');
+    for(var r = 0; r < 7; r++) fill(cx + 1, wl - 9 + r, Math.max(1, r), 1, 'Cloth');
+    if(!wreck) people(cx - 5, cx - 2, wl - 2, 1);
+  }
+  function aquarium(cx, gy){
+    var w = sz(15), h = sz(10), x0 = cx - (w >> 1), top = gy - h;
+    outline(x0, top, w, h, 'Glass');
+    fill(x0 + 1, top + 1, w - 2, h - 2, 'Water');
+    fill(x0 + 1, gy - 2, w - 2, 1, 'Sand');
+    put(x0 + 2, gy - 3, 'Kelp'); put(x0 + w - 3, gy - 3, 'Kelp');
+    for(var k = 0; k < 4; k++) put(ri(x0 + 2, x0 + w - 3), ri(top + 2, gy - 4), pick(['Fish', 'Goldfish', 'Fish', 'Shrimp']));
+  }
+  function pool(cx, gy){
+    var w = sz(17), d = 5, x0 = cx - (w >> 1);
+    fill(x0, gy, w, d + 1, 'Tile');
+    fill(x0 + 1, gy, w - 2, d, 'Water');
+    fill(x0 - 1, gy - 1, w + 2, 1, EMPTY);
+    people(x0 - 6, x0 - 2, gy - 2, 1); people(x0 + w + 1, x0 + w + 5, gy - 2, 1);
+  }
+  function rocket(cx, gy){
+    fill(cx - 7, gy - 2, 15, 2, 'Concrete');
+    var b = gy - 2, h = Math.max(12, Math.min(b - 8, sz(ri(18, 24)))), x0 = cx - 2, top = b - h;
+    fill(x0, top, 5, h, EMPTY);
+    outline(x0, top, 5, h, 'Steel');
+    fill(x0 + 1, top + (h >> 1), 3, h - (h >> 1) - 1, 'Rocket Fuel');
+    put(cx, top + 2, 'Glass');
+    fill(cx - 1, top - 1, 3, 1, 'Steel'); put(cx, top - 2, 'Steel');
+    for(var k = 1; k <= 3; k++){ put(x0 - 1, b - k, 'Steel'); put(x0 + 5, b - k, 'Steel'); }
+    put(x0 - 2, b - 1, 'Steel'); put(x0 + 6, b - 1, 'Steel');
+    people(cx, cx, top + (h >> 1) - 1, 1);
+  }
+  function tntTower(cx, gy){
+    var w = 7, h = Math.max(12, Math.min(gy - 6, sz(ri(22, 28)))), x0 = cx - 3, top = gy - h;
+    fill(x0, top, w, h, EMPTY);
+    outline(x0, top, w, h, 'Brick');
+    for(var y = gy - 7; y > top + 2; y -= 6) fill(x0 + 1, y, w - 2, 1, 'Wood');
+    fill(x0 + 1, gy - 4, w - 2, 3, 'TNT');
+    fill(x0 - 16, gy - 1, 16, 1, 'Fuse');                   // light the far end with Ignite
+  }
+  function volcano(cx, gy){
+    var hh = Math.max(12, Math.min(gy - 8, sz(ri(30, 42)))), half = Math.round(hh * 1.5);
+    for(var dx = -half * 2; dx <= half * 2; dx++){
+      var t = gy - hh + Math.round(Math.abs(dx) * hh / half), x = cx + dx;   // (the slope carries on down to meet the ground)
+      if(x < 0 || x >= W) continue;
+      // down to whatever it's standing on, so a slope underneath doesn't leave it floating
+      for(var y = t; y < H && (y < gy || isOpen(grid[y * W + x]) || (KIND[grid[y * W + x]] === LIQUID && Math.abs(dx) <= half)); y++) put(x, y, 'Basalt');
+      if(y < t + 3) continue;
+      for(var b = 0; b < 9 && y + b < H - 2; b++) put(x, y + b, 'Basalt');   // (burying the old soil)
+    }
+    // a glowing magma chamber inside, and lava welling up in the crater and pouring down the sides
+    var cy = gy - Math.round(hh * 0.3), top = gy - hh;
+    blob(cx, cy, Math.max(3, Math.round(hh * 0.22)), 'Magma', 0.5);
+    fill(cx - 2, top - 1, 5, 2, EMPTY);
+    put(cx, top + 1, 'Magma Vent');
+    // the rock up top is still hot, so the lava keeps running (until it cools, and the eruption dies down)
+    var basalt = idn('Basalt');
+    for(var ry = 0; ry < hh; ry++) for(var rx = -half; rx <= half; rx++){
+      var qx = cx + rx, qy = top + ry, dd = Math.sqrt(rx * rx + ry * ry) / (hh * 0.7);
+      if(qx >= 0 && qx < W && qy >= 0 && qy < H && dd < 1 && grid[qy * W + qx] === basalt) temp[qy * W + qx] = room + 750 * (1 - dd);
+    }
+  }
+
+  // everything the Build tools can put down (the bridge goes where you click; the rest stand on the ground below)
+  var BUILDERS = {
+    house: house, cabin: cabin, hut: hut, barn: barn, skyscraper: skyscraper, tower: function(x, g){ tower(x, g); }, castle: castle,
+    lighthouse: lighthouse, pyramid: pyramid, igloo: igloo, tent: tent, dome: dome,
+    oak: function(x, g){ tree(x, g, 'oak'); }, pine: function(x, g){ tree(x, g, 'pine'); }, cherry: function(x, g){ tree(x, g, 'cherry'); },
+    autumn: function(x, g){ tree(x, g, 'autumn'); }, palm: function(x, g){ tree(x, g, 'palm'); }, cactus: cactusPlant,
+    campfire: campfire, aquarium: aquarium, pool: pool, rocket: rocket, tnttower: tntTower, volcano: volcano
+  };
+  function placeStamp(t, x, y){
+    var s = STAMPS[t - STAMP0];
+    if(!s) return;
+    x = Math.max(0, Math.min(W - 1, x)); y = Math.max(0, Math.min(H - 1, y));
+    if(s[1] === 'bridge'){ bridge(x - sz(18), x + sz(18), y); }
+    else if(s[1] === 'boat'){ boat(x, groundBelow(x, y)); }
+    else BUILDERS[s[1]](x, groundBelow(x, y));
+    toast(s[0] + ' built. ' + UNDO_TIP);
+  }
+  function isStamp(t){ return t >= STAMP0 && t < STAMP0 + STAMPS.length; }
+
+  // =====================================================================
+  // ---------- Surprise me: a whole little world ----------
+  // =====================================================================
+  // Ground in layers (with ore, caves and bedrock), water in the low bits, buildings on the flat
+  // bits, then people, animals and weather. Each kind of world picks from its own lists.
+  var BIOMES = [
+    { name: 'a village by the lake', top: 'Grass', under: 'Dirt', liquid: 'Water', bridge: true,
+      build: [['house', 3], ['tree', 5, 'oak'], ['tree', 2, 'birch'], ['campfire', 1]],
+      people: [['Human', 4], ['Farmer', 1], ['Builder', 1]], life: ['Chicken', 'Sheep', 'Bird', 'Butterfly', 'Fish', 'Frog', 'Rose', 'Bee'], sky: ['Cloud'] },
+    { name: 'a farm', top: 'Grass', under: 'Dirt', liquid: 'Water', hills: 0.4,
+      build: [['barn', 1], ['house', 1], ['field', 2], ['tree', 3, 'oak']],
+      people: [['Farmer', 3], ['Human', 2]], life: ['Cow', 'Cow', 'Chicken', 'Chicken', 'Sheep', 'Bee', 'Worm'], sky: ['Cloud'] },
+    { name: 'a castle on a hill', top: 'Grass', under: 'Dirt', liquid: 'Water', hills: 0.5, shape: 'hill',
+      build: [['castle', 1, 'top'], ['house', 2], ['tree', 4, 'oak']],
+      people: [['Human', 3], ['Builder', 1]], life: ['Bird', 'Sheep', 'Fish', 'Butterfly'], sky: ['Cloud'] },
+    { name: 'a big city', top: 'Asphalt', under: 'Dirt', liquid: null, hills: 0.05, topDepth: 2,
+      build: [['skyscraper', 4], ['house', 2], ['tree', 3, 'oak'], ['pool', 1]],
+      people: [['Human', 6], ['Firefighter', 2], ['Builder', 1]], life: ['Bird', 'Fly', 'Mouse'], sky: null },
+    { name: 'a town on fire', top: 'Grass', under: 'Dirt', liquid: 'Water', hills: 0.3,
+      build: [['house', 2, { fire: true, roof: 'Wood', wall: 'Wood' }], ['house', 2], ['tree', 3, 'autumn']],
+      people: [['Firefighter', 4], ['Human', 3]], life: ['Bird'], sky: null },
+    { name: 'a desert with pyramids', top: 'Sand', under: 'Sandstone', rock: 'Sandstone', liquid: 'Water', lakeDepth: 0.04, temp: 38, hills: 0.6,
+      build: [['pyramid', 2], ['tent', 2], ['cactus', 5], ['tree', 2, 'palm']],
+      people: [['Human', 3]], life: ['Lizard', 'Beetle', 'Snake'], sky: null, ores: ['Gold Ore', 'Copper Ore'] },
+    { name: 'a snowy village', top: 'Snow', under: 'Packed Snow', rock: 'Granite', liquid: 'Water', freeze: true, temp: -8,
+      build: [['igloo', 2], ['cabin', 2], ['tree', 5, 'pine']],
+      people: [['Human', 4]], life: ['Penguin', 'Penguin', 'Fish'], sky: ['Snow Cloud'] },
+    { name: 'a mountain mine', top: 'Grass', under: 'Dirt', liquid: 'Water', hills: 1.6, shape: 'mountain', mine: true,
+      build: [['cabin', 2], ['tree', 4, 'pine']], ores: ['Coal', 'Iron Ore', 'Gold Ore', 'Copper Ore', 'Silver Ore', 'Diamond', 'Emerald', 'Sapphire'], oreRich: 3,
+      people: [['Miner', 2], ['Human', 1]], life: ['Bat', 'Bird'], sky: ['Cloud'] },
+    { name: 'a zombie outbreak', top: 'Grass', under: 'Dirt', liquid: 'Water', hills: 0.4,
+      build: [['house', 4, { people: 1 }], ['tree', 3, 'autumn']],
+      people: [['Human', 5], ['Firefighter', 1], ['Zombie', 3]], life: ['Bat', 'Fly'], sky: ['Storm Cloud'] },
+    { name: 'a volcano island', top: 'Grass', under: 'Dirt', rock: 'Basalt', liquid: 'Saltwater', sea: 'both', temp: 28, volcano: true,
+      build: [['hut', 2], ['tree', 4, 'palm']],
+      people: [['Human', 3]], life: ['Crab', 'Fish', 'Shark', 'Bird'], sky: null },
+    { name: 'a beach town', top: 'Sand', under: 'Sandstone', liquid: 'Saltwater', sea: 'either', hills: 0.4, level: 0.76, temp: 30, boat: true,
+      build: [['lighthouse', 1, 'shore'], ['house', 2, { wall: 'Plaster' }], ['tree', 3, 'palm']],
+      people: [['Human', 5]], life: ['Crab', 'Crab', 'Fish', 'Shark', 'Jellyfish', 'Seashells', 'Bird'], sky: ['Cloud'] },
+    { name: 'a base on Mars', top: 'Mars Dust', under: 'Mars Rock', rock: 'Mars Rock', liquid: null, temp: -20, hills: 0.8,
+      build: [['dome', 2], ['rocket', 1]], ores: ['Iron Ore', 'Dry Ice'], people: [], life: ['Meteor'], sky: null },
+    { name: 'a demolition site', top: 'Gravel', under: 'Dirt', liquid: null, hills: 0.1,
+      build: [['tnttower', 1], ['hut', 1]], people: [['Builder', 3], ['Human', 2]], life: ['Bird'], sky: null, tip: ' Light the fuse with Ignite!' },
+    { name: 'islands in the sky', top: 'Grass', under: 'Dirt', liquid: 'Water', base: 0.93, hills: 0.15, islands: true,
+      build: [], people: [['Human', 2]], life: ['Bird', 'Butterfly', 'Fish'], sky: ['Cloud'] },
+    { name: 'candy land', top: 'Cotton Candy', under: 'Cake', rock: 'Chocolate', liquid: 'Melted Chocolate',
+      build: [['house', 3, { wall: 'Chocolate', roof: 'Candy', floor: 'Cake' }], ['tree', 3, 'cherry']],
+      people: [['Human', 3]], life: ['Gummy Bears', 'Sprinkles', 'Ant', 'Marshmallow'], sky: null, ores: ['Candy'] },
+    { name: 'a swamp', top: 'Mud', under: 'Dirt', liquid: 'Swamp Water', hills: 0.6, lakeDepth: 0.06,
+      build: [['cabin', 2], ['tree', 3, 'oak']], people: [['Human', 2]], life: ['Frog', 'Mosquito', 'Mushroom', 'Lily Pad', 'Tadpole', 'Dragonfly'], sky: ['Cloud'] },
+    { name: 'a night garden', top: 'Grass', under: 'Dirt', liquid: 'Water',
+      build: [['house', 1], ['tree', 4, 'cherry'], ['campfire', 1]], people: [['Human', 2]],
+      life: ['Firefly', 'Firefly', 'Glowing Mushroom', 'Moth', 'Bat', 'Glowing Water', 'Seed'], sky: null },
+    { name: 'a coral reef', top: 'Sand', under: 'Gravel', liquid: 'Saltwater', base: 0.9, hills: 0.4, level: 0.18,
+      build: [], people: [], life: ['Coral', 'Coral', 'Fish', 'Goldfish', 'Jellyfish', 'Octopus', 'Seaweed', 'Pufferfish', 'Seahorse', 'Shark'], sky: null, wreck: true },
+    { name: 'a dam in the valley', top: 'Grass', under: 'Dirt', liquid: null, hills: 0.1, shape: 'valley', dam: true,
+      build: [['house', 3], ['tree', 3, 'oak']], people: [['Human', 4], ['Builder', 1]], life: ['Bird', 'Fish'], sky: ['Cloud'] }
   ];
-  function surprise(){
-    var s = SCENES[Math.random() * SCENES.length | 0], ph = Math.random() * 10, f = 0.015 + Math.random() * 0.025, ground = [], x, y;
+  var WIDTH = { house: 21, cabin: 17, hut: 11, barn: 27, skyscraper: 19, castle: 48, lighthouse: 9, pyramid: 45, igloo: 17, tent: 13,
+                dome: 27, tree: 11, cactus: 6, campfire: 6, pool: 30, rocket: 16, tnttower: 26, field: 30 };
+
+  function surprise(only){
+    var b = BIOMES[only != null ? only : Math.random() * BIOMES.length | 0];
     snapshot();
     clearAll();
-    var top = idn(s[1]), under = idn(s[2]), bed = idn('Stone');
-    for(x = 0; x < W; x++){
-      var h = Math.round(H * 0.7 + Math.sin(x * f + ph) * H * 0.1 + Math.sin(x * f * 2.7 + ph * 2) * H * 0.04);
-      ground[x] = Math.max(6, Math.min(H - 3, h));
-      for(y = ground[x]; y < H; y++) spawn(y * W + x, y - ground[x] < 3 ? top : y > H - 4 ? bed : under);
+    setRoom(b.temp != null ? b.temp : AMBIENT, 1);
+    var ctx = terrain(b);
+    if(b.volcano){
+      var vx = W >> 1;
+      volcano(vx, ctx.ground[vx]);
+      for(var x = 0; x < W; x++) ctx.ground[x] = groundBelow(x, 0);   // the ground is the mountain now
+      for(x = vx - sz(25); x < vx + sz(25); x++) ctx.taken[x] = 1;
     }
-    var deepest = 0;
-    for(x = 1; x < W; x++) if(ground[x] > ground[deepest]) deepest = x;
-    if(s[3]){   // fill the dips up to a waterline
-      var level = ground[deepest] - Math.round(H * 0.07), liq = idn(s[3]);
-      for(x = 0; x < W; x++) for(y = level; y < ground[x]; y++) if(grid[y * W + x] === EMPTY) spawn(y * W + x, liq);
+    if(b.islands) skyIslands(ctx);
+    if(b.dam) damValley(ctx);
+    if(b.mine) mineShafts(ctx, b);
+    if(b.wreck){ var sx = ri(20, W - 20); boat(sx, ctx.ground[sx] - 2, true); fill(sx - 2, ctx.ground[sx] - 3, 3, 1, 'Gold'); }
+    if(b.boat && ctx.level != null){
+      for(var t = 0; t < 30; t++){ var bx = ri(10, W - 10); if(ctx.ground[bx] > ctx.level + 4){ boat(bx, ctx.level); break; } }
     }
-    s[4].forEach(function(n){
-      var id = idn(n), swims = CUSTOM[id] === swimmerUpdate, cloud = KIND[id] === GAS;
-      for(var tries = 0, placed = 0; tries < 60 && placed < 3; tries++){
-        var px = 2 + (Math.random() * (W - 4) | 0);
-        var py = cloud ? 2 + (Math.random() * 8 | 0) : ground[px] - 2 - (Math.random() * (swims ? 4 : 20) | 0);
-        if(py < 1) continue;
-        var i0 = py * W + px, here = grid[i0];
-        if(swims ? !WET[here] && here !== ID['Saltwater'] : here !== EMPTY) continue;
-        for(var dy = 0; dy < (cloud ? 4 : 2); dy++) for(var dx = 0; dx < (cloud ? 14 : 2); dx++){
-          var qx = px + dx, qy = py - dy;
-          if(qx < W && qy >= 0){ var q = qy * W + qx; if(swims ? WET[grid[q]] : grid[q] === EMPTY) spawn(q, id); }
+    if(b.bridge) lakeBridge(ctx);
+    b.build.forEach(function(e){
+      var n = Math.max(1, Math.round(e[1] * Math.min(1, W / 300)));
+      for(var k = 0; k < n; k++) buildOne(ctx, e[0], e[2]);
+    });
+    (b.people || []).forEach(function(e){
+      var n = Math.max(1, Math.round(e[1] * Math.min(1, W / 260)));
+      for(var k = 0; k < n; k++){
+        for(var tr = 0; tr < 15; tr++){   // somewhere dry
+          var px = ri(4, W - 5);
+          if((ctx.level == null || ctx.ground[px] < ctx.level - 1) && placePerson(px, ctx.ground[px] - 1, idn(e[0]))) break;
         }
+      }
+    });
+    creatures(ctx, b.life);
+    if(b.sky && Math.random() < 0.75) weather(b.sky[0]);
+    return b.name + '.' + (b.tip || '');
+  }
+
+  function terrain(b){
+    var ground = [], taken = [], ph = Math.random() * 10, f = 0.012 + Math.random() * 0.02;
+    var amp = H * 0.1 * (b.hills == null ? 1 : b.hills), base = H * (b.base || 0.7), x, y;
+    var sea = b.sea === 'either' ? (Math.random() < 0.5 ? 'left' : 'right') : b.sea;
+    for(x = 0; x < W; x++){
+      var h = base + Math.sin(x * f + ph) * amp + Math.sin(x * f * 2.7 + ph * 2) * amp * 0.4, u = x / W;
+      if(sea === 'left' || sea === 'both') h += Math.max(0, 1 - x / (W * 0.38)) * H * 0.3;
+      if(sea === 'right' || sea === 'both') h += Math.max(0, 1 - (W - 1 - x) / (W * 0.38)) * H * 0.3;
+      if(b.shape === 'hill') h -= Math.max(0, 1 - Math.abs(u - 0.5) * 3) * H * 0.18;
+      if(b.shape === 'mountain') h -= Math.max(0, 1 - Math.abs(u - 0.55) * 2.2) * H * 0.35;
+      if(b.shape === 'valley') h -= Math.max(0, 1 - u / 0.14) * H * 0.42;   // a mountainside the reservoir fills up against
+      ground[x] = Math.max(8, Math.min(H - 5, Math.round(h)));
+    }
+    // layers: topsoil, earth, rock, and a bed of basalt at the very bottom
+    var top = idn(b.top), under = idn(b.under), rock = idn(b.rock || 'Slate'), bed = idn('Basalt'), td = b.topDepth || 2;
+    for(x = 0; x < W; x++){
+      var ud = 5 + Math.round(Math.sin(x * 0.07 + ph) * 2 + Math.random());
+      for(y = ground[x]; y < H; y++){ var d = y - ground[x]; spawn(y * W + x, d < td ? top : d < td + ud ? under : y >= H - 2 ? bed : rock); }
+    }
+    // veins of ore, and a few caves, in the rock
+    var ores = b.ores || ['Coal', 'Iron Ore', 'Copper Ore', 'Gold Ore'];
+    for(var v = 0; v < Math.round(W / 40 * (b.oreRich || 1)); v++){
+      var ox = ri(2, W - 3), oy = ri(ground[ox] + 9, H - 3), oreId = idn(pick(ores));
+      if(oy < H - 2) veins(ox, oy, ri(1, 3), oreId, rock);
+    }
+    for(var c = 0; c < ri(1, 3); c++){
+      var cx = ri(10, W - 10), cy = ri(ground[cx] + 12, H - 6), rw = ri(6, 14), rh = ri(3, 5);
+      for(y = cy - rh; y <= cy + rh; y++) for(x = cx - rw; x <= cx + rw; x++){
+        if(x < 0 || x >= W || y < 0 || y >= H - 2) continue;
+        var e = (x - cx) * (x - cx) / (rw * rw) + (y - cy) * (y - cy) / (rh * rh);
+        if(e <= 1 && grid[y * W + x] === rock) put(x, y, e > 0.5 && y > cy && Math.random() < 0.6 ? (b.volcano ? 'Lava' : 'Water') : EMPTY);
+      }
+    }
+    // water up to a line in the low bits (or the sea)
+    var level = null;
+    if(b.liquid){
+      var deepest = 0;
+      for(x = 1; x < W; x++) if(ground[x] > ground[deepest]) deepest = x;
+      level = b.level != null ? Math.round(H * b.level) : ground[deepest] - Math.max(4, Math.round(H * (b.lakeDepth || 0.07)));
+      var liq = idn(b.liquid), ice = idn('Ice');
+      for(x = 0; x < W; x++) for(y = level; y < ground[x]; y++) if(grid[y * W + x] === EMPTY) spawn(y * W + x, b.freeze && y < level + 2 ? ice : liq);
+    }
+    return { ground: ground, level: level, taken: taken, top: top, under: under };
+  }
+  function veins(x, y, r, id, rock){
+    for(var dy = -r; dy <= r; dy++) for(var dx = -r - 1; dx <= r + 1; dx++){
+      var qx = x + dx, qy = y + dy;
+      if(qx >= 0 && qx < W && qy >= 0 && qy < H && grid[qy * W + qx] === rock && Math.random() < 0.7) spawn(qy * W + qx, id);
+    }
+  }
+
+  // finds a stretch of dry ground w wide, levels it, and returns where to build
+  function site(ctx, w, where){
+    for(var tries = 0; tries < 50; tries++){
+      var cx;
+      if(where === 'top'){ cx = 0; for(var q = 1; q < W; q++) if(ctx.ground[q] < ctx.ground[cx]) cx = q; cx += ri(-6, 6); }
+      else if(where === 'shore' && ctx.level != null){
+        cx = -1;   // just back from where the land meets the water
+        for(var s = 0; s < W - 1 && cx < 0; s++) if((ctx.ground[s] < ctx.level) !== (ctx.ground[s + 1] < ctx.level)) cx = ctx.ground[s] < ctx.level ? s - 6 - tries : s + 7 + tries;
+        if(cx < 0) cx = ri(w, W - w);
+      }
+      else cx = ri((w >> 1) + 2, W - (w >> 1) - 3);
+      var x0 = cx - (w >> 1), lo = 0, hi = H, ok = x0 >= 1 && x0 + w < W - 1;
+      for(var x = x0; x < x0 + w && ok; x++){
+        var g = ctx.ground[x];
+        if(ctx.taken[x] || (ctx.level != null && g >= ctx.level - 1)) ok = false;
+        if(g > lo) lo = g;
+        if(g < hi) hi = g;
+      }
+      if(!ok || lo - hi > Math.max(6, w >> 2)) continue;
+      var gy = Math.round((lo + hi) / 2);
+      for(x = x0; x < x0 + w; x++){
+        for(var y = ctx.ground[x]; y < gy; y++) put(x, y, EMPTY);               // dig down the high bits
+        for(y = gy; y < ctx.ground[x]; y++) put(x, y, ctx.under);               // and fill in the low ones
+        if(gy < H) put(x, gy, ctx.top);
+        ctx.ground[x] = gy;
+      }
+      for(x = x0 - 2; x < x0 + w + 2; x++) ctx.taken[x] = 1;
+      return { cx: cx, gy: gy };
+    }
+    return null;
+  }
+  function buildOne(ctx, kind, opt){
+    var w = kind === 'tree' ? (opt === 'palm' ? 9 : 11) : sz(WIDTH[kind] || 15);
+    var s = site(ctx, w, typeof opt === 'string' && (opt === 'top' || opt === 'shore') ? opt : null);
+    if(!s) return;
+    if(kind === 'tree') tree(s.cx, s.gy, opt);
+    else if(kind === 'house') house(s.cx, s.gy, typeof opt === 'object' ? opt : null);
+    else if(kind === 'field') field(s.cx, s.gy, w);
+    else BUILDERS[kind](s.cx, s.gy);
+  }
+  function field(cx, gy, w){
+    var crop = pick(['Wheat', 'Corn', 'Pumpkin', 'Carrot', 'Cabbage']), x0 = cx - (w >> 1);
+    for(var x = x0 + 1; x < x0 + w - 1; x++){
+      put(x, gy, 'Dirt');
+      var ch = ri(1, 2);
+      if(x % 3 !== 0) fill(x, gy - ch, 1, ch, crop);
+    }
+    put(x0, gy - 1, 'Wood'); put(x0 + w - 1, gy - 1, 'Wood');
+  }
+  function lakeBridge(ctx){
+    if(ctx.level == null) return;
+    var y = ctx.level - 2, a = -1, b = -1;
+    for(var x = 1; x < W - 1; x++){
+      if(ctx.ground[x] > ctx.level){ if(a < 0) a = x; b = x; }
+    }
+    if(a < 3 || b > W - 4 || b - a > W * 0.6 || b - a < 6) return;
+    bridge(a - 3, b + 3, y);
+    for(x = a - 3; x <= b + 3; x++) ctx.taken[x] = 1;
+  }
+  function skyIslands(ctx){
+    var n = Math.max(2, Math.round(W / 110));
+    for(var k = 0; k < n; k++){
+      var cx = Math.round((k + 0.5) * W / n) + ri(-10, 10), cy = ri(Math.round(H * 0.3), Math.round(H * 0.55)), rw = sz(ri(16, 24)), rh = ri(9, 13);
+      for(var y = cy; y <= cy + rh; y++) for(var x = cx - rw; x <= cx + rw; x++){
+        var e = (x - cx) * (x - cx) / (rw * rw) + (y - cy) * (y - cy) / (rh * rh);
+        if(e <= 1 - Math.random() * 0.15) put(x, y, y < cy + 2 ? 'Grass' : y < cy + 4 ? 'Dirt' : 'Granite');
+      }
+      var h = Math.random() < 0.5;
+      if(h) house(cx, cy, { w: sz(13), h: 8 }); else tree(cx, cy, pick(['oak', 'cherry', 'autumn']));
+      tree(cx + (h ? -rw + 4 : rw - 5), cy, 'oak', 0.7);
+      put(cx + rw - 1, cy + 2, 'Faucet');                   // a waterfall off the edge
+      if(!h) people(cx - 4, cx + 4, cy - 1, 1);
+    }
+  }
+  function damValley(ctx){
+    var dx = Math.round(W * 0.38), gy = ctx.ground[dx], dh = Math.min(gy - 10, Math.round(H * 0.4));
+    for(var r = 0; r < dh; r++) fill(dx, gy - dh + r, 3 + Math.round(r / dh * 5), 1, 'Concrete');   // thicker at the bottom
+    for(var x = 0; x < dx; x++){
+      for(var y = gy - dh + 3; y < ctx.ground[x]; y++) if(grid[y * W + x] === EMPTY) put(x, y, 'Water');
+      ctx.taken[x] = 1;
+    }
+    for(x = dx - 1; x < dx + 11; x++) ctx.taken[x] = 1;
+  }
+  function mineShafts(ctx, b){
+    var peak = 0;
+    for(var x = 1; x < W; x++) if(ctx.ground[x] < ctx.ground[peak]) peak = x;
+    // each shaft opens on the hillside and runs in under the peak, with props holding the roof up
+    for(var s = 0; s < 3; s++){
+      var y = ctx.ground[peak] + 10 + s * 9, side = s % 2 ? 1 : -1, ex = peak;
+      if(y > H - 6) break;
+      while(ex > 1 && ex < W - 2 && ctx.ground[ex] < y - 1) ex += side;   // where the hillside comes down to it
+      var len = Math.abs(ex - peak) + sz(ri(10, 30));
+      for(var k = 0; k < len; k++){
+        var qx = ex - side * k;
+        var past = side > 0 ? qx < peak : qx > peak;
+        if(qx < 1 || qx >= W - 1 || (past && ctx.ground[qx] > y - 6)) break;   // (and not out the other side)
+        fill(qx, y - 3, 1, 3, EMPTY);
+        if(k > 4 && k % 8 >= 5) put(qx, y - 4, 'Wood');     // beams holding the roof up
+      }
+      placePerson(ex - side * 3, y - 1, idn('Miner'));
+    }
+    for(x = peak - 8; x < peak + 8; x++) ctx.taken[x] = 1;
+  }
+  function creatures(ctx, list){
+    (list || []).forEach(function(n){
+      if(!DEFINED[n]) return;
+      var id = ID[n], swims = CUSTOM[id] === swimmerUpdate, flies = CUSTOM[id] === flyerUpdate || n === 'Meteor', planty = KIND[id] === SOLID;
+      for(var tries = 0, placed = 0; tries < 60 && placed < 2 + (Math.random() * 2 | 0); tries++){
+        var px = ri(2, W - 3), g = ctx.ground[px], py;
+        if(swims){ if(ctx.level == null || g <= ctx.level + 2) continue; py = ri(ctx.level + 1, g - 1); }
+        else if(flies) py = ri(3, Math.max(4, g - 15));
+        else py = g - 1;
+        var q = py * W + px;
+        if(swims ? !WET[grid[q]] && grid[q] !== SALTWATER && KIND[grid[q]] !== LIQUID : !isOpen(grid[q])) continue;
+        spawn(q, id);
+        if(!planty && !flies && !swims && Math.random() < 0.5 && px + 1 < W && isOpen(grid[q + 1])) spawn(q + 1, id);
         placed++;
       }
     });
-    return s[0];
   }
-  document.getElementById('surprise').addEventListener('click', function(){
+  function weather(cloud){
+    var id = idn(cloud);
+    for(var k = 0; k < Math.max(1, Math.round(W / 120)); k++){
+      var cx = ri(10, W - 30), cy = ri(2, 8), w = sz(ri(14, 24));
+      for(var y = cy; y < cy + 4; y++) for(var x = cx; x < cx + w; x++){
+        var e = Math.abs(x - cx - w / 2) / (w / 2) + Math.abs(y - cy - 2) / 2.5;
+        if(e < 1.2 && x < W && isOpen(grid[y * W + x])) spawn(y * W + x, id);
+      }
+    }
+  }
+
+  function doSurprise(){
     if(!built) return;
-    note('Here’s ' + surprise() + '. Ctrl+Z to go back.');
+    var what = surprise();
+    lastWorld = what.replace(/[.!].*$/, '');
+    toast('Here’s ' + what + ' ' + UNDO_TIP);
     hint.classList.add('gone');
-  });
+    openMore(false);
+  }
+  var lastWorld = '';
+  document.getElementById('surprise').addEventListener('click', function(e){ doSurprise(); e.currentTarget.blur(); });
 
   // ---------- pointer ----------
   canvas.addEventListener('pointerdown', function(e){
@@ -4155,7 +5475,8 @@
     lastPaint = c;
     snapshot();   // every stroke can be undone
     boomWait = 0;
-    paint(c.x, c.y, activeTool());
+    if(isStamp(activeTool())) placeStamp(tool, c.x, c.y);
+    else paint(c.x, c.y, activeTool());
     hint.classList.add('gone');
   });
 
@@ -4187,6 +5508,10 @@
     if(e.key === ' '){ e.preventDefault(); setPaused(!paused); return; }
     if(e.key === 'Escape' && !roomPop.hidden){ openRoom(false); return; }
     if(e.key === 'Escape' && !morePop.hidden){ openMore(false); return; }
+    if(!savesEl.hidden){ if(e.key === 'Escape') closeSaves(); return; }   // (typing a save's name)
+    if(e.ctrlKey || e.metaKey || e.altKey) return;
+    if(e.key === 's' || e.key === 'S'){ doSurprise(); return; }
+    if(e.key === 'r' || e.key === 'R'){ randomElement(); return; }
     if(e.key === 'h' || e.key === 'H'){ setHeatView(!heatView); return; }
     if(e.key === 'p' || e.key === 'P'){ setPresView(!presView); return; }
     if(e.key === '['){ setBrush(brush - 1); return; }
@@ -4216,6 +5541,7 @@
       if(pointer.down) paint(pointer.x, pointer.y, activeTool());   // hold still to keep pouring
       dragDX = dragDY = 0;
       if(boomWait > 0) boomWait--;
+      if(personWait > 0) personWait--;
       if(!paused) step();
       acc -= STEP_MS;
       n++;
